@@ -1,16 +1,12 @@
 #!/bin/sh
 set -e
 
-echo "=== TRIPLE A CONSTRUCCIONES SAS - Iniciando API ==="
-echo "DATABASE_URL prefix: $(echo $DATABASE_URL | cut -c1-15)..."
-echo "Python: $(python --version 2>&1)"
-echo "Alembic: $(alembic --version 2>&1)"
+echo "=== TRIPLE A CONSTRUCCIONES SAS ==="
+echo "DATABASE_URL: ${DATABASE_URL:0:30}..."
 
-echo ""
-echo ">>> Ejecutando migraciones Alembic..."
+echo ">>> Migraciones..."
 alembic upgrade head
-echo ">>> Migraciones completadas exitosamente"
+echo ">>> Migraciones OK"
 
-echo ""
-echo ">>> Iniciando servidor FastAPI en puerto 8000..."
+echo ">>> Iniciando uvicorn..."
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level info
