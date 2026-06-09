@@ -18,6 +18,18 @@ depends_on = None
 
 def upgrade() -> None:
 
+    # Create PostgreSQL ENUM types first
+    op.execute("CREATE TYPE estadoapu AS ENUM ('ACTIVO', 'INACTIVO')")
+    op.execute("CREATE TYPE estadocliente AS ENUM ('ACTIVO', 'INACTIVO')")
+    op.execute("CREATE TYPE estadoproducto AS ENUM ('ACTIVO', 'INACTIVO')")
+    op.execute("CREATE TYPE estadotrabajador AS ENUM ('ACTIVO', 'INACTIVO', 'LICENCIA')")
+    op.execute("CREATE TYPE estadousuario AS ENUM ('ACTIVO', 'INACTIVO', 'SUSPENDIDO')")
+    op.execute("CREATE TYPE estadocotizacion AS ENUM ('BORRADOR', 'PENDIENTE', 'ACEPTADA', 'RECHAZADA', 'CANCELADA')")
+    op.execute("CREATE TYPE estadopago AS ENUM ('PENDIENTE', 'PAGADO', 'ANULADO')")
+    op.execute("CREATE TYPE estadocontrato AS ENUM ('VIGENTE', 'COMPLETADO', 'CANCELADO', 'SUSPENDIDO')")
+    op.execute("CREATE TYPE estadogasto AS ENUM ('PENDIENTE', 'APROBADO', 'RECHAZADO')")
+    op.execute("CREATE TYPE tiponotificacion AS ENUM ('COTIZACION', 'CONTRATO', 'GASTO', 'SISTEMA')")
+
     op.execute("""
 CREATE TABLE apu (
 	codigo VARCHAR(50) NOT NULL, 
@@ -595,3 +607,13 @@ def downgrade() -> None:
     op.execute("""DROP TABLE IF EXISTS permisos CASCADE;""")
     op.execute("""DROP TABLE IF EXISTS clientes CASCADE;""")
     op.execute("""DROP TABLE IF EXISTS apu CASCADE;""")
+    op.execute("DROP TYPE IF EXISTS estadoapu")
+    op.execute("DROP TYPE IF EXISTS estadocliente")
+    op.execute("DROP TYPE IF EXISTS estadoproducto")
+    op.execute("DROP TYPE IF EXISTS estadotrabajador")
+    op.execute("DROP TYPE IF EXISTS estadousuario")
+    op.execute("DROP TYPE IF EXISTS estadocotizacion")
+    op.execute("DROP TYPE IF EXISTS estadopago")
+    op.execute("DROP TYPE IF EXISTS estadocontrato")
+    op.execute("DROP TYPE IF EXISTS estadogasto")
+    op.execute("DROP TYPE IF EXISTS tiponotificacion")
