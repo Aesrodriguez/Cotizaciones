@@ -128,6 +128,11 @@ class Producto(Base, UUIDPrimaryKey, TimestampedMixin, SoftDeleteMixin):
         nullable=True,
         comment="Last price update date"
     )
+    impuesto_porcentaje = Column(
+        Numeric(5, 2),
+        nullable=True,
+        comment="Default tax percentage for quotes"
+    )
     categoria = Column(
         VARCHAR(100),
         nullable=True,

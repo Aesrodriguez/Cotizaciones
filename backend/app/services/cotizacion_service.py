@@ -10,12 +10,13 @@ from app.schemas.cotizacion import CotizacionCreate, CotizacionUpdate
 def _next_numero(db: Session) -> str:
     from datetime import date
     year = date.today().year
-    seq = db.query(Secuencia).filter(Secuencia.nombre == "cotizacion").first()
+    seq = db.query(Secuencia).filter(Secuencia.tipo_documento == "cotizacion").first()
     if not seq:
-        seq = Secuencia(nombre="cotizacion", prefijo=f"COT-{year}-", siguiente_valor=1, digitos=4)
+        seq = Secuencia(tipo_documento="cotizacion", prefijo=f"COT-{year}-", proximo_numero=1)
         db.add(seq)
-    num = f"{seq.prefijo}{str(seq.siguiente_valor).zfill(seq.digitos)}"
-    seq.siguiente_valor += 1
+        db.flush()
+    num = f"{seq.prefijo or ''}{str(seq.proximo_numero).zfill(4)}"
+    seq.proximo_numero += 1
     db.commit()
     return num
 
