@@ -32,6 +32,9 @@ database_url = os.getenv(
     'DATABASE_URL',
     'postgresql://user:password@localhost:5432/triplaa_db'
 )
+# Render provides 'postgres://' but SQLAlchemy 2.0 requires 'postgresql://'
+if database_url.startswith('postgres://'):
+    database_url = database_url.replace('postgres://', 'postgresql://', 1)
 config.set_main_option('sqlalchemy.url', database_url)
 
 
