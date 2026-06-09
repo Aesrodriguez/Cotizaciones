@@ -1,40 +1,33 @@
 {
   "name": "cotizaciones-frontend",
-  "private": true,
   "version": "1.0.0",
+  "description": "Frontend for Cotizaciones application",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "lint": "eslint src --ext .js,.jsx"
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@hookform/resolvers": "^3.9.0",
-    "axios": "^1.7.2",
-    "date-fns": "^3.6.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-hook-form": "^7.52.1",
-    "react-hot-toast": "^2.4.1",
-    "react-router-dom": "^6.24.1",
-    "recharts": "^2.12.7",
-    "yup": "^1.4.0",
-    "zustand": "^4.5.4"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.0",
+    "@tanstack/react-query": "^5.28.0",
+    "axios": "^1.6.2",
+    "typescript": "^5.3.3"
   },
   "devDependencies": {
-    "@testing-library/jest-dom": "^6.4.6",
-    "@testing-library/react": "^16.0.0",
-    "@testing-library/user-event": "^14.5.2",
-    "@vitejs/plugin-react": "^4.3.1",
-    "autoprefixer": "^10.4.19",
-    "jsdom": "^24.1.0",
-    "postcss": "^8.4.39",
-    "tailwindcss": "^3.4.6",
-    "vite": "^5.3.4",
-    "vitest": "^2.0.3"
+    "@vitejs/plugin-react": "^4.2.0",
+    "@types/react": "^18.2.37",
+    "@types/react-dom": "^18.2.15",
+    "vite": "^5.0.8",
+    "tailwindcss": "^3.3.6",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
   }
 }
