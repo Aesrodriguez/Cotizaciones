@@ -73,6 +73,7 @@ export interface Cotizacion {
   cliente_id?: string
   cliente_nombre?: string
   usuario_nombre?: string
+  validez_dias?: number
   condiciones_pago?: string
   terminos?: string
   observaciones?: string
