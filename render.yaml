@@ -29,7 +29,6 @@ services:
   - type: web
     name: cotizaciones-web
     env: static
-    plan: free
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
