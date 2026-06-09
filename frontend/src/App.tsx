@@ -1,22 +1,38 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { Toaster } from 'react-hot-toast'
+import { useAuthStore } from './stores/authStore'
+import Layout from './components/layout/Layout'
+import LoginPage from './pages/LoginPage'
+import DashboardPage from './pages/DashboardPage'
+import CotizacionesPage from './pages/CotizacionesPage'
+import CotizacionFormPage from './pages/CotizacionFormPage'
+import CotizacionDetailPage from './pages/CotizacionDetailPage'
+import ClientesPage from './pages/ClientesPage'
+import ProductosPage from './pages/ProductosPage'
 
-function App() {
-  return (
-    <Router>
-      <div className="min-h-screen bg-gray-50">
-        <header className="bg-white shadow">
-          <nav className="max-w-7xl mx-auto px-4 py-4">
-            <h1 className="text-2xl font-bold text-gray-900">Cotizaciones</h1>
-          </nav>
-        </header>
-        <main className="max-w-7xl mx-auto px-4 py-8">
-          <Routes>
-            <Route path="/" element={<div className="text-gray-600">Welcome to Cotizaciones</div>} />
-          </Routes>
-        </main>
-      </div>
-    </Router>
-  )
+function PrivateRoute({ children }: { children: React.ReactNode }) {
+  const token = useAuthStore((s) => s.token)
+  return token ? <>{children}</> : <Navigate to="/login" replace />
 }
 
-export default App
+export default function App() {
+  return (
+    <>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="dashboard" element={<DashboardPage />} />
+          <Route path="cotizaciones" element={<CotizacionesPage />} />
+          <Route path="cotizaciones/nueva" element={<CotizacionFormPage />} />
+          <Route path="cotizaciones/:id" element={<CotizacionDetailPage />} />
+          <Route path="cotizaciones/:id/editar" element={<CotizacionFormPage />} />
+          <Route path="clientes" element={<ClientesPage />} />
+          <Route path="productos" element={<ProductosPage />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+      <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+    </>
+  )
+}

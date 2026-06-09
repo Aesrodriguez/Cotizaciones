@@ -1,0 +1,110 @@
+from uuid import UUID
+from typing import Optional, List, Dict, Any
+from decimal import Decimal
+from datetime import date, datetime
+from pydantic import BaseModel, field_validator
+
+
+class CotizacionItemCreate(BaseModel):
+    producto_id: UUID
+    descripcion: Optional[str] = None
+    cantidad: Decimal
+    precio_unitario: Decimal
+    descuento_porcentaje: Optional[Decimal] = Decimal("0")
+    impuesto_porcentaje: Optional[Decimal] = Decimal("19")
+    orden: int = 0
+
+
+class CotizacionItemOut(BaseModel):
+    id: UUID
+    producto_id: UUID
+    descripcion: Optional[str] = None
+    cantidad: Decimal
+    precio_unitario: Decimal
+    descuento_porcentaje: Optional[Decimal] = None
+    descuento_monto: Optional[Decimal] = None
+    impuesto_porcentaje: Optional[Decimal] = None
+    impuesto_monto: Optional[Decimal] = None
+    subtotal: Decimal
+    total: Decimal
+    orden: int
+    producto_nombre: Optional[str] = None
+    producto_codigo: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class CotizacionCreate(BaseModel):
+    cliente_id: UUID
+    titulo: str
+    descripcion: Optional[str] = None
+    fecha_emision: date
+    fecha_vencimiento: Optional[date] = None
+    moneda: str = "COP"
+    validez_dias: Optional[int] = 30
+    condiciones_pago: Optional[str] = None
+    terminos: Optional[str] = None
+    observaciones: Optional[str] = None
+    items: List[CotizacionItemCreate]
+
+    @field_validator("items")
+    @classmethod
+    def items_not_empty(cls, v: list) -> list:
+        if not v:
+            raise ValueError("La cotización debe tener al menos un ítem")
+        return v
+
+
+class CotizacionUpdate(BaseModel):
+    cliente_id: Optional[UUID] = None
+    titulo: Optional[str] = None
+    descripcion: Optional[str] = None
+    fecha_emision: Optional[date] = None
+    fecha_vencimiento: Optional[date] = None
+    estado: Optional[str] = None
+    moneda: Optional[str] = None
+    validez_dias: Optional[int] = None
+    condiciones_pago: Optional[str] = None
+    terminos: Optional[str] = None
+    observaciones: Optional[str] = None
+    items: Optional[List[CotizacionItemCreate]] = None
+
+
+class CotizacionList(BaseModel):
+    id: UUID
+    numero: str
+    titulo: str
+    estado: str
+    moneda: str
+    subtotal: Decimal
+    total: Decimal
+    fecha_emision: date
+    fecha_vencimiento: Optional[date] = None
+    cliente_nombre: Optional[str] = None
+    usuario_nombre: Optional[str] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class CotizacionOut(CotizacionList):
+    descripcion: Optional[str] = None
+    impuesto: Decimal
+    descuento: Decimal
+    condiciones_pago: Optional[str] = None
+    terminos: Optional[str] = None
+    observaciones: Optional[str] = None
+    items: List[CotizacionItemOut] = []
+
+    model_config = {"from_attributes": True}
+
+
+class StatsOut(BaseModel):
+    total: int
+    aprobadas: int
+    pendientes: int
+    rechazadas: int
+    ingresos_totales: Decimal
+    ingresos_aprobados: Decimal
+    por_estado: List[Dict[str, Any]]
+    por_mes: List[Dict[str, Any]]

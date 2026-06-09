@@ -39,25 +39,25 @@ def create_app() -> FastAPI:
         allow_headers=settings.CORS_HEADERS,
     )
 
-    # Health check endpoint
+    # Routers
+    from app.api.v1.auth.router import router as auth_router
+    from app.api.v1.clientes.router import router as clientes_router
+    from app.api.v1.productos.router import router as productos_router
+    from app.api.v1.cotizaciones.router import router as cotizaciones_router
+
+    prefix = settings.API_PREFIX
+    app.include_router(auth_router, prefix=prefix)
+    app.include_router(clientes_router, prefix=prefix)
+    app.include_router(productos_router, prefix=prefix)
+    app.include_router(cotizaciones_router, prefix=prefix)
+
     @app.get("/health", tags=["Health"])
     async def health_check():
-        """Health check endpoint."""
-        return {
-            "status": "healthy",
-            "app": settings.API_TITLE,
-            "version": settings.API_VERSION,
-        }
+        return {"status": "healthy", "app": settings.API_TITLE, "version": settings.API_VERSION}
 
-    # Root endpoint
     @app.get("/", tags=["Root"])
     async def root():
-        """Root endpoint."""
-        return {
-            "message": f"Welcome to {settings.API_TITLE}",
-            "version": settings.API_VERSION,
-            "docs": "/docs",
-        }
+        return {"message": f"Welcome to {settings.API_TITLE}", "docs": "/docs"}
 
     return app
 
