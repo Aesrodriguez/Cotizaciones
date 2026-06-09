@@ -11,9 +11,9 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # API Configuration
-    API_TITLE: str = "Triplaa API"
-    API_VERSION: str = "0.1.0"
-    API_DESCRIPTION: str = "API Backend for Triplaa Cotizaciones"
+    API_TITLE: str = "Triple A Construcciones API"
+    API_VERSION: str = "1.0.0"
+    API_DESCRIPTION: str = "Sistema de Cotizaciones - TRIPLE A CONSTRUCCIONES SAS NIT: 901650581-4"
     API_PREFIX: str = "/api/v1"
 
     # Database

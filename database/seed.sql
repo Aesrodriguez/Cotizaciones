@@ -1,141 +1,159 @@
--- Seed data for Triplaa Cotizaciones
+-- =============================================================
+-- SEED DATA - TRIPLE A CONSTRUCCIONES SAS
+-- NIT: 901650581-4
+-- =============================================================
 
--- Insert default roles
-INSERT INTO roles (id, codigo, nombre, descripcion, created_at, updated_at) VALUES
-  ('550e8400-e29b-41d4-a716-446655440000'::uuid, 'ADMIN', 'Administrador', 'Sistema administrator with full access', NOW(), NOW()),
-  ('550e8400-e29b-41d4-a716-446655440001'::uuid, 'MGMT', 'Gerencia', 'Management/executive role', NOW(), NOW()),
-  ('550e8400-e29b-41d4-a716-446655440002'::uuid, 'ACC', 'Contabilidad', 'Accounting department role', NOW(), NOW()),
-  ('550e8400-e29b-41d4-a716-446655440003'::uuid, 'SALES', 'Comercial', 'Sales/commercial role', NOW(), NOW()),
-  ('550e8400-e29b-41d4-a716-446655440004'::uuid, 'ENG', 'Ingeniero', 'Engineering/technical role', NOW(), NOW()),
-  ('550e8400-e29b-41d4-a716-446655440005'::uuid, 'VIEW', 'Consulta', 'Read-only view access', NOW(), NOW());
+-- ============================================================
+-- ROLES
+-- ============================================================
+INSERT INTO roles (id, nombre, descripcion, activo, created_at, updated_at) VALUES
+  ('a0000000-0000-0000-0000-000000000001'::uuid, 'ADMIN',    'Administrador con acceso total al sistema',  true, NOW(), NOW()),
+  ('a0000000-0000-0000-0000-000000000002'::uuid, 'GERENCIA', 'Gerencia: aprueba cotizaciones y contratos', true, NOW(), NOW()),
+  ('a0000000-0000-0000-0000-000000000003'::uuid, 'VENDEDOR', 'Comercial: crea y edita cotizaciones',       true, NOW(), NOW());
 
--- Insert default permissions
-INSERT INTO permisos (id, codigo, nombre, descripcion, created_at, updated_at) VALUES
-  ('550e8400-e29b-41d4-a716-446655440100'::uuid, 'PERM.USER.CREATE', 'Crear Usuario', 'Create new users', NOW(), NOW()),
-  ('550e8400-e29b-41d4-a716-446655440101'::uuid, 'PERM.USER.EDIT', 'Editar Usuario', 'Edit existing users', NOW(), NOW()),
-  ('550e8400-e29b-41d4-a716-446655440102'::uuid, 'PERM.USER.DELETE', 'Eliminar Usuario', 'Delete users', NOW(), NOW()),
-  ('550e8400-e29b-41d4-a716-446655440103'::uuid, 'PERM.COTIZ.CREATE', 'Crear Cotización', 'Create quotations', NOW(), NOW()),
-  ('550e8400-e29b-41d4-a716-446655440104'::uuid, 'PERM.COTIZ.EDIT', 'Editar Cotización', 'Edit quotations', NOW(), NOW()),
-  ('550e8400-e29b-41d4-a716-446655440105'::uuid, 'PERM.COTIZ.APPROVE', 'Aprobar Cotización', 'Approve quotations', NOW(), NOW()),
-  ('550e8400-e29b-41d4-a716-446655440106'::uuid, 'PERM.CONTRATO.CREATE', 'Crear Contrato', 'Create contracts', NOW(), NOW()),
-  ('550e8400-e29b-41d4-a716-446655440107'::uuid, 'PERM.CONTRATO.EDIT', 'Editar Contrato', 'Edit contracts', NOW(), NOW()),
-  ('550e8400-e29b-41d4-a716-446655440108'::uuid, 'PERM.GASTO.APPROVE', 'Aprobar Gasto', 'Approve expenses', NOW(), NOW()),
-  ('550e8400-e29b-41d4-a716-446655440109'::uuid, 'PERM.REPORT.VIEW', 'Ver Reportes', 'View reports', NOW(), NOW());
+-- ============================================================
+-- PERMISOS
+-- ============================================================
+INSERT INTO permisos (id, codigo, descripcion, recurso, accion, activo, created_at, updated_at) VALUES
+  ('b0000000-0000-0000-0000-000000000001'::uuid, 'usuarios.crear',       'Crear usuarios',          'usuarios',    'crear',    true, NOW(), NOW()),
+  ('b0000000-0000-0000-0000-000000000002'::uuid, 'usuarios.editar',      'Editar usuarios',         'usuarios',    'editar',   true, NOW(), NOW()),
+  ('b0000000-0000-0000-0000-000000000003'::uuid, 'usuarios.eliminar',    'Eliminar usuarios',       'usuarios',    'eliminar', true, NOW(), NOW()),
+  ('b0000000-0000-0000-0000-000000000004'::uuid, 'cotizaciones.crear',   'Crear cotizaciones',      'cotizaciones','crear',    true, NOW(), NOW()),
+  ('b0000000-0000-0000-0000-000000000005'::uuid, 'cotizaciones.editar',  'Editar cotizaciones',     'cotizaciones','editar',   true, NOW(), NOW()),
+  ('b0000000-0000-0000-0000-000000000006'::uuid, 'cotizaciones.aprobar', 'Aprobar cotizaciones',    'cotizaciones','aprobar',  true, NOW(), NOW()),
+  ('b0000000-0000-0000-0000-000000000007'::uuid, 'reportes.ver',         'Ver reportes y dashboard','reportes',    'ver',      true, NOW(), NOW());
 
--- Assign permissions to Admin role (all permissions)
-INSERT INTO rol_permiso (id, rol_id, permiso_id, created_at, updated_at) 
-SELECT 
-  gen_random_uuid(),
-  '550e8400-e29b-41d4-a716-446655440000'::uuid,
-  id,
-  NOW(),
-  NOW()
+-- Asignar TODOS los permisos al ADMIN
+INSERT INTO rol_permiso (id, rol_id, permiso_id, created_at)
+SELECT gen_random_uuid(), 'a0000000-0000-0000-0000-000000000001'::uuid, id, NOW()
 FROM permisos;
 
--- Assign basic permissions to other roles
-INSERT INTO rol_permiso (id, rol_id, permiso_id, created_at, updated_at) VALUES
-  -- Management: Create and edit quotations, approve, create contracts, view reports
-  (gen_random_uuid(), '550e8400-e29b-41d4-a716-446655440001'::uuid, '550e8400-e29b-41d4-a716-446655440103'::uuid, NOW(), NOW()),
-  (gen_random_uuid(), '550e8400-e29b-41d4-a716-446655440001'::uuid, '550e8400-e29b-41d4-a716-446655440104'::uuid, NOW(), NOW()),
-  (gen_random_uuid(), '550e8400-e29b-41d4-a716-446655440001'::uuid, '550e8400-e29b-41d4-a716-446655440105'::uuid, NOW(), NOW()),
-  (gen_random_uuid(), '550e8400-e29b-41d4-a716-446655440001'::uuid, '550e8400-e29b-41d4-a716-446655440106'::uuid, NOW(), NOW()),
-  (gen_random_uuid(), '550e8400-e29b-41d4-a716-446655440001'::uuid, '550e8400-e29b-41d4-a716-446655440109'::uuid, NOW(), NOW()),
-  -- Accounting: Create contracts, approve expenses, view reports
-  (gen_random_uuid(), '550e8400-e29b-41d4-a716-446655440002'::uuid, '550e8400-e29b-41d4-a716-446655440106'::uuid, NOW(), NOW()),
-  (gen_random_uuid(), '550e8400-e29b-41d4-a716-446655440002'::uuid, '550e8400-e29b-41d4-a716-446655440108'::uuid, NOW(), NOW()),
-  (gen_random_uuid(), '550e8400-e29b-41d4-a716-446655440002'::uuid, '550e8400-e29b-41d4-a716-446655440109'::uuid, NOW(), NOW()),
-  -- Sales: Create and edit quotations
-  (gen_random_uuid(), '550e8400-e29b-41d4-a716-446655440003'::uuid, '550e8400-e29b-41d4-a716-446655440103'::uuid, NOW(), NOW()),
-  (gen_random_uuid(), '550e8400-e29b-41d4-a716-446655440003'::uuid, '550e8400-e29b-41d4-a716-446655440104'::uuid, NOW(), NOW()),
-  -- Engineering: Create APUs, edit quotations
-  (gen_random_uuid(), '550e8400-e29b-41d4-a716-446655440004'::uuid, '550e8400-e29b-41d4-a716-446655440104'::uuid, NOW(), NOW()),
-  -- View only: just reports
-  (gen_random_uuid(), '550e8400-e29b-41d4-a716-446655440005'::uuid, '550e8400-e29b-41d4-a716-446655440109'::uuid, NOW(), NOW());
+-- Asignar permisos a GERENCIA
+INSERT INTO rol_permiso (id, rol_id, permiso_id, created_at) VALUES
+  (gen_random_uuid(), 'a0000000-0000-0000-0000-000000000002'::uuid, 'b0000000-0000-0000-0000-000000000004'::uuid, NOW()),
+  (gen_random_uuid(), 'a0000000-0000-0000-0000-000000000002'::uuid, 'b0000000-0000-0000-0000-000000000005'::uuid, NOW()),
+  (gen_random_uuid(), 'a0000000-0000-0000-0000-000000000002'::uuid, 'b0000000-0000-0000-0000-000000000006'::uuid, NOW()),
+  (gen_random_uuid(), 'a0000000-0000-0000-0000-000000000002'::uuid, 'b0000000-0000-0000-0000-000000000007'::uuid, NOW());
 
--- Insert default admin user (password: admin123 - should be hashed in production)
-INSERT INTO usuarios (
-  id, email, password_hash, nombres, apellidos, telefono, estado, 
-  verificado, verificacion_token, created_at, updated_at
-) VALUES (
-  '550e8400-e29b-41d4-a716-446655440200'::uuid,
-  'admin@triplaa.com',
-  '$2b$12$Oj7DG2rK9zY7qX4jM5nP6O3L8q9Z2x1W0v/EsK7fJ4iH5gD3bC6T2',  -- 'admin123' hashed
-  'Administrador',
-  'Sistema',
-  '+56-9-1234-5678',
-  'ACTIVO'::estadousuario,
-  true,
-  NULL,
-  NOW(),
-  NOW()
-);
+-- Asignar permisos a VENDEDOR
+INSERT INTO rol_permiso (id, rol_id, permiso_id, created_at) VALUES
+  (gen_random_uuid(), 'a0000000-0000-0000-0000-000000000003'::uuid, 'b0000000-0000-0000-0000-000000000004'::uuid, NOW()),
+  (gen_random_uuid(), 'a0000000-0000-0000-0000-000000000003'::uuid, 'b0000000-0000-0000-0000-000000000005'::uuid, NOW()),
+  (gen_random_uuid(), 'a0000000-0000-0000-0000-000000000003'::uuid, 'b0000000-0000-0000-0000-000000000007'::uuid, NOW());
 
--- Assign admin role to admin user
-INSERT INTO usuario_rol (id, usuario_id, rol_id, created_at, updated_at) VALUES (
-  gen_random_uuid(),
-  '550e8400-e29b-41d4-a716-446655440200'::uuid,
-  '550e8400-e29b-41d4-a716-446655440000'::uuid,
-  NOW(),
-  NOW()
-);
+-- ============================================================
+-- USUARIOS
+-- ============================================================
+-- Contraseñas:
+--   admin@tripleaconstrucciones.com.co  →  TripleA2024
+--   gerencia@tripleaconstrucciones.com.co → Gerencia2024
+--   comercial@tripleaconstrucciones.com.co → Comercial2024
 
--- Insert sample customers
-INSERT INTO clientes (
-  id, codigo, nombre, rut, giro, contacto_nombre, contacto_email, contacto_telefono,
-  direccion, ciudad, provincia, pais, condiciones_pago, dias_credito, limite_credito,
-  estado, notas, created_at, updated_at
-) VALUES
-  (gen_random_uuid(), 'CLI-001', 'Constructora Andes S.A.', '12.345.678-9', 'Construcción', 
-   'Juan Pérez', 'juan@constructoraandes.cl', '+56-9-9876-5432',
-   'Av. Providencia 1234', 'Santiago', 'Metropolitana', 'Chile', '30 días', 30, 500000000,
-   'ACTIVO'::estadocliente, 'Cliente clave', NOW(), NOW()),
-  
-  (gen_random_uuid(), 'CLI-002', 'Minería del Cobre S.A.', '98.765.432-1', 'Minería',
-   'María García', 'maria@mineriadelcobre.cl', '+56-9-5432-1098',
-   'Calle Minería 567', 'Antofagasta', 'Antofagasta', 'Chile', '60 días', 60, 1000000000,
-   'ACTIVO'::estadocliente, 'Gran volumen', NOW(), NOW()),
-  
-  (gen_random_uuid(), 'CLI-003', 'Inmobiliaria Horizonte Ltda.', '12.987.654-3', 'Inmobiliario',
-   'Carlos López', 'carlos@inmohoriz.cl', '+56-9-2345-6789',
-   'Paseo Ahumada 890', 'Valparaíso', 'Valparaíso', 'Chile', '45 días', 45, 750000000,
-   'ACTIVO'::estadocliente, NULL, NOW(), NOW());
+INSERT INTO usuarios (id, email, password_hash, nombres, apellidos, telefono, estado, verificado, intentos_fallidos, created_at, updated_at) VALUES
+  ('c0000000-0000-0000-0000-000000000001'::uuid,
+   'admin@tripleaconstrucciones.com.co',
+   '$2b$12$dzaC2.b86BS1pRBLMOehmeRmpOLbq/pnrgQ.7gk4uuSc/rM.KYgRK',
+   'Administrador', 'Sistema', '3001234567',
+   'ACTIVO'::estadousuario, true, 0, NOW(), NOW()),
 
--- Insert sample products
-INSERT INTO productos (
-  id, codigo, nombre, descripcion, unidad_medida, precio_unitario, 
-  ultima_actualizacion_precio, categoria, margen_default, estado, created_at, updated_at
-) VALUES
-  (gen_random_uuid(), 'PROD-001', 'Hormigón Premezclado', 'Hormigón de 25 MPa', 'm3', 85000,
-   NOW(), 'Materiales', 15, 'ACTIVO'::estadoproducto, NOW(), NOW()),
-  
-  (gen_random_uuid(), 'PROD-002', 'Acero Estructural', 'Barras de acero A63-42H', 'kg', 850,
-   NOW(), 'Materiales', 12, 'ACTIVO'::estadoproducto, NOW(), NOW()),
-  
-  (gen_random_uuid(), 'PROD-003', 'Instalación Eléctrica', 'Instalación de sistema eléctrico', 'ud', 5000000,
-   NOW(), 'Servicios', 20, 'ACTIVO'::estadoproducto, NOW(), NOW()),
-  
-  (gen_random_uuid(), 'PROD-004', 'Excavación', 'Excavación y movimiento de tierra', 'm3', 15000,
-   NOW(), 'Servicios', 18, 'ACTIVO'::estadoproducto, NOW(), NOW()),
-  
-  (gen_random_uuid(), 'PROD-005', 'Ladrillo Fiscal', 'Ladrillo fiscal 18 huecos', 'mil', 120000,
-   NOW(), 'Materiales', 14, 'ACTIVO'::estadoproducto, NOW(), NOW());
+  ('c0000000-0000-0000-0000-000000000002'::uuid,
+   'gerencia@tripleaconstrucciones.com.co',
+   '$2b$12$WErz8wpHQ9WimTplW/VbWufLI9q6Go40hV6gUcgrxNWONQoQEkgLC',
+   'Gerencia', 'Triple A', '3007654321',
+   'ACTIVO'::estadousuario, true, 0, NOW(), NOW()),
 
--- Insert system parameters
-INSERT INTO parametros_sistema (
-  id, clave, valor, tipo, descripcion, created_at, updated_at
-) VALUES
-  (gen_random_uuid(), 'IVA_RATE', '19', 'percentage', 'IVA rate for Chile', NOW(), NOW()),
-  (gen_random_uuid(), 'DEFAULT_CURRENCY', 'CLP', 'string', 'Default currency', NOW(), NOW()),
-  (gen_random_uuid(), 'COMPANY_NAME', 'Triplaa SpA', 'string', 'Company legal name', NOW(), NOW()),
-  (gen_random_uuid(), 'COMPANY_RUT', '76.543.210-5', 'string', 'Company RUT', NOW(), NOW()),
-  (gen_random_uuid(), 'COMPANY_EMAIL', 'info@triplaa.cl', 'string', 'Company email', NOW(), NOW()),
-  (gen_random_uuid(), 'QUOTATION_VALIDITY_DAYS', '30', 'number', 'Days quotations are valid', NOW(), NOW());
+  ('c0000000-0000-0000-0000-000000000003'::uuid,
+   'comercial@tripleaconstrucciones.com.co',
+   '$2b$12$A2oYhQ4hEIUbHqnVTEUb6eHBvQfErFUrxeAVJpLYcu0/TPyORSThW',
+   'Asesor', 'Comercial', '3009876543',
+   'ACTIVO'::estadousuario, true, 0, NOW(), NOW());
 
--- Insert document sequences
-INSERT INTO secuencias (
-  id, nombre, prefijo, proximo_numero, fecha_reset, created_at, updated_at
-) VALUES
-  (gen_random_uuid(), 'Cotizaciones', 'COT', 1000, DATE_TRUNC('year', NOW()), NOW(), NOW()),
-  (gen_random_uuid(), 'Contratos', 'CON', 1000, DATE_TRUNC('year', NOW()), NOW(), NOW()),
-  (gen_random_uuid(), 'Gastos', 'GAS', 1000, DATE_TRUNC('year', NOW()), NOW(), NOW()),
-  (gen_random_uuid(), 'APUs', 'APU', 100, DATE_TRUNC('year', NOW()), NOW(), NOW());
+-- Asignar roles a usuarios
+INSERT INTO usuario_rol (id, usuario_id, rol_id, created_at) VALUES
+  (gen_random_uuid(), 'c0000000-0000-0000-0000-000000000001'::uuid, 'a0000000-0000-0000-0000-000000000001'::uuid, NOW()),
+  (gen_random_uuid(), 'c0000000-0000-0000-0000-000000000002'::uuid, 'a0000000-0000-0000-0000-000000000002'::uuid, NOW()),
+  (gen_random_uuid(), 'c0000000-0000-0000-0000-000000000003'::uuid, 'a0000000-0000-0000-0000-000000000003'::uuid, NOW());
+
+-- ============================================================
+-- CLIENTES DE EJEMPLO (construcción colombiana)
+-- ============================================================
+INSERT INTO clientes (id, codigo, nombre, rut, giro, contacto_nombre, contacto_email, contacto_telefono, direccion, ciudad, provincia, pais, condiciones_pago, dias_credito, limite_credito, estado, notas, created_at, updated_at) VALUES
+  (gen_random_uuid(), 'CLI-001', 'Constructora Ospina & Cía S.A.S.', '800123456-7', 'Construcción y obras civiles',
+   'Ricardo Ospina', 'r.ospina@construospina.com.co', '3112345678',
+   'Calle 72 No. 10-45 Of. 301', 'Bogotá', 'Cundinamarca', 'Colombia',
+   '30 días', 30, 500000000, 'ACTIVO'::estadocliente, 'Cliente frecuente, obras de urbanismo', NOW(), NOW()),
+
+  (gen_random_uuid(), 'CLI-002', 'Inmobiliaria Central S.A.S.', '900234567-1', 'Desarrollo inmobiliario',
+   'Laura Martínez', 'l.martinez@inmobcentral.co', '3187654321',
+   'Carrera 15 No. 88-64 Piso 5', 'Bogotá', 'Cundinamarca', 'Colombia',
+   '45 días', 45, 800000000, 'ACTIVO'::estadocliente, 'Proyectos de vivienda VIS y No VIS', NOW(), NOW()),
+
+  (gen_random_uuid(), 'CLI-003', 'Consorcio Vías del Llano', '901345678-2', 'Infraestructura vial',
+   'Carlos Roa', 'c.roa@viasdellano.co', '3209871234',
+   'Avenida 40A No. 13-09', 'Villavicencio', 'Meta', 'Colombia',
+   '60 días', 60, 1200000000, 'ACTIVO'::estadocliente, 'Contratos de obra pública', NOW(), NOW());
+
+-- ============================================================
+-- PRODUCTOS / SERVICIOS (construcción colombiana, precios COP)
+-- ============================================================
+INSERT INTO productos (id, codigo, nombre, descripcion, unidad_medida, precio_unitario, impuesto_porcentaje, categoria, margen_default, estado, created_at, updated_at) VALUES
+  (gen_random_uuid(), 'SER-001', 'Mano de Obra Oficial',
+   'Oficial de construcción por día (8 horas)',
+   'Día', 85000, 0, 'Mano de Obra', 20, 'ACTIVO'::estadoproducto, NOW(), NOW()),
+
+  (gen_random_uuid(), 'SER-002', 'Mano de Obra Ayudante',
+   'Ayudante de construcción por día (8 horas)',
+   'Día', 60000, 0, 'Mano de Obra', 20, 'ACTIVO'::estadoproducto, NOW(), NOW()),
+
+  (gen_random_uuid(), 'MAT-001', 'Concreto 3000 PSI',
+   'Concreto premezclado resistencia 3000 PSI (21 MPa) incluye bomba',
+   'm3', 480000, 19, 'Materiales', 15, 'ACTIVO'::estadoproducto, NOW(), NOW()),
+
+  (gen_random_uuid(), 'MAT-002', 'Acero de Refuerzo 60000 PSI',
+   'Varilla corrugada Fy=60000 PSI según norma NTC-2289',
+   'kg', 3200, 19, 'Materiales', 12, 'ACTIVO'::estadoproducto, NOW(), NOW()),
+
+  (gen_random_uuid(), 'MAT-003', 'Bloque de Arcilla No. 4',
+   'Bloque arcilla cocida 10x20x40 cm apto para muros',
+   'Und', 1800, 19, 'Materiales', 14, 'ACTIVO'::estadoproducto, NOW(), NOW()),
+
+  (gen_random_uuid(), 'MAT-004', 'Tubería PVC 4" Sanitaria',
+   'Tubería PVC sanitaria Ø4" RDE-41 unión cementar',
+   'ml', 28000, 19, 'Materiales', 18, 'ACTIVO'::estadoproducto, NOW(), NOW()),
+
+  (gen_random_uuid(), 'SER-003', 'Excavación Manual',
+   'Excavación manual en material común, retiro incluido',
+   'm3', 55000, 19, 'Servicios', 22, 'ACTIVO'::estadoproducto, NOW(), NOW()),
+
+  (gen_random_uuid(), 'SER-004', 'Excavación Mecánica',
+   'Excavación con retrocargador sobre llantas, retiro incluido',
+   'm3', 28000, 19, 'Servicios', 20, 'ACTIVO'::estadoproducto, NOW(), NOW()),
+
+  (gen_random_uuid(), 'SER-005', 'Impermeabilización con Sika 107',
+   'Sistema impermeabilizante cementicio flexible Sika Top 107, e=2mm',
+   'm2', 45000, 19, 'Servicios', 25, 'ACTIVO'::estadoproducto, NOW(), NOW()),
+
+  (gen_random_uuid(), 'SER-006', 'Topografía y Replanteo',
+   'Levantamiento topográfico y replanteo de obra con estación total',
+   'Día', 450000, 19, 'Servicios', 30, 'ACTIVO'::estadoproducto, NOW(), NOW());
+
+-- ============================================================
+-- PARÁMETROS DEL SISTEMA
+-- ============================================================
+INSERT INTO parametros_sistema (id, clave, valor, tipo, descripcion, created_at, updated_at) VALUES
+  (gen_random_uuid(), 'EMPRESA_NOMBRE',    'TRIPLE A CONSTRUCCIONES SAS',    'string',     'Razón social de la empresa',              NOW(), NOW()),
+  (gen_random_uuid(), 'EMPRESA_NIT',       '901650581-4',                     'string',     'NIT de la empresa',                       NOW(), NOW()),
+  (gen_random_uuid(), 'EMPRESA_EMAIL',     'contratacion@tripleaconstrucciones.com.co', 'string', 'Correo principal de la empresa', NOW(), NOW()),
+  (gen_random_uuid(), 'EMPRESA_TELEFONO',  '(601) 234-5678',                  'string',     'Teléfono principal',                      NOW(), NOW()),
+  (gen_random_uuid(), 'EMPRESA_CIUDAD',    'Bogotá D.C.',                     'string',     'Ciudad sede principal',                   NOW(), NOW()),
+  (gen_random_uuid(), 'MONEDA_DEFAULT',    'COP',                             'string',     'Moneda por defecto (Peso colombiano)',     NOW(), NOW()),
+  (gen_random_uuid(), 'IVA_PORCENTAJE',    '19',                              'percentage', 'Tarifa de IVA vigente en Colombia',        NOW(), NOW()),
+  (gen_random_uuid(), 'VALIDEZ_COTIZACION','30',                              'number',     'Días de validez predeterminados',          NOW(), NOW());
+
+-- ============================================================
+-- SECUENCIAS DE DOCUMENTOS
+-- ============================================================
+INSERT INTO secuencias (id, tipo_documento, prefijo, proximo_numero, reiniciar_anualmente, created_at, updated_at) VALUES
+  (gen_random_uuid(), 'cotizacion', 'COT-2026-', 1, true, NOW(), NOW()),
+  (gen_random_uuid(), 'contrato',   'CON-2026-', 1, true, NOW(), NOW()),
+  (gen_random_uuid(), 'gasto',      'GAS-2026-', 1, true, NOW(), NOW());

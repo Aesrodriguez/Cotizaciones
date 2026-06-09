@@ -24,9 +24,12 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-700 to-blue-900 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
         <div className="text-center mb-8">
-          <div className="text-5xl mb-3">📄</div>
-          <h1 className="text-2xl font-bold text-gray-900">GDM Cotizaciones</h1>
-          <p className="text-gray-500 mt-1">Ingresa a tu cuenta</p>
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-800 rounded-2xl mb-4">
+            <span className="text-white text-2xl font-black">3A</span>
+          </div>
+          <h1 className="text-xl font-black text-gray-900 uppercase tracking-wide">TRIPLE A CONSTRUCCIONES</h1>
+          <p className="text-sm text-gray-500 font-medium">SAS &nbsp;·&nbsp; NIT 901650581-4</p>
+          <p className="text-gray-400 text-xs mt-2">Sistema de Cotizaciones — Ingresa a tu cuenta</p>
         </div>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
           <div>
