@@ -1,41 +1,28 @@
-"""Database connection and session management."""
-
 import os
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import NullPool
 
-# Get database URL from environment or use default
-DATABASE_URL = os.getenv(
-    'DATABASE_URL',
-    'postgresql://user:password@localhost:5432/triplaa_db'
+from sqlalchemy import create_engine, event, text
+from sqlalchemy.orm import Session, sessionmaker
+
+_raw_url = os.getenv(
+    "DATABASE_URL",
+    "postgresql://user:password@localhost:5432/cotizaciones_db",
 )
-# Render provides 'postgres://' but SQLAlchemy 2.0 requires 'postgresql://'
-if DATABASE_URL.startswith('postgres://'):
-    DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+DATABASE_URL = _raw_url.replace("postgres://", "postgresql://", 1)
 
-# Create engine
-# pool_pre_ping: Test connections before using them (helps with stale connections)
-# echo: Log all SQL statements (disable in production)
 engine = create_engine(
     DATABASE_URL,
-    poolclass=NullPool if 'postgresql' in DATABASE_URL else None,
-    echo=os.getenv('DATABASE_ECHO', 'False').lower() == 'true',
-    future=True
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10,
+    pool_recycle=300,
+    echo=os.getenv("DATABASE_ECHO", "False").lower() == "true",
+    future=True,
 )
 
-# Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def get_db() -> Session:
-    """
-    Dependency for getting database session in FastAPI.
-    
-    Example:
-        def my_endpoint(db: Session = Depends(get_db)):
-            # Use db session
-    """
     db = SessionLocal()
     try:
         yield db

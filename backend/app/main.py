@@ -1,49 +1,98 @@
-"""FastAPI application entry point."""
-
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+import logging
+import time
+import uuid
 from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from app.config.settings import get_settings
 
 settings = get_settings()
 
+logging.basicConfig(
+    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger("cotizaciones")
+
+limiter = Limiter(key_func=get_remote_address)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application lifespan."""
-    # Startup
-    print(f"🚀 {settings.API_TITLE} v{settings.API_VERSION} starting...")
+    logger.info(f"🚀 {settings.API_TITLE} v{settings.API_VERSION} iniciando...")
     yield
-    # Shutdown
-    print(f"🛑 {settings.API_TITLE} shutting down...")
+    logger.info(f"🛑 {settings.API_TITLE} deteniendo...")
 
 
 def create_app() -> FastAPI:
-    """Create and configure FastAPI application."""
     app = FastAPI(
         title=settings.API_TITLE,
         version=settings.API_VERSION,
         description=settings.API_DESCRIPTION,
-        docs_url="/docs",
-        openapi_url="/openapi.json",
+        docs_url="/docs" if settings.ENVIRONMENT != "production" else None,
+        redoc_url=None,
+        openapi_url="/openapi.json" if settings.ENVIRONMENT != "production" else None,
         lifespan=lifespan,
     )
 
-    # Add CORS middleware
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,
-        allow_credentials=settings.CORS_CREDENTIALS,
-        allow_methods=settings.CORS_METHODS,
-        allow_headers=settings.CORS_HEADERS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
-    # Routers
+    @app.middleware("http")
+    async def request_logging(request: Request, call_next):
+        request_id = str(uuid.uuid4())[:8]
+        start = time.perf_counter()
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            logger.error(f"[{request_id}] {request.method} {request.url.path} → 500 ({exc!r})")
+            raise
+        elapsed = (time.perf_counter() - start) * 1000
+        logger.info(
+            f"[{request_id}] {request.method} {request.url.path} "
+            f"→ {response.status_code} ({elapsed:.1f}ms)"
+        )
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        errors = [
+            {"campo": ".".join(str(l) for l in e["loc"][1:]), "mensaje": e["msg"]}
+            for e in exc.errors()
+        ]
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={"detail": "Datos inválidos", "errores": errors},
+        )
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(request: Request, exc: Exception):
+        logger.exception(f"Error no manejado en {request.method} {request.url.path}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": "Error interno del servidor"},
+        )
+
     from app.api.v1.auth.router import router as auth_router
     from app.api.v1.clientes.router import router as clientes_router
-    from app.api.v1.productos.router import router as productos_router
     from app.api.v1.cotizaciones.router import router as cotizaciones_router
+    from app.api.v1.productos.router import router as productos_router
 
     prefix = settings.API_PREFIX
     app.include_router(auth_router, prefix=prefix)
@@ -51,28 +100,20 @@ def create_app() -> FastAPI:
     app.include_router(productos_router, prefix=prefix)
     app.include_router(cotizaciones_router, prefix=prefix)
 
-    @app.get("/health", tags=["Health"])
-    async def health_check():
-        return {"status": "healthy", "app": settings.API_TITLE, "version": settings.API_VERSION}
+    @app.get("/health", tags=["Sistema"])
+    async def health():
+        return {
+            "status": "ok",
+            "app": settings.API_TITLE,
+            "version": settings.API_VERSION,
+            "environment": settings.ENVIRONMENT,
+        }
 
-    @app.get("/", tags=["Root"])
+    @app.get("/", tags=["Sistema"])
     async def root():
-        return {"message": f"Welcome to {settings.API_TITLE}", "docs": "/docs"}
+        return {"app": settings.API_TITLE, "docs": "/docs"}
 
     return app
 
 
-# Create application instance
 app = create_app()
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=settings.DEBUG,
-        log_level=settings.LOG_LEVEL.lower(),
-    )

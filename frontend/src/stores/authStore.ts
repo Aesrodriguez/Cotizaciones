@@ -5,7 +5,8 @@ import type { Usuario } from '../types'
 interface AuthState {
   user: Usuario | null
   token: string | null
-  setAuth: (user: Usuario, token: string) => void
+  refreshToken: string | null
+  setAuth: (user: Usuario, token: string, refreshToken?: string) => void
   logout: () => void
 }
 
@@ -14,9 +15,11 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       token: null,
-      setAuth: (user, token) => set({ user, token }),
-      logout: () => set({ user: null, token: null }),
+      refreshToken: null,
+      setAuth: (user, token, refreshToken) =>
+        set((s) => ({ user, token, refreshToken: refreshToken ?? s.refreshToken })),
+      logout: () => set({ user: null, token: null, refreshToken: null }),
     }),
-    { name: 'auth-gdm' }
-  )
+    { name: 'auth-triplaa' },
+  ),
 )

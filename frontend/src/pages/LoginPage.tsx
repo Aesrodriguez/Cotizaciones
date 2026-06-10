@@ -14,7 +14,7 @@ export default function LoginPage() {
   const onSubmit = async (data: FormData) => {
     try {
       const res = await authAPI.login(data)
-      setAuth(res.data.user, res.data.access_token)
+      setAuth(res.data.user, res.data.access_token, res.data.refresh_token)
       toast.success(`Bienvenido, ${res.data.user.nombres}`)
       navigate('/dashboard')
     } catch { /* interceptor muestra el toast */ }

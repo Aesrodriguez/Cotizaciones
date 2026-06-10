@@ -7,18 +7,26 @@ node_modules/
 .env.local
 .env.*.local
 backend/.env
+frontend/.env
 
-# Build
+# Builds
 frontend/dist/
 frontend/build/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/.pytest_cache/
+backend/htmlcov/
 
 # Logs
 logs/
 *.log
+backend/logs/
 
 # Test coverage
 coverage/
 .nyc_output/
+.coverage
 
 # OS
 .DS_Store
@@ -28,6 +36,15 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+*.swo
 
-# Knex
+# Python virtual envs
+venv/
+.venv/
+env/
+
+# Mypy
+.mypy_cache/
+
+# Knex (legacy, no longer used)
 .knex_migrations_lock

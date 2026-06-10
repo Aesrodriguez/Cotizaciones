@@ -1,7 +1,8 @@
-from uuid import UUID
-from typing import Optional, List
-from pydantic import BaseModel, EmailStr, field_validator
 import re
+from typing import List, Optional
+from uuid import UUID
+
+from pydantic import BaseModel, EmailStr, field_validator
 
 
 class UsuarioCreate(BaseModel):
@@ -73,10 +74,15 @@ class UsuarioOut(BaseModel):
 
 class Token(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     user: UsuarioOut
 
 
-class TokenRefresh(BaseModel):
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class TokenRefreshed(BaseModel):
     access_token: str
     token_type: str = "bearer"

@@ -1,5 +1,5 @@
 services:
-  # Backend API — Python FastAPI con Docker
+  # Backend API — Python FastAPI (Docker)
   - type: web
     name: cotizaciones-api
     env: docker
@@ -18,13 +18,15 @@ services:
       - key: ALGORITHM
         value: HS256
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
-        value: 15
+        value: 30
       - key: REFRESH_TOKEN_EXPIRE_DAYS
         value: 7
-      - key: CORS_ORIGINS
-        value: '["https://cotizaciones-web.onrender.com"]'
+      - key: ENVIRONMENT
+        value: production
       - key: LOG_LEVEL
         value: INFO
+      - key: CORS_ORIGINS
+        value: '["https://cotizaciones-web.onrender.com"]'
 
   # Frontend — React + Vite (sitio estático)
   - type: web

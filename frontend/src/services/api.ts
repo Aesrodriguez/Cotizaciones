@@ -1,35 +1,97 @@
-import axios from 'axios'
+import axios, { AxiosError, AxiosRequestConfig } from 'axios'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../stores/authStore'
 import type { Cliente, Cotizacion, PaginatedResponse, Producto, Stats, Usuario } from '../types'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api/v1',
-  timeout: 15000,
+  timeout: 20000,
 })
 
+// ─── Request interceptor ───────────────────────────────────────────────────
 api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().token
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
 
+// ─── Response interceptor with silent token refresh ───────────────────────
+let isRefreshing = false
+let pendingQueue: Array<{ resolve: (v: string) => void; reject: (e: unknown) => void }> = []
+
+function processQueue(error: unknown, token: string | null) {
+  pendingQueue.forEach(({ resolve, reject }) => (error ? reject(error) : resolve(token!)))
+  pendingQueue = []
+}
+
 api.interceptors.response.use(
   (res) => res,
-  (error) => {
-    const msg = error.response?.data?.detail || 'Error de conexión'
-    if (error.response?.status === 401) {
-      useAuthStore.getState().logout()
+  async (error: AxiosError) => {
+    const original = error.config as AxiosRequestConfig & { _retry?: boolean }
+    const status = error.response?.status
+    const { refreshToken, setAuth, logout } = useAuthStore.getState()
+
+    // Token expirado → intentar refresh silencioso
+    if (status === 401 && refreshToken && !original._retry && !original.url?.includes('/auth/')) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          pendingQueue.push({
+            resolve: (token) => {
+              original.headers = { ...original.headers, Authorization: `Bearer ${token}` }
+              resolve(api(original))
+            },
+            reject,
+          })
+        })
+      }
+
+      original._retry = true
+      isRefreshing = true
+
+      try {
+        const { data } = await axios.post(
+          `${api.defaults.baseURL}/auth/refresh`,
+          { refresh_token: refreshToken },
+        )
+        const newToken: string = data.access_token
+        const currentUser = useAuthStore.getState().user
+        if (currentUser) setAuth(currentUser, newToken, refreshToken)
+        processQueue(null, newToken)
+        original.headers = { ...original.headers, Authorization: `Bearer ${newToken}` }
+        return api(original)
+      } catch (refreshError) {
+        processQueue(refreshError, null)
+        logout()
+        window.location.href = '/login'
+        return Promise.reject(refreshError)
+      } finally {
+        isRefreshing = false
+      }
+    }
+
+    // 401 sin refresh token → logout
+    if (status === 401) {
+      logout()
       window.location.href = '/login'
-    } else if (error.response?.status !== 404) {
+      return Promise.reject(error)
+    }
+
+    // Mostrar toast de error (excepto 404)
+    if (status !== 404) {
+      const msg = (error.response?.data as any)?.detail ?? 'Error de conexión'
       toast.error(typeof msg === 'string' ? msg : 'Error del servidor')
     }
+
     return Promise.reject(error)
-  }
+  },
 )
 
+// ─── API modules ──────────────────────────────────────────────────────────
 export const authAPI = {
-  login: (data: { email: string; password: string }) => api.post('/auth/login', data),
+  login: (data: { email: string; password: string }) =>
+    api.post<{ access_token: string; refresh_token: string; user: Usuario }>('/auth/login', data),
+  refresh: (refresh_token: string) =>
+    api.post<{ access_token: string }>('/auth/refresh', { refresh_token }),
   me: () => api.get<{ user: Usuario }>('/auth/me'),
   changePassword: (data: { current_password: string; new_password: string }) =>
     api.patch('/auth/change-password', data),

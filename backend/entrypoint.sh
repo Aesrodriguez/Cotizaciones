@@ -1,12 +1,23 @@
 #!/bin/sh
 set -e
 
-echo "=== TRIPLE A CONSTRUCCIONES SAS ==="
-echo "PORT: ${PORT:-8000}"
+echo "========================================"
+echo "  TRIPLE A CONSTRUCCIONES SAS"
+echo "  Sistema de Cotizaciones v1.0"
+echo "========================================"
+echo "Python : $(python --version 2>&1)"
+echo "Puerto : ${PORT:-8000}"
+echo "DB     : $(echo "${DATABASE_URL:-NO_CONFIG}" | cut -c1-25)..."
+echo ""
 
-echo ">>> Ejecutando migraciones..."
+echo ">>> Ejecutando migraciones Alembic..."
 alembic upgrade head
 echo ">>> Migraciones completadas"
+echo ""
 
-echo ">>> Iniciando uvicorn en puerto ${PORT:-8000}..."
-exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" --log-level info
+echo ">>> Iniciando servidor en puerto ${PORT:-8000}..."
+exec uvicorn app.main:app \
+  --host 0.0.0.0 \
+  --port "${PORT:-8000}" \
+  --log-level info \
+  --no-access-log
