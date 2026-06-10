@@ -2,11 +2,12 @@
 set -e
 
 echo "=== TRIPLE A CONSTRUCCIONES SAS ==="
-echo "DATABASE_URL: ${DATABASE_URL:0:30}..."
+echo "PORT: ${PORT:-8000}"
+echo "DATABASE_URL prefix: ${DATABASE_URL:0:20}..."
 
-echo ">>> Migraciones..."
+echo ">>> Ejecutando migraciones..."
 alembic upgrade head
-echo ">>> Migraciones OK"
+echo ">>> Migraciones completadas"
 
-echo ">>> Iniciando uvicorn..."
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level info
+echo ">>> Iniciando uvicorn en puerto ${PORT:-8000}..."
+exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" --log-level info
