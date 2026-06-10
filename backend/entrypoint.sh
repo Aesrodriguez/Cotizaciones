@@ -3,7 +3,6 @@ set -e
 
 echo "=== TRIPLE A CONSTRUCCIONES SAS ==="
 echo "PORT: ${PORT:-8000}"
-echo "DATABASE_URL prefix: ${DATABASE_URL:0:20}..."
 
 echo ">>> Ejecutando migraciones..."
 alembic upgrade head
