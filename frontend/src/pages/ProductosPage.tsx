@@ -81,7 +81,15 @@ export default function ProductosPage() {
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div><label className="label">Nombre *</label><input {...register('nombre', { required: true })} className="input" /></div>
-            <div><label className="label">Categoría</label><input {...register('categoria')} className="input" /></div>
+            <div>
+              <label className="label">Categoría</label>
+              <input {...register('categoria')} list="categorias-list" className="input" placeholder="Seleccionar o escribir..." />
+              <datalist id="categorias-list">
+                {[...new Set(productos.map((p) => p.categoria).filter(Boolean))].map((cat) => (
+                  <option key={cat} value={cat!} />
+                ))}
+              </datalist>
+            </div>
             <div><label className="label">Unidad</label><input {...register('unidad_medida')} className="input" /></div>
             <div><label className="label">Precio *</label><input type="number" step="0.01" min="0" {...register('precio_unitario', { required: true })} className="input" /></div>
             <div><label className="label">IVA %</label><input type="number" step="0.1" min="0" max="100" {...register('impuesto_porcentaje')} className="input" /></div>

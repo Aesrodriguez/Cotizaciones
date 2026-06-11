@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { cotizacionesAPI, clientesAPI, productosAPI } from '../services/api'
-import { formatCurrency } from '../utils/format'
+import { formatCurrency, formatDate } from '../utils/format'
 import Modal from '../components/common/Modal'
 import ClienteAutocomplete from '../components/common/ClienteAutocomplete'
 import ProductoBuscador from '../components/common/ProductoBuscador'
@@ -49,6 +49,7 @@ interface ProductoForm {
   precio_unitario: number
   impuesto_porcentaje: number
   unidad_medida: string
+  categoria?: string
 }
 
 const defaultItem: ItemForm = {
@@ -290,9 +291,51 @@ export default function CotizacionFormPage() {
                   </select>
                 </div>
 
-                <div>
+                <div className="sm:col-span-2">
                   <label className="label">Días de vigencia</label>
-                  <input type="number" {...register('validez_dias')} className="input" placeholder="30" />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      {...register('validez_dias', { valueAsNumber: true })}
+                      onBlur={(e) => {
+                        const dias = Number(e.target.value)
+                        const emision = watch('fecha_emision')
+                        if (dias > 0 && emision) {
+                          const base = new Date(emision + 'T12:00:00')
+                          base.setDate(base.getDate() + dias)
+                          setValue('fecha_vencimiento', base.toISOString().slice(0, 10))
+                        }
+                      }}
+                      className="input w-24"
+                      placeholder="30"
+                    />
+                    {[15, 30, 45, 60].map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => {
+                          setValue('validez_dias', d)
+                          const emision = watch('fecha_emision')
+                          if (emision) {
+                            const base = new Date(emision + 'T12:00:00')
+                            base.setDate(base.getDate() + d)
+                            setValue('fecha_vencimiento', base.toISOString().slice(0, 10))
+                          }
+                        }}
+                        className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
+                          Number(watch('validez_dias')) === d
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white text-gray-600 border-gray-200 hover:border-blue-400 hover:text-blue-600'
+                        }`}
+                      >{d} días</button>
+                    ))}
+                  </div>
+                  {watch('fecha_vencimiento') && (
+                    <p className="text-xs text-gray-500 mt-1.5">
+                      Válida hasta: <span className="font-medium text-gray-700">{formatDate(watch('fecha_vencimiento')!)}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -643,10 +686,14 @@ export default function CotizacionFormPage() {
                 className="input"
               />
             </div>
-          </div>
-          <div>
-            <label className="label">Unidad de medida</label>
-            <input {...productoForm.register('unidad_medida')} className="input" placeholder="UN, M2, KG, GL..." />
+            <div>
+              <label className="label">Unidad de medida</label>
+              <input {...productoForm.register('unidad_medida')} className="input" placeholder="UN, M2, KG, GL..." />
+            </div>
+            <div>
+              <label className="label">Categoría</label>
+              <input {...productoForm.register('categoria')} className="input" placeholder="Ej: Equipos, Servicios..." />
+            </div>
           </div>
           <div className="flex justify-end gap-3 pt-1">
             <button type="button" onClick={() => setProductoModal(false)} className="btn-secondary">Cancelar</button>

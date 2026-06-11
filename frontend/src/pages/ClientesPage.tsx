@@ -25,7 +25,16 @@ export default function ClientesPage() {
   useEffect(() => { fetchData() }, [fetchData])
 
   const openCreate = () => { setEditTarget(null); reset({}); setModalOpen(true) }
-  const openEdit = (c: Cliente) => { setEditTarget(c); reset(c); setModalOpen(true) }
+  const openEdit = async (c: Cliente) => {
+    setEditTarget(c)
+    try {
+      const res = await clientesAPI.getById(c.id)
+      reset(res.data)
+    } catch {
+      reset(c)
+    }
+    setModalOpen(true)
+  }
 
   const onSubmit = async (data: Partial<Cliente>) => {
     try {
