@@ -122,6 +122,8 @@ export const cotizacionesAPI = {
     api.patch<{ message: string }>(`/cotizaciones/${id}/estado`, { estado }),
   enviarEmail: (id: string, data: { email: string; asunto?: string; mensaje?: string }) =>
     api.post<{ message: string }>(`/cotizaciones/${id}/enviar-email`, data),
+  downloadPdf: (id: string) =>
+    api.get(`/cotizaciones/${id}/pdf`, { responseType: 'blob' }),
 }
 
 export const clientesAPI = {

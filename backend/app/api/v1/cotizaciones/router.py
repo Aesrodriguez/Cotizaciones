@@ -1,5 +1,6 @@
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from app.api.deps import get_db_session, get_authenticated_user, require_admin
 from app.models.auth import Usuario
@@ -95,6 +96,27 @@ def update_estado(
     cot.estado = body.estado
     db.commit()
     return {"message": f"Estado actualizado a {body.estado}"}
+
+
+@router.get("/{id}/pdf")
+def descargar_pdf(id: UUID, db: Session = Depends(get_db_session), _: Usuario = Depends(get_authenticated_user)):
+    from app.utils.pdf import generate_cotizacion_pdf
+    cot = CotizacionRepository(db).get_with_items(id)
+    if not cot:
+        raise HTTPException(404, "Cotización no encontrada")
+    cot.cliente_nombre = cot.cliente.nombre if cot.cliente else None
+    for item in cot.items:
+        item.producto_nombre = item.producto.nombre if item.producto else None
+    try:
+        pdf_bytes = generate_cotizacion_pdf(cot)
+    except Exception as exc:
+        raise HTTPException(500, f"Error generando PDF: {exc}")
+    filename = f"Cotizacion-{cot.numero}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/{id}/enviar-email", response_model=MessageResponse)

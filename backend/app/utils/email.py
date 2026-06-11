@@ -1,11 +1,12 @@
+import base64
 from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
+from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition
 from typing import Optional
 
 from app.config.settings import get_settings
 
 
-def _send_email(to_email: str, subject: str, html: str) -> bool:
+def _send_email(to_email: str, subject: str, html: str, pdf_bytes: Optional[bytes] = None, pdf_filename: str = "cotizacion.pdf") -> bool:
     settings = get_settings()
     if not settings.SENDGRID_API_KEY:
         print("[EMAIL] ABORTADO: SENDGRID_API_KEY no configurado en las variables de entorno", flush=True)
@@ -19,6 +20,14 @@ def _send_email(to_email: str, subject: str, html: str) -> bool:
             subject=subject,
             html_content=html,
         )
+        if pdf_bytes:
+            attachment = Attachment(
+                FileContent(base64.b64encode(pdf_bytes).decode()),
+                FileName(pdf_filename),
+                FileType("application/pdf"),
+                Disposition("attachment"),
+            )
+            message.attachment = attachment
         sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
         response = sg.send(message)
         print(f"[EMAIL] OK — status {response.status_code} enviado a {to_email}", flush=True)
@@ -188,7 +197,16 @@ def send_cotizacion_email(
 </body>
 </html>"""
 
-    return _send_email(to_email, asunto_email, html)
+    try:
+        from app.utils.pdf import generate_cotizacion_pdf
+        pdf_bytes = generate_cotizacion_pdf(cotizacion)
+        pdf_filename = f"Cotizacion-{numero}.pdf"
+    except Exception as exc:
+        print(f"[EMAIL] Advertencia: no se pudo generar PDF — {exc}", flush=True)
+        pdf_bytes = None
+        pdf_filename = "cotizacion.pdf"
+
+    return _send_email(to_email, asunto_email, html, pdf_bytes=pdf_bytes, pdf_filename=pdf_filename)
 
 
 def send_reset_email(to_email: str, reset_url: str) -> bool:

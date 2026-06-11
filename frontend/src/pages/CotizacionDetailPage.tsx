@@ -39,6 +39,7 @@ export default function CotizacionDetailPage() {
   const [emailOpen, setEmailOpen] = useState(false)
   const [sendingEmail, setSendingEmail] = useState(false)
   const [changingEstado, setChangingEstado] = useState<string | null>(null)
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
 
   const { register, handleSubmit, reset: resetEmail, formState: { errors } } = useForm<EmailForm>()
 
@@ -74,6 +75,24 @@ export default function CotizacionDetailPage() {
       setEmailOpen(false)
     } finally {
       setSendingEmail(false)
+    }
+  }
+
+  const handleDownloadPdf = async () => {
+    if (!id || !quote) return
+    setDownloadingPdf(true)
+    try {
+      const res = await cotizacionesAPI.downloadPdf(id)
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Cotizacion-${quote.numero}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error('No se pudo generar el PDF')
+    } finally {
+      setDownloadingPdf(false)
     }
   }
 
@@ -135,11 +154,11 @@ export default function CotizacionDetailPage() {
               </svg>
               Enviar por correo
             </button>
-            <button onClick={() => window.print()} className="btn-secondary">
+            <button onClick={handleDownloadPdf} disabled={downloadingPdf} className="btn-secondary">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              Descargar PDF
+              {downloadingPdf ? 'Generando...' : 'Descargar PDF'}
             </button>
             {id && (
               <Link to={`/cotizaciones/${id}/editar`} className="btn-secondary">
