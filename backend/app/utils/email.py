@@ -1,13 +1,17 @@
+import logging
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from app.config.settings import get_settings
 
+logger = logging.getLogger(__name__)
+
 
 def send_reset_email(to_email: str, reset_url: str) -> bool:
     settings = get_settings()
     if not settings.SMTP_PASSWORD:
+        logger.error("EMAIL_ERROR: SMTP_PASSWORD no configurado — el correo no se enviará")
         return False
 
     html = f"""
@@ -83,12 +87,16 @@ def send_reset_email(to_email: str, reset_url: str) -> bool:
     msg["To"] = to_email
     msg.attach(MIMEText(html, "html", "utf-8"))
 
+    logger.info("EMAIL_ATTEMPT: enviando a %s vía %s:%s (user=%s)",
+                to_email, settings.SMTP_HOST, settings.SMTP_PORT, settings.SMTP_USER)
     try:
         with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
             server.ehlo()
             server.starttls()
             server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
             server.sendmail(settings.SMTP_USER, to_email, msg.as_string())
+        logger.info("EMAIL_OK: correo enviado a %s", to_email)
         return True
-    except Exception:
+    except Exception as exc:
+        logger.error("EMAIL_ERROR: %s", exc)
         return False
