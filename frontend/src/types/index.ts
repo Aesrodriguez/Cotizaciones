@@ -74,6 +74,10 @@ export interface Cotizacion {
   cliente_nombre?: string
   cliente_email?: string
   usuario_nombre?: string
+  aiu_administracion?: number
+  aiu_imprevistos?: number
+  aiu_utilidad?: number
+  aiu_monto?: number
   validez_dias?: number
   condiciones_pago?: string
   terminos?: string

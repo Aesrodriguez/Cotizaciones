@@ -15,6 +15,7 @@ interface FormData {
   cliente_id: string; titulo: string; descripcion?: string
   fecha_emision: string; fecha_vencimiento?: string; moneda: string
   validez_dias?: number; condiciones_pago?: string; terminos?: string; observaciones?: string
+  aiu_administracion: number; aiu_imprevistos: number; aiu_utilidad: number
   items: ItemForm[]
 }
 interface ClienteForm { codigo: string; nombre: string; contacto_email: string; contacto_telefono: string; ciudad: string }
@@ -28,7 +29,7 @@ export default function CotizacionFormPage() {
   const isEdit = Boolean(id)
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [productos, setProductos] = useState<Producto[]>([])
-  const [totals, setTotals] = useState({ subtotal: 0, descuento: 0, impuesto: 0, total: 0 })
+  const [totals, setTotals] = useState({ subtotal: 0, descuento: 0, impuesto: 0, aiu: 0, total: 0 })
   const [clienteModal, setClienteModal] = useState(false)
   const [productoModal, setProductoModal] = useState(false)
   const [savingCliente, setSavingCliente] = useState(false)
@@ -39,12 +40,14 @@ export default function CotizacionFormPage() {
     defaultValues: {
       moneda: 'COP', fecha_emision: new Date().toISOString().slice(0, 10),
       fecha_vencimiento: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+      aiu_administracion: 0, aiu_imprevistos: 0, aiu_utilidad: 0,
       items: [{ ...defaultItem }],
     },
   })
   const { register, control, handleSubmit, watch, setValue, reset, formState: { isSubmitting } } = mainForm
   const { fields, append, remove } = useFieldArray({ control, name: 'items' })
   const watchItems = watch('items')
+  const watchAiu = watch(['aiu_administracion', 'aiu_imprevistos', 'aiu_utilidad'])
 
   const clienteForm = useForm<ClienteForm>()
   const productoForm = useForm<ProductoForm>({ defaultValues: { impuesto_porcentaje: 19, unidad_medida: 'UN' } })
@@ -63,6 +66,9 @@ export default function CotizacionFormPage() {
           moneda: q.moneda, validez_dias: q.validez_dias ?? 30,
           condiciones_pago: q.condiciones_pago ?? '', terminos: q.terminos ?? '',
           observaciones: q.observaciones ?? '',
+          aiu_administracion: Number(q.aiu_administracion ?? 0),
+          aiu_imprevistos: Number(q.aiu_imprevistos ?? 0),
+          aiu_utilidad: Number(q.aiu_utilidad ?? 0),
           items: (q.items ?? []).map((i, idx) => ({
             producto_id: i.producto_id, descripcion: i.descripcion ?? '',
             cantidad: Number(i.cantidad), precio_unitario: Number(i.precio_unitario),
@@ -83,8 +89,11 @@ export default function CotizacionFormPage() {
       const taxable = base - disc
       subtotal += base; descuento += disc; impuesto += taxable * ((Number(item.impuesto_porcentaje) || 0) / 100)
     })
-    setTotals({ subtotal, descuento, impuesto, total: subtotal - descuento + impuesto })
-  }, [watchItems])
+    const [a, i, u] = watchAiu.map((v) => Number(v) || 0)
+    const costosDirect = subtotal - descuento
+    const aiu = costosDirect * (a + i + u) / 100
+    setTotals({ subtotal, descuento, impuesto, aiu, total: costosDirect + impuesto + aiu })
+  }, [watchItems, watchAiu])
 
   const selectProducto = (index: number, productoId: string) => {
     const p = productos.find((x) => x.id === productoId)
@@ -233,11 +242,54 @@ export default function CotizacionFormPage() {
             ))}
           </div>
           <div className="mt-6 pt-4 border-t max-w-xs ml-auto space-y-1.5 text-sm">
-            <div className="flex justify-between text-gray-600"><span>Subtotal:</span><span>{formatCurrency(totals.subtotal)}</span></div>
-            {totals.descuento > 0 && <div className="flex justify-between text-red-600"><span>Descuento:</span><span>- {formatCurrency(totals.descuento)}</span></div>}
-            <div className="flex justify-between text-gray-600"><span>IVA:</span><span>{formatCurrency(totals.impuesto)}</span></div>
+            <div className="flex justify-between text-gray-600"><span>Costos directos:</span><span>{formatCurrency(totals.subtotal - totals.descuento)}</span></div>
+            {totals.descuento > 0 && <div className="flex justify-between text-red-600 text-xs"><span>Descuento incluido:</span><span>- {formatCurrency(totals.descuento)}</span></div>}
+            <div className="flex justify-between text-gray-600"><span>IVA (ítems):</span><span>{formatCurrency(totals.impuesto)}</span></div>
+            {totals.aiu > 0 && <div className="flex justify-between text-blue-700 font-medium"><span>AIU ({(Number(watch('aiu_administracion'))||0)+(Number(watch('aiu_imprevistos'))||0)+(Number(watch('aiu_utilidad'))||0)}%):</span><span>{formatCurrency(totals.aiu)}</span></div>}
             <div className="flex justify-between font-bold text-lg border-t pt-2 text-gray-900"><span>Total:</span><span>{formatCurrency(totals.total)}</span></div>
           </div>
+        </div>
+
+        {/* AIU */}
+        <div className="card">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-lg font-semibold">AIU — Administración, Imprevistos y Utilidad</h2>
+            <span className="text-xs text-gray-400">Aplicado sobre costos directos</span>
+          </div>
+          <p className="text-xs text-gray-500 mb-4">
+            Impuesto específico del sector construcción. Deja en 0 si no aplica.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="label">Administración %</label>
+              <input type="number" step="0.01" min="0" max="100"
+                {...register('aiu_administracion', { valueAsNumber: true })}
+                className="input" placeholder="10" />
+              <p className="text-xs text-gray-400 mt-1">Gastos de oficina, personal administrativo</p>
+            </div>
+            <div>
+              <label className="label">Imprevistos %</label>
+              <input type="number" step="0.01" min="0" max="100"
+                {...register('aiu_imprevistos', { valueAsNumber: true })}
+                className="input" placeholder="5" />
+              <p className="text-xs text-gray-400 mt-1">Contingencias y riesgos del proyecto</p>
+            </div>
+            <div>
+              <label className="label">Utilidad %</label>
+              <input type="number" step="0.01" min="0" max="100"
+                {...register('aiu_utilidad', { valueAsNumber: true })}
+                className="input" placeholder="10" />
+              <p className="text-xs text-gray-400 mt-1">Margen de ganancia</p>
+            </div>
+          </div>
+          {totals.aiu > 0 && (
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-100 flex items-center justify-between text-sm">
+              <span className="text-blue-700 font-medium">
+                AIU Total: {(Number(watch('aiu_administracion'))||0)+(Number(watch('aiu_imprevistos'))||0)+(Number(watch('aiu_utilidad'))||0)}%
+              </span>
+              <span className="text-blue-900 font-bold">{formatCurrency(totals.aiu)}</span>
+            </div>
+          )}
         </div>
 
         {/* Notas */}
