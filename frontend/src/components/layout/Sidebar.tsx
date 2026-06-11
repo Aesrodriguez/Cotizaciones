@@ -18,10 +18,9 @@ export default function Sidebar({ open, onClose }: Props) {
     <>
       {open && <div className="fixed inset-0 bg-black/40 z-20 md:hidden" onClick={onClose} />}
       <aside className={`fixed inset-y-0 left-0 z-30 w-64 bg-blue-800 text-white flex flex-col transform transition-transform duration-200 md:relative md:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="px-6 py-5 border-b border-blue-700">
-          <h1 className="text-lg font-bold leading-tight">TRIPLE A</h1>
-          <p className="text-sm font-semibold text-blue-100">CONSTRUCCIONES SAS</p>
-          <p className="text-xs text-blue-300 mt-0.5">NIT: 901650581-4</p>
+        <div className="px-4 py-4 border-b border-blue-700 flex flex-col items-center">
+          <img src="/logo.png" alt="Triple A Construcciones" className="h-16 w-auto object-contain" />
+          <p className="text-xs text-blue-300 mt-1.5">NIT: 901650581-4</p>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {navItems.map((item) => (

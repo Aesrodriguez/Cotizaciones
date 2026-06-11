@@ -115,20 +115,16 @@ def send_cotizacion_email(
       <table width="620" cellpadding="0" cellspacing="0"
              style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
         <tr>
-          <td style="background:#1e3a8a;padding:28px 36px;">
+          <td style="background:#1e3a8a;padding:20px 36px;">
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
-                <td>
-                  <div style="display:inline-block;width:48px;height:48px;background:#1d4ed8;border-radius:10px;
-                              text-align:center;line-height:48px;font-size:18px;font-weight:900;color:#fff;
-                              vertical-align:middle;">3A</div>
-                  <span style="color:#fff;font-size:17px;font-weight:900;letter-spacing:1px;
-                               text-transform:uppercase;vertical-align:middle;margin-left:12px;">
-                    TRIPLE A CONSTRUCCIONES SAS
-                  </span>
-                  <p style="color:#93c5fd;font-size:11px;margin:4px 0 0 60px;">NIT 901650581-4</p>
+                <td style="vertical-align:middle;">
+                  <img src="https://cotizaciones-web.onrender.com/logo.png"
+                       alt="Triple A Construcciones" height="64"
+                       style="height:64px;width:auto;display:block;" />
+                  <p style="color:#93c5fd;font-size:11px;margin:4px 0 0;">NIT 901650581-4</p>
                 </td>
-                <td align="right" style="vertical-align:top;">
+                <td align="right" style="vertical-align:middle;">
                   <p style="color:#fff;font-size:22px;font-weight:900;margin:0;">COTIZACIÓN</p>
                   <p style="color:#93c5fd;font-size:14px;margin:4px 0 0;font-weight:600;">{numero}</p>
                 </td>
@@ -226,15 +222,11 @@ def send_reset_email(to_email: str, reset_url: str) -> bool:
                  style="background:#ffffff;border-radius:12px;overflow:hidden;
                         box-shadow:0 2px 12px rgba(0,0,0,0.08);">
             <tr>
-              <td align="center" style="background:#1e3a8a;padding:32px 40px;">
-                <div style="display:inline-block;width:56px;height:56px;background:#1d4ed8;
-                            border-radius:12px;line-height:56px;text-align:center;
-                            font-size:22px;font-weight:900;color:#ffffff;">3A</div>
-                <h1 style="color:#ffffff;margin:12px 0 4px;font-size:18px;
-                           font-weight:900;letter-spacing:1px;text-transform:uppercase;">
-                  TRIPLE A CONSTRUCCIONES SAS
-                </h1>
-                <p style="color:#93c5fd;margin:0;font-size:12px;">NIT 901650581-4</p>
+              <td align="center" style="background:#1e3a8a;padding:24px 40px;">
+                <img src="https://cotizaciones-web.onrender.com/logo.png"
+                     alt="Triple A Construcciones" height="72"
+                     style="height:72px;width:auto;display:block;margin:0 auto;" />
+                <p style="color:#93c5fd;margin:8px 0 0;font-size:12px;">NIT 901650581-4</p>
               </td>
             </tr>
             <tr>

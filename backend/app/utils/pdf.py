@@ -1,4 +1,12 @@
+import os
 from weasyprint import HTML
+
+_STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'static')
+
+
+def _logo_uri() -> str:
+    path = os.path.abspath(os.path.join(_STATIC_DIR, 'logo.png'))
+    return f"file://{path}" if os.path.exists(path) else ""
 
 
 def _fmt(amount) -> str:
@@ -105,12 +113,11 @@ def generate_cotizacion_pdf(cotizacion) -> bytes:
 </head>
 <body>
   <!-- Header -->
-  <table style="width:100%;background:#1e3a8a;padding:20px 24px;" cellpadding="0" cellspacing="0">
+  <table style="width:100%;background:#1e3a8a;padding:16px 24px;" cellpadding="0" cellspacing="0">
     <tr>
       <td style="vertical-align:middle;">
-        <div style="display:inline-block;width:40px;height:40px;background:#1d4ed8;border-radius:8px;text-align:center;line-height:40px;font-size:16px;font-weight:900;color:#fff;vertical-align:middle;">3A</div>
-        <span style="color:#fff;font-size:16px;font-weight:900;letter-spacing:1px;text-transform:uppercase;vertical-align:middle;margin-left:10px;">TRIPLE A CONSTRUCCIONES SAS</span>
-        <div style="color:#93c5fd;font-size:10px;margin-top:3px;margin-left:50px;">NIT 901650581-4</div>
+        {f'<img src="{_logo_uri()}" style="height:64px;width:auto;display:block;" />' if _logo_uri() else '<span style="color:#fff;font-size:16px;font-weight:900;letter-spacing:1px;">TRIPLE A CONSTRUCCIONES SAS</span>'}
+        <div style="color:#93c5fd;font-size:10px;margin-top:4px;">NIT 901650581-4</div>
       </td>
       <td style="text-align:right;vertical-align:middle;">
         <div style="color:#fff;font-size:20px;font-weight:900;">COTIZACIÓN</div>
