@@ -97,7 +97,9 @@ export default function CotizacionFormPage() {
     const costosDirect = subtotal - descuento
     const aiu = watchConAiu ? costosDirect * (a + i + u) / 100 : 0
     const aiuIva = watchConAiu ? costosDirect * u / 100 * 0.19 : 0
-    setTotals({ subtotal, descuento, impuesto, aiu, aiuIva, total: costosDirect + impuesto + aiu + aiuIva })
+    // When AIU is active, item-level IVA is excluded from the total (reference only)
+    const total = watchConAiu ? costosDirect + aiu + aiuIva : costosDirect + impuesto
+    setTotals({ subtotal, descuento, impuesto, aiu, aiuIva, total })
   }, [watchItems, watchAiu, watchConAiu])
 
   const selectProducto = (index: number, productoId: string) => {
@@ -241,7 +243,11 @@ export default function CotizacionFormPage() {
                   <div><label className="label text-xs">Cantidad</label><input type="number" step="0.01" min="0.01" {...register(`items.${index}.cantidad`)} className="input text-sm" /></div>
                   <div><label className="label text-xs">Precio unit.</label><input type="number" step="0.01" min="0" {...register(`items.${index}.precio_unitario`)} className="input text-sm" /></div>
                   <div><label className="label text-xs">Desc. %</label><input type="number" step="0.1" min="0" max="100" {...register(`items.${index}.descuento_porcentaje`)} className="input text-sm" /></div>
-                  <div><label className="label text-xs">IVA %</label><input type="number" step="0.1" min="0" {...register(`items.${index}.impuesto_porcentaje`)} className="input text-sm" /></div>
+                  <div>
+                    <label className="label text-xs">{watchConAiu ? 'IVA % (ref.)' : 'IVA %'}</label>
+                    <input type="number" step="0.1" min="0" {...register(`items.${index}.impuesto_porcentaje`)} className={`input text-sm ${watchConAiu ? 'bg-gray-50 text-gray-400' : ''}`} />
+                    {watchConAiu && <p className="text-xs text-gray-400 mt-0.5">No aplica en AIU</p>}
+                  </div>
                 </div>
               </div>
             ))}
@@ -249,7 +255,8 @@ export default function CotizacionFormPage() {
           <div className="mt-6 pt-4 border-t max-w-xs ml-auto space-y-1.5 text-sm">
             <div className="flex justify-between text-gray-600"><span>Costos directos:</span><span>{formatCurrency(totals.subtotal - totals.descuento)}</span></div>
             {totals.descuento > 0 && <div className="flex justify-between text-red-600 text-xs"><span>Descuento incluido:</span><span>- {formatCurrency(totals.descuento)}</span></div>}
-            <div className="flex justify-between text-gray-600"><span>IVA (ítems):</span><span>{formatCurrency(totals.impuesto)}</span></div>
+            {!watchConAiu && <div className="flex justify-between text-gray-600"><span>IVA (ítems):</span><span>{formatCurrency(totals.impuesto)}</span></div>}
+            {watchConAiu && totals.impuesto > 0 && <div className="flex justify-between text-xs text-gray-400"><span>IVA ítems (ref., no aplica):</span><span>{formatCurrency(totals.impuesto)}</span></div>}
             {watchConAiu && totals.aiu > 0 && (
               <>
                 <div className="flex justify-between text-blue-700 font-medium">
