@@ -30,7 +30,7 @@ export default function CotizacionFormPage() {
   const isEdit = Boolean(id)
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [productos, setProductos] = useState<Producto[]>([])
-  const [totals, setTotals] = useState({ subtotal: 0, descuento: 0, impuesto: 0, aiu: 0, aiuIva: 0, total: 0 })
+  const [totals, setTotals] = useState({ subtotal: 0, descuento: 0, impuesto: 0, aiuAdm: 0, aiuImp: 0, aiuUtil: 0, aiu: 0, aiuIva: 0, total: 0 })
   const [clienteModal, setClienteModal] = useState(false)
   const [productoModal, setProductoModal] = useState(false)
   const [savingCliente, setSavingCliente] = useState(false)
@@ -84,6 +84,13 @@ export default function CotizacionFormPage() {
     }
   }, [id, isEdit])
 
+  // Zero out IVA on all items when AIU is toggled on
+  useEffect(() => {
+    if (watchConAiu) {
+      fields.forEach((_, index) => setValue(`items.${index}.impuesto_porcentaje`, 0))
+    }
+  }, [watchConAiu])
+
   useEffect(() => {
     if (!watchItems) return
     let subtotal = 0, descuento = 0, impuesto = 0
@@ -95,11 +102,13 @@ export default function CotizacionFormPage() {
     })
     const [a, i, u] = watchAiu.map((v) => Number(v) || 0)
     const costosDirect = subtotal - descuento
-    const aiu = watchConAiu ? costosDirect * (a + i + u) / 100 : 0
+    const aiuAdm = watchConAiu ? costosDirect * a / 100 : 0
+    const aiuImp = watchConAiu ? costosDirect * i / 100 : 0
+    const aiuUtil = watchConAiu ? costosDirect * u / 100 : 0
+    const aiu = aiuAdm + aiuImp + aiuUtil
     const aiuIva = watchConAiu ? costosDirect * u / 100 * 0.19 : 0
-    // When AIU is active, item-level IVA is excluded from the total (reference only)
     const total = watchConAiu ? costosDirect + aiu + aiuIva : costosDirect + impuesto
-    setTotals({ subtotal, descuento, impuesto, aiu, aiuIva, total })
+    setTotals({ subtotal, descuento, impuesto, aiuAdm, aiuImp, aiuUtil, aiu, aiuIva, total })
   }, [watchItems, watchAiu, watchConAiu])
 
   const selectProducto = (index: number, productoId: string) => {
@@ -107,7 +116,7 @@ export default function CotizacionFormPage() {
     if (!p) return
     setValue(`items.${index}.descripcion`, p.nombre)
     setValue(`items.${index}.precio_unitario`, Number(p.precio_unitario))
-    setValue(`items.${index}.impuesto_porcentaje`, Number(p.impuesto_porcentaje ?? 19))
+    setValue(`items.${index}.impuesto_porcentaje`, watchConAiu ? 0 : Number(p.impuesto_porcentaje ?? 19))
   }
 
   const onSubmit = async (data: FormData) => {
@@ -252,19 +261,16 @@ export default function CotizacionFormPage() {
           </div>
           <div className="mt-6 pt-4 border-t max-w-xs ml-auto space-y-1.5 text-sm">
             <div className="flex justify-between text-gray-600"><span>Costos directos:</span><span>{formatCurrency(totals.subtotal - totals.descuento)}</span></div>
-            {totals.descuento > 0 && <div className="flex justify-between text-red-600 text-xs"><span>Descuento incluido:</span><span>- {formatCurrency(totals.descuento)}</span></div>}
-            {!watchConAiu && <div className="flex justify-between text-gray-600"><span>IVA (ítems):</span><span>{formatCurrency(totals.impuesto)}</span></div>}
-            {watchConAiu && totals.aiu > 0 && (
-              <>
-                <div className="flex justify-between text-blue-700 font-medium">
-                  <span>AIU ({(Number(watch('aiu_administracion'))||0)+(Number(watch('aiu_imprevistos'))||0)+(Number(watch('aiu_utilidad'))||0)}%):</span>
-                  <span>{formatCurrency(totals.aiu)}</span>
-                </div>
-                <div className="flex justify-between text-xs text-gray-500">
-                  <span>IVA s/ Utilidad (19%):</span>
-                  <span>{formatCurrency(totals.aiuIva)}</span>
-                </div>
-              </>
+            {totals.descuento > 0 && <div className="flex justify-between text-red-600 text-xs"><span>Descuento incluido:</span><span>— {formatCurrency(totals.descuento)}</span></div>}
+            {!watchConAiu && <div className="flex justify-between text-gray-600"><span>IVA (19%):</span><span>{formatCurrency(totals.impuesto)}</span></div>}
+            {watchConAiu && (
+              <div className="border-t pt-1.5 mt-1 space-y-1">
+                <div className="flex justify-between text-xs text-gray-500"><span>Administración ({Number(watch('aiu_administracion'))||0}%):</span><span>{formatCurrency(totals.aiuAdm)}</span></div>
+                <div className="flex justify-between text-xs text-gray-500"><span>Imprevistos ({Number(watch('aiu_imprevistos'))||0}%):</span><span>{formatCurrency(totals.aiuImp)}</span></div>
+                <div className="flex justify-between text-xs text-gray-500"><span>Utilidad ({Number(watch('aiu_utilidad'))||0}%):</span><span>{formatCurrency(totals.aiuUtil)}</span></div>
+                <div className="flex justify-between text-blue-700 font-medium"><span>AIU Total ({(Number(watch('aiu_administracion'))||0)+(Number(watch('aiu_imprevistos'))||0)+(Number(watch('aiu_utilidad'))||0)}%):</span><span>{formatCurrency(totals.aiu)}</span></div>
+                <div className="flex justify-between text-xs text-gray-500"><span>IVA s/ Utilidad (19%):</span><span>{formatCurrency(totals.aiuIva)}</span></div>
+              </div>
             )}
             <div className="flex justify-between font-bold text-lg border-t pt-2 text-gray-900"><span>Total:</span><span>{formatCurrency(totals.total)}</span></div>
           </div>
@@ -310,17 +316,14 @@ export default function CotizacionFormPage() {
                 </div>
               </div>
               {totals.aiu > 0 && (
-                <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-100 space-y-1.5">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-blue-700 font-medium">
-                      AIU Total ({(Number(watch('aiu_administracion'))||0)+(Number(watch('aiu_imprevistos'))||0)+(Number(watch('aiu_utilidad'))||0)}%):
-                    </span>
-                    <span className="text-blue-900 font-bold">{formatCurrency(totals.aiu)}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-gray-500">
-                    <span>IVA sobre Utilidad ({Number(watch('aiu_utilidad'))||0}%) al 19%:</span>
-                    <span className="font-medium">{formatCurrency(totals.aiuIva)}</span>
-                  </div>
+                <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-100 space-y-2">
+                  <p className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-2">Desglose AIU sobre costos directos ({formatCurrency(totals.subtotal - totals.descuento)})</p>
+                  <div className="flex justify-between text-sm text-gray-700"><span>Administración ({Number(watch('aiu_administracion'))||0}%):</span><span>{formatCurrency(totals.aiuAdm)}</span></div>
+                  <div className="flex justify-between text-sm text-gray-700"><span>Imprevistos ({Number(watch('aiu_imprevistos'))||0}%):</span><span>{formatCurrency(totals.aiuImp)}</span></div>
+                  <div className="flex justify-between text-sm text-gray-700"><span>Utilidad ({Number(watch('aiu_utilidad'))||0}%):</span><span>{formatCurrency(totals.aiuUtil)}</span></div>
+                  <div className="border-t border-blue-200 pt-2 flex justify-between font-semibold text-blue-700"><span>AIU Total ({(Number(watch('aiu_administracion'))||0)+(Number(watch('aiu_imprevistos'))||0)+(Number(watch('aiu_utilidad'))||0)}%):</span><span>{formatCurrency(totals.aiu)}</span></div>
+                  <div className="flex justify-between text-sm text-gray-600"><span>IVA s/ Utilidad ({Number(watch('aiu_utilidad'))||0}%) al 19%:</span><span>{formatCurrency(totals.aiuIva)}</span></div>
+                  <div className="border-t border-blue-200 pt-2 flex justify-between font-bold text-blue-900"><span>Total con AIU:</span><span>{formatCurrency(totals.total)}</span></div>
                 </div>
               )}
             </div>
