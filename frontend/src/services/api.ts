@@ -3,8 +3,12 @@ import toast from 'react-hot-toast'
 import { useAuthStore } from '../stores/authStore'
 import type { Cliente, Cotizacion, PaginatedResponse, Producto, Stats, Usuario } from '../types'
 
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  'https://cotizaciones-api-3uuy.onrender.com/api/v1'
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api/v1',
+  baseURL: API_URL,
   timeout: 20000,
 })
 
