@@ -15,6 +15,9 @@ const CotizacionFormPage = lazy(() => import('./pages/CotizacionFormPage'))
 const CotizacionDetailPage = lazy(() => import('./pages/CotizacionDetailPage'))
 const ClientesPage = lazy(() => import('./pages/ClientesPage'))
 const ProductosPage = lazy(() => import('./pages/ProductosPage'))
+const ContratosPage = lazy(() => import('./pages/ContratosPage'))
+const ContratoFormPage = lazy(() => import('./pages/ContratoFormPage'))
+const ContratoDetailPage = lazy(() => import('./pages/ContratoDetailPage'))
 
 function PageLoader() {
   return (
@@ -51,6 +54,10 @@ export default function App() {
             <Route path="cotizaciones/nueva" element={<CotizacionFormPage />} />
             <Route path="cotizaciones/:id" element={<CotizacionDetailPage />} />
             <Route path="cotizaciones/:id/editar" element={<CotizacionFormPage />} />
+            <Route path="contratos" element={<ContratosPage />} />
+            <Route path="contratos/nuevo" element={<ContratoFormPage />} />
+            <Route path="contratos/:id" element={<ContratoDetailPage />} />
+            <Route path="contratos/:id/editar" element={<ContratoFormPage />} />
             <Route path="clientes" element={<ClientesPage />} />
             <Route path="productos" element={<ProductosPage />} />
             <Route path="usuarios" element={<UsuariosPage />} />

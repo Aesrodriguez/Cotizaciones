@@ -106,3 +106,140 @@ export interface Stats {
   por_estado: { estado: string; count: number }[]
   por_mes: { mes: string; count: number; total: number }[]
 }
+
+// ── Contratos ──────────────────────────────────────────────────────────────
+
+export interface ContratoListItem {
+  id: string
+  numero: string
+  titulo: string
+  nombre?: string
+  estado: string
+  tipo: string
+  moneda: string
+  monto_total?: number
+  valor_final: number
+  fecha_inicio: string
+  fecha_termino?: string
+  cliente_id: string
+  cliente_nombre?: string
+  usuario_nombre?: string
+  created_at: string
+}
+
+export interface Contrato extends ContratoListItem {
+  objeto?: string
+  descripcion?: string
+  con_aiu: boolean
+  aiu_administracion: number
+  aiu_imprevistos: number
+  aiu_utilidad: number
+  aiu_monto: number
+  impuesto: number
+  condiciones_pago?: string
+  plazo_dias?: number
+  nit_cliente?: string
+  cotizacion_id?: string
+  responsable_id?: string
+  usuario_id: string
+  terminos?: string
+  observaciones?: string
+  updated_at: string
+}
+
+export interface ContratoEjecucion {
+  id: string
+  item_id: string
+  acta_id?: string
+  fecha: string
+  cantidad: number
+  valor_unitario: number
+  valor_total: number
+  observaciones?: string
+  created_at: string
+}
+
+export interface ContratoItem {
+  id: string
+  capitulo_id: string
+  codigo?: string
+  descripcion: string
+  unidad: string
+  cantidad_contratada: number
+  valor_unitario: number
+  valor_total: number
+  cantidad_ejecutada: number
+  cantidad_pendiente: number
+  valor_ejecutado: number
+  valor_pendiente: number
+  pct_ejecutado: number
+  orden: number
+  ejecuciones?: ContratoEjecucion[]
+}
+
+export interface ContratoCapitulo {
+  id: string
+  contrato_id: string
+  padre_id?: string
+  codigo?: string
+  nombre: string
+  orden: number
+  items: ContratoItem[]
+  subcapitulos: ContratoCapitulo[]
+}
+
+export interface ContratoActa {
+  id: string
+  contrato_id: string
+  numero: string
+  fecha: string
+  responsable?: string
+  observaciones?: string
+  valor_total: number
+  estado: string
+  created_at: string
+}
+
+export interface ContratoPago {
+  id: string
+  contrato_id: string
+  acta_id?: string
+  fecha: string
+  valor: number
+  descripcion?: string
+  metodo_pago?: string
+  referencia?: string
+  observaciones?: string
+  created_at: string
+}
+
+export interface ContratoGasto {
+  id: string
+  contrato_id: string
+  categoria: string
+  fecha: string
+  descripcion: string
+  proveedor?: string
+  factura?: string
+  valor: number
+  observaciones?: string
+  created_at: string
+}
+
+export interface ContratoDashboard {
+  contrato_id: string
+  numero: string
+  estado: string
+  valor_contrato: number
+  valor_final: number
+  valor_ejecutado: number
+  valor_pendiente: number
+  total_gastos: number
+  total_pagos: number
+  pagos_pendientes: number
+  utilidad_estimada: number
+  utilidad_real: number
+  pct_ejecucion: number
+  pct_gasto: number
+  dias_restantes?: number
+}

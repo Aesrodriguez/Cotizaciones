@@ -1,7 +1,7 @@
 import axios, { AxiosError, AxiosRequestConfig } from 'axios'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../stores/authStore'
-import type { Cliente, Cotizacion, PaginatedResponse, Producto, Stats, Usuario } from '../types'
+import type { Cliente, Contrato, ContratoActa, ContratoCapitulo, ContratoDashboard, ContratoGasto, ContratoListItem, ContratoPago, Cotizacion, PaginatedResponse, Producto, Stats, Usuario } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'https://cotizaciones-api-3uuy.onrender.com/api/v1'
 
@@ -140,6 +140,42 @@ export const productosAPI = {
   create: (data: object) => api.post<Producto>('/productos', data),
   update: (id: string, data: object) => api.put<Producto>(`/productos/${id}`, data),
   remove: (id: string) => api.delete(`/productos/${id}`),
+}
+
+export const contratosAPI = {
+  getAll: (params?: object) => api.get<PaginatedResponse<ContratoListItem>>('/contratos', { params }),
+  getById: (id: string) => api.get<Contrato>(`/contratos/${id}`),
+  create: (data: object) => api.post<Contrato>('/contratos', data),
+  update: (id: string, data: object) => api.put<Contrato>(`/contratos/${id}`, data),
+  remove: (id: string) => api.delete(`/contratos/${id}`),
+  getDashboard: (id: string) => api.get<ContratoDashboard>(`/contratos/${id}/dashboard`),
+
+  // Capítulos e ítems
+  getCapitulos: (id: string) => api.get<ContratoCapitulo[]>(`/contratos/${id}/capitulos`),
+  createCapitulo: (id: string, data: object) => api.post<ContratoCapitulo>(`/contratos/${id}/capitulos`, data),
+  deleteCapitulo: (id: string, capId: string) => api.delete(`/contratos/${id}/capitulos/${capId}`),
+  createItem: (id: string, capId: string, data: object) =>
+    api.post(`/contratos/${id}/capitulos/${capId}/items`, data),
+  deleteItem: (id: string, itemId: string) => api.delete(`/contratos/${id}/items/${itemId}`),
+
+  // Ejecuciones
+  getEjecuciones: (id: string) => api.get(`/contratos/${id}/ejecuciones`),
+  ejecutar: (id: string, itemId: string, data: object) =>
+    api.post(`/contratos/${id}/items/${itemId}/ejecutar`, data),
+
+  // Actas
+  getActas: (id: string) => api.get<ContratoActa[]>(`/contratos/${id}/actas`),
+  createActa: (id: string, data: object) => api.post<ContratoActa>(`/contratos/${id}/actas`, data),
+
+  // Pagos recibidos
+  getPagos: (id: string) => api.get<ContratoPago[]>(`/contratos/${id}/pagos`),
+  createPago: (id: string, data: object) => api.post<ContratoPago>(`/contratos/${id}/pagos`, data),
+  deletePago: (id: string, pagoId: string) => api.delete(`/contratos/${id}/pagos/${pagoId}`),
+
+  // Gastos
+  getGastos: (id: string) => api.get<ContratoGasto[]>(`/contratos/${id}/gastos`),
+  createGasto: (id: string, data: object) => api.post<ContratoGasto>(`/contratos/${id}/gastos`, data),
+  deleteGasto: (id: string, gastoId: string) => api.delete(`/contratos/${id}/gastos/${gastoId}`),
 }
 
 export default api

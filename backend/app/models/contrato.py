@@ -6,9 +6,8 @@ from enum import Enum
 
 from sqlalchemy import (
     text,
-    text,
-    Column, VARCHAR, String, Text, Numeric, Date, DateTime, Integer, ForeignKey,
-    Index, CheckConstraint, func
+    Column, VARCHAR, String, Text, Numeric, Date, DateTime, Integer, Boolean, ForeignKey,
+    Index, CheckConstraint, UniqueConstraint, func
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID, ENUM as PGENUM
@@ -105,6 +104,20 @@ class Contrato(Base, UUIDPrimaryKey, TimestampedMixin, SoftDeleteMixin):
         comment="Additional observations"
     )
 
+    # New columns for construction contract management
+    objeto = Column(Text, nullable=True, comment="Contract purpose / object")
+    nombre = Column(VARCHAR(255), nullable=True, comment="Display name")
+    con_aiu = Column(Boolean, default=False, nullable=False, server_default="false")
+    aiu_administracion = Column(Numeric(5, 2), default=0, nullable=False, server_default="0")
+    aiu_imprevistos = Column(Numeric(5, 2), default=0, nullable=False, server_default="0")
+    aiu_utilidad = Column(Numeric(5, 2), default=0, nullable=False, server_default="0")
+    aiu_monto = Column(Numeric(15, 2), default=0, nullable=False, server_default="0")
+    impuesto = Column(Numeric(15, 2), default=0, nullable=False, server_default="0")
+    valor_final = Column(Numeric(15, 2), default=0, nullable=False, server_default="0")
+    condiciones_pago = Column(Text, nullable=True, comment="Payment conditions")
+    plazo_dias = Column(Integer, nullable=True, comment="Contract duration in days")
+    nit_cliente = Column(VARCHAR(50), nullable=True, comment="Client NIT/tax ID")
+
     # Relationships
     cliente = relationship(
         "Cliente",
@@ -126,6 +139,30 @@ class Contrato(Base, UUIDPrimaryKey, TimestampedMixin, SoftDeleteMixin):
         "Gasto",
         back_populates="contrato",
         cascade="all, delete-orphan",
+    )
+    capitulos = relationship(
+        "ContratoCapitulo",
+        back_populates="contrato",
+        cascade="all, delete-orphan",
+        foreign_keys="ContratoCapitulo.contrato_id",
+    )
+    actas = relationship(
+        "ContratoActa",
+        back_populates="contrato",
+        cascade="all, delete-orphan",
+        foreign_keys="ContratoActa.contrato_id",
+    )
+    pagos = relationship(
+        "ContratoPago",
+        back_populates="contrato",
+        cascade="all, delete-orphan",
+        foreign_keys="ContratoPago.contrato_id",
+    )
+    contrato_gastos = relationship(
+        "ContratoGasto",
+        back_populates="contrato",
+        cascade="all, delete-orphan",
+        foreign_keys="ContratoGasto.contrato_id",
     )
 
     # Indexes
@@ -417,3 +454,278 @@ class TrabajadorPago(Base, UUIDPrimaryKey, TimestampedMixin):
 
     def __repr__(self):
         return f"<TrabajadorPago trabajador_id={self.trabajador_id} periodo={self.periodo}>"
+
+
+# ---------------------------------------------------------------------------
+# Construction contract management models
+# ---------------------------------------------------------------------------
+
+class EstadoActa(str, Enum):
+    """Progress certificate status."""
+    BORRADOR = "BORRADOR"
+    APROBADA = "APROBADA"
+    PAGADA = "PAGADA"
+
+
+class CategoriaGastoContrato(str, Enum):
+    """Expense categories for construction contracts."""
+    MATERIALES = "MATERIALES"
+    MANO_OBRA = "MANO_OBRA"
+    EQUIPOS = "EQUIPOS"
+    TRANSPORTE = "TRANSPORTE"
+    COMBUSTIBLE = "COMBUSTIBLE"
+    VIATICOS = "VIATICOS"
+    HOSPEDAJE = "HOSPEDAJE"
+    ADMINISTRACION = "ADMINISTRACION"
+    IMPREVISTOS = "IMPREVISTOS"
+    OTROS = "OTROS"
+
+
+class ContratoCapitulo(Base, UUIDPrimaryKey, TimestampedMixin, SoftDeleteMixin):
+    """Chapter / section within a construction contract."""
+    __tablename__ = "contrato_capitulos"
+
+    contrato_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("contratos.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    padre_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("contrato_capitulos.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    codigo = Column(VARCHAR(50), nullable=True)
+    nombre = Column(VARCHAR(255), nullable=False)
+    orden = Column(Integer, default=0, nullable=False)
+
+    # Relationships
+    contrato = relationship("Contrato", back_populates="capitulos", foreign_keys=[contrato_id])
+    padre = relationship(
+        "ContratoCapitulo",
+        primaryjoin="ContratoCapitulo.padre_id == ContratoCapitulo.id",
+        foreign_keys="[ContratoCapitulo.padre_id]",
+        remote_side="[ContratoCapitulo.id]",
+        back_populates="subcapitulos",
+    )
+    subcapitulos = relationship(
+        "ContratoCapitulo",
+        primaryjoin="ContratoCapitulo.padre_id == ContratoCapitulo.id",
+        foreign_keys="[ContratoCapitulo.padre_id]",
+        back_populates="padre",
+        cascade="all, delete-orphan",
+    )
+    items = relationship(
+        "ContratoItem",
+        back_populates="capitulo",
+        cascade="all, delete-orphan",
+        foreign_keys="ContratoItem.capitulo_id",
+    )
+
+    __table_args__ = (Index("idx_capitulos_contrato_id", "contrato_id"),)
+
+    def __repr__(self):
+        return f"<ContratoCapitulo nombre={self.nombre}>"
+
+
+class ContratoItem(Base, UUIDPrimaryKey, TimestampedMixin, SoftDeleteMixin):
+    """Line item within a chapter of a construction contract."""
+    __tablename__ = "contrato_items"
+
+    capitulo_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("contrato_capitulos.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    codigo = Column(VARCHAR(50), nullable=True)
+    descripcion = Column(VARCHAR(500), nullable=False)
+    unidad = Column(VARCHAR(30), nullable=False, default="UN")
+    cantidad_contratada = Column(Numeric(15, 4), nullable=False)
+    valor_unitario = Column(Numeric(15, 2), nullable=False)
+    orden = Column(Integer, default=0, nullable=False)
+
+    # Relationships
+    capitulo = relationship("ContratoCapitulo", back_populates="items", foreign_keys=[capitulo_id])
+    ejecuciones = relationship(
+        "ContratoEjecucion",
+        back_populates="item",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (Index("idx_items_capitulo_id", "capitulo_id"),)
+
+    # Computed properties
+    @property
+    def valor_total(self) -> Decimal:
+        return Decimal(str(self.cantidad_contratada or 0)) * Decimal(str(self.valor_unitario or 0))
+
+    @property
+    def cantidad_ejecutada(self) -> Decimal:
+        return sum(Decimal(str(e.cantidad or 0)) for e in self.ejecuciones)
+
+    @property
+    def cantidad_pendiente(self) -> Decimal:
+        return Decimal(str(self.cantidad_contratada or 0)) - self.cantidad_ejecutada
+
+    @property
+    def valor_ejecutado(self) -> Decimal:
+        return sum(Decimal(str(e.valor_total or 0)) for e in self.ejecuciones)
+
+    @property
+    def valor_pendiente(self) -> Decimal:
+        return self.valor_total - self.valor_ejecutado
+
+    def __repr__(self):
+        return f"<ContratoItem descripcion={self.descripcion}>"
+
+
+class ContratoActa(Base, UUIDPrimaryKey, TimestampedMixin, SoftDeleteMixin):
+    """Progress certificate (acta de obra) for a construction contract."""
+    __tablename__ = "contrato_actas"
+
+    contrato_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("contratos.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    numero = Column(VARCHAR(50), nullable=False)
+    fecha = Column(Date, nullable=False)
+    responsable = Column(VARCHAR(255), nullable=True)
+    observaciones = Column(Text, nullable=True)
+    valor_total = Column(Numeric(15, 2), nullable=False, default=0)
+    estado = Column(PGENUM(EstadoActa), default=EstadoActa.BORRADOR, nullable=False)
+    created_by_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("usuarios.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Relationships
+    contrato = relationship("Contrato", back_populates="actas", foreign_keys=[contrato_id])
+    created_by = relationship("Usuario", foreign_keys=[created_by_id])
+    ejecuciones = relationship("ContratoEjecucion", back_populates="acta")
+    pagos = relationship("ContratoPago", back_populates="acta")
+
+    __table_args__ = (
+        Index("idx_actas_contrato_id", "contrato_id"),
+        UniqueConstraint("contrato_id", "numero", name="uq_actas_contrato_numero"),
+    )
+
+    def __repr__(self):
+        return f"<ContratoActa numero={self.numero}>"
+
+
+class ContratoEjecucion(Base, UUIDPrimaryKey, TimestampedMixin):
+    """Execution record: quantity of a contract item performed at a given date."""
+    __tablename__ = "contrato_ejecuciones"
+
+    item_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("contrato_items.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    acta_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("contrato_actas.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    fecha = Column(Date, nullable=False)
+    cantidad = Column(Numeric(15, 4), nullable=False)
+    valor_unitario = Column(Numeric(15, 2), nullable=False)
+    valor_total = Column(Numeric(15, 2), nullable=False)
+    observaciones = Column(Text, nullable=True)
+    created_by_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("usuarios.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Relationships
+    item = relationship("ContratoItem", back_populates="ejecuciones", foreign_keys=[item_id])
+    acta = relationship("ContratoActa", back_populates="ejecuciones", foreign_keys=[acta_id])
+    created_by = relationship("Usuario", foreign_keys=[created_by_id])
+
+    __table_args__ = (
+        Index("idx_ejecuciones_item_id", "item_id"),
+        Index("idx_ejecuciones_acta_id", "acta_id"),
+        CheckConstraint("cantidad > 0", name="ck_ejecuciones_cantidad"),
+        CheckConstraint("valor_total >= 0", name="ck_ejecuciones_valor_total"),
+    )
+
+    def __repr__(self):
+        return f"<ContratoEjecucion item_id={self.item_id} cantidad={self.cantidad}>"
+
+
+class ContratoPago(Base, UUIDPrimaryKey, TimestampedMixin, SoftDeleteMixin):
+    """Payment received against a contract."""
+    __tablename__ = "contrato_pagos"
+
+    contrato_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("contratos.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    acta_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("contrato_actas.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    fecha = Column(Date, nullable=False)
+    valor = Column(Numeric(15, 2), nullable=False)
+    descripcion = Column(VARCHAR(500), nullable=True)
+    metodo_pago = Column(VARCHAR(100), nullable=True)
+    referencia = Column(VARCHAR(200), nullable=True)
+    observaciones = Column(Text, nullable=True)
+    created_by_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("usuarios.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Relationships
+    contrato = relationship("Contrato", back_populates="pagos", foreign_keys=[contrato_id])
+    acta = relationship("ContratoActa", back_populates="pagos", foreign_keys=[acta_id])
+    created_by = relationship("Usuario", foreign_keys=[created_by_id])
+
+    __table_args__ = (
+        Index("idx_pagos_contrato_id", "contrato_id"),
+        CheckConstraint("valor > 0", name="ck_pagos_valor"),
+    )
+
+    def __repr__(self):
+        return f"<ContratoPago contrato_id={self.contrato_id} valor={self.valor}>"
+
+
+class ContratoGasto(Base, UUIDPrimaryKey, TimestampedMixin, SoftDeleteMixin):
+    """Expense recorded against a construction contract."""
+    __tablename__ = "contrato_gastos"
+
+    contrato_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("contratos.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    categoria = Column(PGENUM(CategoriaGastoContrato), nullable=False)
+    fecha = Column(Date, nullable=False)
+    descripcion = Column(VARCHAR(500), nullable=False)
+    proveedor = Column(VARCHAR(255), nullable=True)
+    factura = Column(VARCHAR(100), nullable=True)
+    valor = Column(Numeric(15, 2), nullable=False)
+    observaciones = Column(Text, nullable=True)
+    created_by_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("usuarios.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Relationships
+    contrato = relationship("Contrato", back_populates="contrato_gastos", foreign_keys=[contrato_id])
+    created_by = relationship("Usuario", foreign_keys=[created_by_id])
+
+    __table_args__ = (
+        Index("idx_contrato_gastos_contrato_id", "contrato_id"),
+        CheckConstraint("valor > 0", name="ck_contrato_gastos_valor"),
+    )
+
+    def __repr__(self):
+        return f"<ContratoGasto contrato_id={self.contrato_id} categoria={self.categoria}>"

@@ -92,6 +92,7 @@ def create_app() -> FastAPI:
     from app.api.v1.cotizaciones.router import router as cotizaciones_router
     from app.api.v1.productos.router import router as productos_router
     from app.api.v1.usuarios.router import router as usuarios_router
+    from app.api.v1.contratos.router import router as contratos_router
 
     prefix = settings.API_PREFIX
     app.include_router(auth_router, prefix=prefix)
@@ -99,6 +100,7 @@ def create_app() -> FastAPI:
     app.include_router(productos_router, prefix=prefix)
     app.include_router(cotizaciones_router, prefix=prefix)
     app.include_router(usuarios_router, prefix=prefix)
+    app.include_router(contratos_router, prefix=prefix)
 
     @app.get("/health", tags=["Sistema"])
     async def health():
