@@ -12,6 +12,7 @@ interface Props { open: boolean; onClose: () => void }
 
 export default function Sidebar({ open, onClose }: Props) {
   const user = useAuthStore((s) => s.user)
+  const isAdmin = user?.roles?.some((r) => r.nombre === 'ADMIN') ?? false
 
   return (
     <>
@@ -36,6 +37,18 @@ export default function Sidebar({ open, onClose }: Props) {
               {item.label}
             </NavLink>
           ))}
+          {isAdmin && (
+            <NavLink
+              to="/usuarios"
+              onClick={onClose}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-white/20 text-white' : 'text-blue-100 hover:bg-white/10'}`
+              }
+            >
+              <span className="text-lg">👤</span>
+              Usuarios
+            </NavLink>
+          )}
         </nav>
         <div className="px-4 py-3 border-t border-blue-700 text-xs text-blue-300">
           <p className="font-medium text-blue-100">{user?.nombres} {user?.apellidos}</p>

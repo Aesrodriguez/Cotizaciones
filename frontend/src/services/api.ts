@@ -3,9 +3,7 @@ import toast from 'react-hot-toast'
 import { useAuthStore } from '../stores/authStore'
 import type { Cliente, Cotizacion, PaginatedResponse, Producto, Stats, Usuario } from '../types'
 
-const API_URL =
-  import.meta.env.VITE_API_URL ||
-  'https://cotizaciones-api-3uuy.onrender.com/api/v1'
+const API_URL = import.meta.env.VITE_API_URL ?? 'https://cotizaciones-api-3uuy.onrender.com/api/v1'
 
 const api = axios.create({
   baseURL: API_URL,
@@ -104,6 +102,13 @@ export const authAPI = {
     api.post<{ message: string }>('/auth/forgot-password', data),
   resetPassword: (data: { token: string; new_password: string }) =>
     api.post<{ message: string }>('/auth/reset-password', data),
+}
+
+export const usuariosAPI = {
+  getAll: () => api.get<Usuario[]>('/usuarios'),
+  update: (id: string, data: object) => api.put<Usuario>(`/usuarios/${id}`, data),
+  resetPassword: (id: string, data: { new_password: string }) =>
+    api.patch<{ message: string }>(`/usuarios/${id}/password`, data),
 }
 
 export const cotizacionesAPI = {

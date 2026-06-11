@@ -88,6 +88,30 @@ class TokenRefreshed(BaseModel):
     token_type: str = "bearer"
 
 
+class UsuarioAdminUpdate(BaseModel):
+    nombres: Optional[str] = None
+    apellidos: Optional[str] = None
+    telefono: Optional[str] = None
+    email: Optional[EmailStr] = None
+    estado: Optional[str] = None
+    rol: Optional[str] = None
+
+
+class AdminPasswordReset(BaseModel):
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Mínimo 8 caracteres")
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Debe tener al menos una mayúscula")
+        if not re.search(r"\d", v):
+            raise ValueError("Debe tener al menos un número")
+        return v
+
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 

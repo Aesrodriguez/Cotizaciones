@@ -9,6 +9,7 @@ const LoginPage = lazy(() => import('./pages/LoginPage'))
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'))
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const UsuariosPage = lazy(() => import('./pages/UsuariosPage'))
 const CotizacionesPage = lazy(() => import('./pages/CotizacionesPage'))
 const CotizacionFormPage = lazy(() => import('./pages/CotizacionFormPage'))
 const CotizacionDetailPage = lazy(() => import('./pages/CotizacionDetailPage'))
@@ -52,6 +53,7 @@ export default function App() {
             <Route path="cotizaciones/:id/editar" element={<CotizacionFormPage />} />
             <Route path="clientes" element={<ClientesPage />} />
             <Route path="productos" element={<ProductosPage />} />
+            <Route path="usuarios" element={<UsuariosPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
