@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 
 class ProductoCreate(BaseModel):
-    codigo: str
+    codigo: Optional[str] = None
     nombre: str
     descripcion: Optional[str] = None
     unidad_medida: str = "Unidad"

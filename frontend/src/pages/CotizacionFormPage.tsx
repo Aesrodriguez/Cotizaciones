@@ -38,7 +38,6 @@ interface FormData {
 }
 
 interface ClienteForm {
-  codigo: string
   nombre: string
   contacto_email: string
   contacto_telefono: string
@@ -46,7 +45,6 @@ interface ClienteForm {
 }
 
 interface ProductoForm {
-  codigo: string
   nombre: string
   precio_unitario: number
   impuesto_porcentaje: number
@@ -592,17 +590,10 @@ export default function CotizacionFormPage() {
       {/* Modal — Nuevo cliente */}
       <Modal open={clienteModal} onClose={() => setClienteModal(false)} title="Nuevo cliente" size="sm">
         <form onSubmit={clienteForm.handleSubmit(onCreateCliente)} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label">Código *</label>
-              <input {...clienteForm.register('codigo', { required: true })} className="input" placeholder="CLI-001" />
-              {clienteForm.formState.errors.codigo && <p className="text-red-600 text-xs mt-1">Requerido</p>}
-            </div>
-            <div>
-              <label className="label">Nombre *</label>
-              <input {...clienteForm.register('nombre', { required: true })} className="input" />
-              {clienteForm.formState.errors.nombre && <p className="text-red-600 text-xs mt-1">Requerido</p>}
-            </div>
+          <div>
+            <label className="label">Nombre *</label>
+            <input {...clienteForm.register('nombre', { required: true })} className="input" />
+            {clienteForm.formState.errors.nombre && <p className="text-red-600 text-xs mt-1">Requerido</p>}
           </div>
           <div>
             <label className="label">Correo de contacto</label>
@@ -630,17 +621,10 @@ export default function CotizacionFormPage() {
       {/* Modal — Nuevo producto */}
       <Modal open={productoModal} onClose={() => setProductoModal(false)} title="Nuevo producto" size="sm">
         <form onSubmit={productoForm.handleSubmit(onCreateProducto)} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label">Código *</label>
-              <input {...productoForm.register('codigo', { required: true })} className="input" placeholder="PRD-001" />
-              {productoForm.formState.errors.codigo && <p className="text-red-600 text-xs mt-1">Requerido</p>}
-            </div>
-            <div>
-              <label className="label">Nombre *</label>
-              <input {...productoForm.register('nombre', { required: true })} className="input" />
-              {productoForm.formState.errors.nombre && <p className="text-red-600 text-xs mt-1">Requerido</p>}
-            </div>
+          <div>
+            <label className="label">Nombre *</label>
+            <input {...productoForm.register('nombre', { required: true })} className="input" />
+            {productoForm.formState.errors.nombre && <p className="text-red-600 text-xs mt-1">Requerido</p>}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>

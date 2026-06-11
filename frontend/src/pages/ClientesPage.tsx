@@ -82,8 +82,13 @@ export default function ClientesPage() {
       </div>
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editTarget ? 'Editar cliente' : 'Nuevo cliente'}>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {editTarget && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
+              <span className="text-xs text-gray-500">Código:</span>
+              <span className="text-xs font-mono font-semibold text-gray-700">{editTarget.codigo}</span>
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div><label className="label">Código *</label><input {...register('codigo', { required: true })} className="input" /></div>
             <div><label className="label">Nombre *</label><input {...register('nombre', { required: true })} className="input" /></div>
             <div><label className="label">RUT / NIT</label><input {...register('rut')} className="input" /></div>
             <div><label className="label">Giro / Actividad</label><input {...register('giro')} className="input" /></div>

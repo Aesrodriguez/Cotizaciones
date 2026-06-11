@@ -1,16 +1,31 @@
 from uuid import UUID
+from datetime import date
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.api.deps import get_db_session, get_authenticated_user
 from app.models.auth import Usuario
 from app.models.cliente import Cliente, EstadoCliente
+from app.models.audit import Secuencia
 from app.repositories.cliente import ClienteRepository
 from app.schemas.cliente import ClienteCreate, ClienteUpdate, ClienteOut, ClienteList
 from app.schemas.common import PaginatedResponse
 import math
 
 router = APIRouter(prefix="/clientes", tags=["Clientes"])
+
+
+def _next_codigo_cliente(db: Session) -> str:
+    year = date.today().year
+    seq = db.query(Secuencia).filter(Secuencia.tipo_documento == "cliente").first()
+    if not seq:
+        seq = Secuencia(tipo_documento="cliente", prefijo=f"CLI-{year}-", proximo_numero=1)
+        db.add(seq)
+        db.flush()
+    num = f"{seq.prefijo or ''}{str(seq.proximo_numero).zfill(4)}"
+    seq.proximo_numero += 1
+    db.commit()
+    return num
 
 
 @router.get("/", response_model=PaginatedResponse[ClienteList])
@@ -39,9 +54,10 @@ def get_cliente(id: UUID, db: Session = Depends(get_db_session), _: Usuario = De
 @router.post("/", response_model=ClienteOut, status_code=201)
 def create_cliente(data: ClienteCreate, db: Session = Depends(get_db_session), _: Usuario = Depends(get_authenticated_user)):
     repo = ClienteRepository(db)
-    if repo.get_by_codigo(data.codigo):
+    codigo = data.codigo or _next_codigo_cliente(db)
+    if repo.get_by_codigo(codigo):
         raise HTTPException(409, "El código de cliente ya existe")
-    obj = Cliente(**data.model_dump(), estado=EstadoCliente.ACTIVO)
+    obj = Cliente(**{**data.model_dump(exclude={"codigo"}), "codigo": codigo}, estado=EstadoCliente.ACTIVO)
     return repo.save(obj)
 
 

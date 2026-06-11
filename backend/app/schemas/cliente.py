@@ -6,7 +6,7 @@ from pydantic import BaseModel, EmailStr
 
 
 class ClienteCreate(BaseModel):
-    codigo: str
+    codigo: Optional[str] = None
     nombre: str
     rut: Optional[str] = None
     giro: Optional[str] = None

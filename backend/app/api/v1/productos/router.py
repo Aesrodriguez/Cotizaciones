@@ -1,14 +1,29 @@
 from uuid import UUID
+from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.api.deps import get_db_session, get_authenticated_user, require_admin
 from app.models.auth import Usuario
 from app.models.cliente import Producto, EstadoProducto
+from app.models.audit import Secuencia
 from app.repositories.producto import ProductoRepository
 from app.schemas.producto import ProductoCreate, ProductoUpdate, ProductoOut
 import math
 
 router = APIRouter(prefix="/productos", tags=["Productos"])
+
+
+def _next_codigo_producto(db: Session) -> str:
+    year = date.today().year
+    seq = db.query(Secuencia).filter(Secuencia.tipo_documento == "producto").first()
+    if not seq:
+        seq = Secuencia(tipo_documento="producto", prefijo=f"PRD-{year}-", proximo_numero=1)
+        db.add(seq)
+        db.flush()
+    num = f"{seq.prefijo or ''}{str(seq.proximo_numero).zfill(4)}"
+    seq.proximo_numero += 1
+    db.commit()
+    return num
 
 
 @router.get("/", response_model=list[ProductoOut])
@@ -35,7 +50,8 @@ def get_producto(id: UUID, db: Session = Depends(get_db_session), _: Usuario = D
 @router.post("/", response_model=ProductoOut, status_code=201)
 def create_producto(data: ProductoCreate, db: Session = Depends(get_db_session), _: Usuario = Depends(require_admin)):
     repo = ProductoRepository(db)
-    obj = Producto(**data.model_dump(), estado=EstadoProducto.ACTIVO)
+    codigo = data.codigo or _next_codigo_producto(db)
+    obj = Producto(**{**data.model_dump(exclude={"codigo"}), "codigo": codigo}, estado=EstadoProducto.ACTIVO)
     return repo.save(obj)
 
 
