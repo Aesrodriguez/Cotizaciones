@@ -6,14 +6,43 @@ import type { Stats } from '../types'
 
 const COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6']
 
-function StatCard({ label, value, icon, color }: { label: string; value: string | number; icon: string; color: string }) {
+function IconDoc() {
   return (
-    <div className="card flex items-center gap-4">
-      <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${color}`}>{icon}</div>
-      <div>
-        <p className="text-sm text-gray-500">{label}</p>
-        <p className="text-2xl font-bold text-gray-900">{value}</p>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-5 h-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+    </svg>
+  )
+}
+function IconCheck() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-5 h-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+    </svg>
+  )
+}
+function IconClock() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-5 h-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+    </svg>
+  )
+}
+function IconMoney() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-5 h-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+    </svg>
+  )
+}
+
+function KPICard({ label, value, accent, icon }: { label: string; value: string | number; accent: string; icon: React.ReactNode }) {
+  return (
+    <div className={`bg-white rounded-xl border border-gray-200 shadow-sm p-5 border-l-4 ${accent}`}>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{label}</p>
+        <span className="text-gray-300">{icon}</span>
       </div>
+      <p className="text-2xl font-bold text-gray-900">{value}</p>
     </div>
   )
 }
@@ -26,7 +55,13 @@ export default function DashboardPage() {
     cotizacionesAPI.getStats().then((r) => setStats(r.data)).catch(() => {}).finally(() => setLoading(false))
   }, [])
 
-  if (loading) return <div className="flex justify-center items-center h-64 text-gray-400">Cargando...</div>
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700" />
+      </div>
+    )
+  }
   if (!stats) return null
 
   const pieData = stats.por_estado.map((s) => ({ name: STATUS_CONFIG[s.estado]?.label ?? s.estado, value: s.count }))
@@ -34,40 +69,51 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-gray-900">Dashboard</h1>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total cotizaciones" value={stats.total} icon="📄" color="bg-blue-50" />
-        <StatCard label="Aceptadas" value={stats.aprobadas} icon="✅" color="bg-green-100" />
-        <StatCard label="Pendientes" value={stats.pendientes} icon="⏳" color="bg-yellow-100" />
-        <StatCard label="Ingresos aprobados" value={formatCurrency(stats.ingresos_aprobados)} icon="💰" color="bg-green-50" />
+      <div>
+        <h1>Dashboard</h1>
+        <p className="text-sm text-gray-500 mt-0.5">Resumen del sistema de cotizaciones</p>
       </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <KPICard label="Total cotizaciones" value={stats.total} accent="border-l-blue-500" icon={<IconDoc />} />
+        <KPICard label="Aceptadas" value={stats.aprobadas} accent="border-l-green-500" icon={<IconCheck />} />
+        <KPICard label="Pendientes" value={stats.pendientes} accent="border-l-amber-400" icon={<IconClock />} />
+        <KPICard label="Ingresos aprobados" value={formatCurrency(stats.ingresos_aprobados)} accent="border-l-emerald-500" icon={<IconMoney />} />
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="card lg:col-span-2">
-          <h2 className="mb-4 text-gray-800">Cotizaciones por mes</h2>
+          <h2 className="mb-1">Cotizaciones por mes</h2>
+          <p className="text-xs text-gray-400 mb-4">Total en pesos colombianos</p>
           <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={barData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="mes" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${(v / 1000000).toFixed(1)}M`} />
-              <Tooltip formatter={(v: number) => formatCurrency(v)} />
+            <BarChart data={barData} barSize={28}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" vertical={false} />
+              <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v / 1_000_000).toFixed(0)}M`} />
+              <Tooltip
+                formatter={(v: number) => [formatCurrency(v), 'Total']}
+                contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12px' }}
+              />
               <Bar dataKey="total" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Total" />
             </BarChart>
           </ResponsiveContainer>
         </div>
+
         <div className="card">
-          <h2 className="mb-4 text-gray-800">Por estado</h2>
+          <h2 className="mb-1">Por estado</h2>
+          <p className="text-xs text-gray-400 mb-4">Distribución actual</p>
           {pieData.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
               <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={3} dataKey="value">
+                <Pie data={pieData} cx="50%" cy="45%" innerRadius={55} outerRadius={85} paddingAngle={3} dataKey="value">
                   {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
-                <Tooltip />
-                <Legend iconType="circle" iconSize={10} />
+                <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12px' }} />
+                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '12px' }} />
               </PieChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex items-center justify-center h-64 text-gray-400">Sin datos aún</div>
+            <div className="flex items-center justify-center h-64 text-gray-400 text-sm">Sin datos aún</div>
           )}
         </div>
       </div>

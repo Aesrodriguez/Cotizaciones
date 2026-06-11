@@ -57,33 +57,49 @@ export default function ClientesPage() {
         <h1>Clientes</h1>
         <button onClick={openCreate} className="btn-primary">+ Nuevo cliente</button>
       </div>
-      <div className="card">
-        <input type="search" placeholder="Buscar cliente..." value={search} onChange={(e) => setSearch(e.target.value)} className="input max-w-xs mb-4" />
-        {loading ? <div className="py-12 text-center text-gray-400">Cargando...</div> : (
+      <div className="card !p-0 overflow-hidden">
+        <div className="p-4 border-b border-gray-100">
+          <input type="search" placeholder="Buscar cliente..." value={search} onChange={(e) => setSearch(e.target.value)} className="input max-w-xs" />
+        </div>
+        {loading ? (
+          <div className="py-16 text-center text-gray-400">
+            <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue-600 mx-auto mb-3" />
+            Cargando...
+          </div>
+        ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr className="border-b text-left text-gray-500 text-xs uppercase">
-                <th className="pb-2 pr-4">Código</th><th className="pb-2 pr-4">Nombre</th>
-                <th className="pb-2 pr-4">Contacto</th><th className="pb-2 pr-4">Ciudad</th>
-                <th className="pb-2 pr-4">Estado</th><th className="pb-2 text-right">Acciones</th>
-              </tr></thead>
-              <tbody className="divide-y">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Código</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Nombre</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Contacto</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Ciudad</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Estado</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
                 {clientes.map((c) => (
-                  <tr key={c.id} className="hover:bg-gray-50">
-                    <td className="py-3 pr-4 font-mono text-xs text-gray-500">{c.codigo}</td>
-                    <td className="py-3 pr-4 font-medium text-gray-900">{c.nombre}</td>
-                    <td className="py-3 pr-4 text-gray-600">{c.contacto_nombre || '-'}</td>
-                    <td className="py-3 pr-4 text-gray-600">{c.ciudad || '-'}</td>
-                    <td className="py-3 pr-4"><span className={`badge ${c.estado === 'ACTIVO' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{c.estado}</span></td>
-                    <td className="py-3 text-right">
+                  <tr key={c.id} className="hover:bg-blue-50/40 transition-colors">
+                    <td className="px-4 py-3 font-mono text-xs text-gray-500">{c.codigo}</td>
+                    <td className="px-4 py-3 font-medium text-gray-900">{c.nombre}</td>
+                    <td className="px-4 py-3 text-gray-600">{c.contacto_nombre || '-'}</td>
+                    <td className="px-4 py-3 text-gray-600">{c.ciudad || '-'}</td>
+                    <td className="px-4 py-3">
+                      <span className={`badge ${c.estado === 'ACTIVO' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{c.estado}</span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-2">
-                        <button onClick={() => openEdit(c)} className="btn-secondary py-1 px-2 text-xs">Editar</button>
-                        <button onClick={() => setDeleteTarget(c)} className="btn-danger py-1 px-2 text-xs">Eliminar</button>
+                        <button onClick={() => openEdit(c)} className="btn-secondary py-1 px-2.5 text-xs">Editar</button>
+                        <button onClick={() => setDeleteTarget(c)} className="btn-danger py-1 px-2.5 text-xs">Eliminar</button>
                       </div>
                     </td>
                   </tr>
                 ))}
-                {clientes.length === 0 && <tr><td colSpan={6} className="text-center py-12 text-gray-400">No hay clientes</td></tr>}
+                {clientes.length === 0 && (
+                  <tr><td colSpan={6} className="text-center py-16 text-gray-400">No hay clientes</td></tr>
+                )}
               </tbody>
             </table>
           </div>

@@ -42,30 +42,48 @@ export default function ProductosPage() {
         <h1>Productos y servicios</h1>
         {isAdmin && <button onClick={openCreate} className="btn-primary">+ Nuevo producto</button>}
       </div>
-      <div className="card">
-        <input type="search" placeholder="Buscar producto..." value={search} onChange={(e) => setSearch(e.target.value)} className="input max-w-xs mb-4" />
-        {loading ? <div className="py-12 text-center text-gray-400">Cargando...</div> : (
+      <div className="card !p-0 overflow-hidden">
+        <div className="p-4 border-b border-gray-100">
+          <input type="search" placeholder="Buscar producto..." value={search} onChange={(e) => setSearch(e.target.value)} className="input max-w-xs" />
+        </div>
+        {loading ? (
+          <div className="py-16 text-center text-gray-400">
+            <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue-600 mx-auto mb-3" />
+            Cargando...
+          </div>
+        ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr className="border-b text-left text-gray-500 text-xs uppercase">
-                <th className="pb-2 pr-4">Código</th><th className="pb-2 pr-4">Nombre</th>
-                <th className="pb-2 pr-4">Categoría</th><th className="pb-2 pr-4">Unidad</th>
-                <th className="pb-2 pr-4 text-right">Precio</th><th className="pb-2 pr-4 text-right">IVA %</th>
-                {isAdmin && <th className="pb-2 text-right">Acciones</th>}
-              </tr></thead>
-              <tbody className="divide-y">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Código</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Nombre</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Categoría</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Unidad</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Precio</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">IVA %</th>
+                  {isAdmin && <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Acciones</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
                 {productos.map((p) => (
-                  <tr key={p.id} className="hover:bg-gray-50">
-                    <td className="py-3 pr-4 font-mono text-xs text-gray-500">{p.codigo}</td>
-                    <td className="py-3 pr-4 font-medium text-gray-900">{p.nombre}</td>
-                    <td className="py-3 pr-4 text-gray-600">{p.categoria || '-'}</td>
-                    <td className="py-3 pr-4 text-gray-600">{p.unidad_medida}</td>
-                    <td className="py-3 pr-4 text-right font-semibold">{formatCurrency(p.precio_unitario)}</td>
-                    <td className="py-3 pr-4 text-right text-gray-600">{p.impuesto_porcentaje ?? 0}%</td>
-                    {isAdmin && <td className="py-3 text-right"><button onClick={() => openEdit(p)} className="btn-secondary py-1 px-2 text-xs">Editar</button></td>}
+                  <tr key={p.id} className="hover:bg-blue-50/40 transition-colors">
+                    <td className="px-4 py-3 font-mono text-xs text-gray-500">{p.codigo}</td>
+                    <td className="px-4 py-3 font-medium text-gray-900">{p.nombre}</td>
+                    <td className="px-4 py-3 text-gray-600">{p.categoria || '-'}</td>
+                    <td className="px-4 py-3 text-gray-600">{p.unidad_medida}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-gray-900">{formatCurrency(p.precio_unitario)}</td>
+                    <td className="px-4 py-3 text-right text-gray-600">{p.impuesto_porcentaje ?? 0}%</td>
+                    {isAdmin && (
+                      <td className="px-4 py-3 text-right">
+                        <button onClick={() => openEdit(p)} className="btn-secondary py-1 px-2.5 text-xs">Editar</button>
+                      </td>
+                    )}
                   </tr>
                 ))}
-                {productos.length === 0 && <tr><td colSpan={7} className="text-center py-12 text-gray-400">No hay productos</td></tr>}
+                {productos.length === 0 && (
+                  <tr><td colSpan={7} className="text-center py-16 text-gray-400">No hay productos</td></tr>
+                )}
               </tbody>
             </table>
           </div>
