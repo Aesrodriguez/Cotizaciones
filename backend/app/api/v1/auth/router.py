@@ -1,6 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_authenticated_user, get_db_session
@@ -18,12 +16,10 @@ from app.schemas.common import MessageResponse
 from app.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["Autenticación"])
-limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("/login", response_model=Token)
-@limiter.limit("10/minute")
-def login(request: Request, data: UsuarioLogin, db: Session = Depends(get_db_session)):
+def login(data: UsuarioLogin, db: Session = Depends(get_db_session)):
     svc = AuthService(db)
     try:
         token = svc.login(data)
@@ -38,8 +34,7 @@ def login(request: Request, data: UsuarioLogin, db: Session = Depends(get_db_ses
 
 
 @router.post("/refresh", response_model=TokenRefreshed)
-@limiter.limit("20/minute")
-def refresh_token(request: Request, body: RefreshRequest, db: Session = Depends(get_db_session)):
+def refresh_token(body: RefreshRequest, db: Session = Depends(get_db_session)):
     result = AuthService(db).refresh(body.refresh_token)
     if not result:
         raise HTTPException(

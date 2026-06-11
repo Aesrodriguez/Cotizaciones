@@ -7,9 +7,6 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 from app.config.settings import get_settings
 
@@ -20,8 +17,6 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 logger = logging.getLogger("cotizaciones")
-
-limiter = Limiter(key_func=get_remote_address)
 
 
 @asynccontextmanager
@@ -41,9 +36,6 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json" if settings.ENVIRONMENT != "production" else None,
         lifespan=lifespan,
     )
-
-    app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
     app.add_middleware(
         CORSMiddleware,
