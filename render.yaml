@@ -37,7 +37,7 @@ services:
     staticPublishPath: ./dist
     envVars:
       - key: VITE_API_URL
-        value: https://cotizaciones-api.onrender.com/api/v1
+        value: https://cotizaciones-api-3uuy.onrender.com/api/v1
     routes:
       - type: rewrite
         source: /*

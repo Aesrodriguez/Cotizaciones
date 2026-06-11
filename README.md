@@ -1,7 +1,8 @@
 # Sistema de Cotizaciones — TRIPLE A CONSTRUCCIONES SAS
 
 **NIT:** 901650581-4  
-**Producción:** https://cotizaciones-web.onrender.com
+**Frontend:** https://cotizaciones-web.onrender.com  
+**API:** https://cotizaciones-api-3uuy.onrender.com
 
 ---
 
