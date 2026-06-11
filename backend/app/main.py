@@ -37,9 +37,15 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # Always include the production frontend; merge with anything in CORS_ORIGINS
+    _cors_origins = list({
+        "https://cotizaciones-web.onrender.com",
+        "http://localhost:5173",
+        *settings.CORS_ORIGINS,
+    })
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS,
+        allow_origins=_cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
