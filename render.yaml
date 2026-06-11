@@ -27,6 +27,16 @@ services:
         value: INFO
       - key: CORS_ORIGINS
         value: '["https://cotizaciones-web.onrender.com"]'
+      - key: FRONTEND_URL
+        value: https://cotizaciones-web.onrender.com
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USER
+        value: tripleaconstruccionessas@gmail.com
+      - key: SMTP_PASSWORD
+        sync: false
 
   # Frontend — React + Vite (sitio estático)
   - type: web

@@ -30,6 +30,13 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: List[str] = Field(default=["http://localhost:5173"])
 
+    # Email SMTP (Gmail)
+    SMTP_HOST: str = Field(default="smtp.gmail.com")
+    SMTP_PORT: int = Field(default=587)
+    SMTP_USER: str = Field(default="tripleaconstruccionessas@gmail.com")
+    SMTP_PASSWORD: str = Field(default="")
+    FRONTEND_URL: str = Field(default="https://cotizaciones-web.onrender.com")
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

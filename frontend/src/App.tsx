@@ -6,6 +6,8 @@ import Layout from './components/layout/Layout'
 
 // Lazy loading — cada página se carga solo cuando se necesita
 const LoginPage = lazy(() => import('./pages/LoginPage'))
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'))
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const CotizacionesPage = lazy(() => import('./pages/CotizacionesPage'))
 const CotizacionFormPage = lazy(() => import('./pages/CotizacionFormPage'))
@@ -32,6 +34,8 @@ export default function App() {
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route
             path="/"
             element={

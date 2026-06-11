@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.config.settings import get_settings
 from app.models.auth import EstadoUsuario, Rol, Usuario
 from app.repositories.usuario import UsuarioRepository
-from app.schemas.auth import Token, TokenRefreshed, UsuarioCreate, UsuarioLogin, UsuarioOut
+from app.schemas.auth import Token, TokenRefreshed, UsuarioCreate, UsuarioLogin, UsuarioOut, ResetPasswordRequest
 
 settings = get_settings()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -114,6 +114,26 @@ class AuthService:
 
     def change_password(self, user: Usuario, current: str, new_password: str) -> bool:
         if not verify_password(current, user.password_hash):
+            return False
+        user.password_hash = hash_password(new_password)
+        self.db.commit()
+        return True
+
+    def create_password_reset_token(self, email: str) -> Optional[str]:
+        user = self.repo.get_by_email(email)
+        if not user or user.estado != EstadoUsuario.ACTIVO:
+            return None
+        return _make_token({"sub": email, "type": "password_reset"}, timedelta(minutes=30))
+
+    def reset_password(self, token: str, new_password: str) -> bool:
+        payload = decode_token(token, expected_type="password_reset")
+        if not payload:
+            return False
+        email = payload.get("sub")
+        if not email:
+            return False
+        user = self.repo.get_by_email(email)
+        if not user or user.estado != EstadoUsuario.ACTIVO:
             return False
         user.password_hash = hash_password(new_password)
         self.db.commit()

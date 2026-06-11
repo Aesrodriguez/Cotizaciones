@@ -1,5 +1,5 @@
 import { useForm } from 'react-hook-form'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { authAPI } from '../services/api'
 import toast from 'react-hot-toast'
@@ -56,6 +56,11 @@ export default function LoginPage() {
             {isSubmitting ? 'Ingresando...' : 'Iniciar sesión'}
           </button>
         </form>
+        <p className="text-center text-sm text-gray-500 mt-5">
+          <Link to="/forgot-password" className="text-blue-700 font-medium hover:underline">
+            ¿Olvidaste tu contraseña?
+          </Link>
+        </p>
       </div>
     </div>
   )

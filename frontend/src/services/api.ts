@@ -100,6 +100,10 @@ export const authAPI = {
   changePassword: (data: { current_password: string; new_password: string }) =>
     api.patch('/auth/change-password', data),
   register: (data: object) => api.post('/auth/register', data),
+  forgotPassword: (data: { email: string }) =>
+    api.post<{ message: string }>('/auth/forgot-password', data),
+  resetPassword: (data: { token: string; new_password: string }) =>
+    api.post<{ message: string }>('/auth/reset-password', data),
 }
 
 export const cotizacionesAPI = {
