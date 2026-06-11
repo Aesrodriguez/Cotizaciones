@@ -4,6 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 
+import sqlalchemy as sa
 from sqlalchemy import (
     text,
     text,
@@ -83,10 +84,12 @@ class Cotizacion(Base, UUIDPrimaryKey, TimestampedMixin, SoftDeleteMixin):
         nullable=False,
         default=0
     )
+    con_aiu            = Column(sa.Boolean(), nullable=False, default=False)
     aiu_administracion = Column(Numeric(5, 2), nullable=False, default=0)
     aiu_imprevistos    = Column(Numeric(5, 2), nullable=False, default=0)
     aiu_utilidad       = Column(Numeric(5, 2), nullable=False, default=0)
     aiu_monto          = Column(Numeric(15, 2), nullable=False, default=0)
+    aiu_iva_monto      = Column(Numeric(15, 2), nullable=False, default=0)
 
     validez_dias = Column(
         Integer,

@@ -38,6 +38,15 @@ def _calc_item(item_data) -> dict:
     }
 
 
+def _calc_aiu(con_aiu: bool, aiu_a: Decimal, aiu_i: Decimal, aiu_u: Decimal, costos_directos: Decimal):
+    """IVA 19% applies only on the Utilidad component, not the full AIU."""
+    if not con_aiu:
+        return Decimal("0"), Decimal("0")
+    aiu_monto = costos_directos * (aiu_a + aiu_i + aiu_u) / 100
+    aiu_iva_monto = costos_directos * aiu_u / 100 * Decimal("0.19")
+    return aiu_monto, aiu_iva_monto
+
+
 class CotizacionService:
     def __init__(self, db: Session):
         self.repo = CotizacionRepository(db)
@@ -59,8 +68,8 @@ class CotizacionService:
         aiu_i = Decimal(str(data.aiu_imprevistos or 0))
         aiu_u = Decimal(str(data.aiu_utilidad or 0))
         costos_directos = subtotal - descuento
-        aiu_monto = costos_directos * (aiu_a + aiu_i + aiu_u) / 100
-        total = costos_directos + impuesto + aiu_monto
+        aiu_monto, aiu_iva_monto = _calc_aiu(data.con_aiu, aiu_a, aiu_i, aiu_u, costos_directos)
+        total = costos_directos + impuesto + aiu_monto + aiu_iva_monto
 
         cot = Cotizacion(
             numero=_next_numero(self.db),
@@ -79,10 +88,12 @@ class CotizacionService:
             subtotal=subtotal,
             descuento=descuento,
             impuesto=impuesto,
+            con_aiu=data.con_aiu,
             aiu_administracion=aiu_a,
             aiu_imprevistos=aiu_i,
             aiu_utilidad=aiu_u,
             aiu_monto=aiu_monto,
+            aiu_iva_monto=aiu_iva_monto,
             total=total,
         )
         self.db.add(cot)
@@ -134,11 +145,11 @@ class CotizacionService:
                     total=calc["total"],
                     orden=i,
                 ))
-            aiu_a = Decimal(str(data.aiu_administracion or cot.aiu_administracion or 0))
-            aiu_i = Decimal(str(data.aiu_imprevistos    or cot.aiu_imprevistos    or 0))
-            aiu_u = Decimal(str(data.aiu_utilidad       or cot.aiu_utilidad       or 0))
+            aiu_a = Decimal(str(cot.aiu_administracion or 0))
+            aiu_i = Decimal(str(cot.aiu_imprevistos or 0))
+            aiu_u = Decimal(str(cot.aiu_utilidad or 0))
             costos_directos = subtotal - descuento
-            aiu_monto = costos_directos * (aiu_a + aiu_i + aiu_u) / 100
+            aiu_monto, aiu_iva_monto = _calc_aiu(cot.con_aiu, aiu_a, aiu_i, aiu_u, costos_directos)
             cot.subtotal = subtotal
             cot.descuento = descuento
             cot.impuesto = impuesto
@@ -146,18 +157,16 @@ class CotizacionService:
             cot.aiu_imprevistos = aiu_i
             cot.aiu_utilidad = aiu_u
             cot.aiu_monto = aiu_monto
-            cot.total = costos_directos + impuesto + aiu_monto
-        elif any(getattr(data, f, None) is not None for f in ("aiu_administracion", "aiu_imprevistos", "aiu_utilidad")):
-            # Solo cambió el AIU sin cambiar ítems — recalcular
-            aiu_a = Decimal(str(data.aiu_administracion if data.aiu_administracion is not None else cot.aiu_administracion))
-            aiu_i = Decimal(str(data.aiu_imprevistos    if data.aiu_imprevistos    is not None else cot.aiu_imprevistos))
-            aiu_u = Decimal(str(data.aiu_utilidad       if data.aiu_utilidad       is not None else cot.aiu_utilidad))
+            cot.aiu_iva_monto = aiu_iva_monto
+            cot.total = costos_directos + impuesto + aiu_monto + aiu_iva_monto
+        elif any(k in update_data for k in ("aiu_administracion", "aiu_imprevistos", "aiu_utilidad", "con_aiu")):
+            aiu_a = Decimal(str(cot.aiu_administracion or 0))
+            aiu_i = Decimal(str(cot.aiu_imprevistos or 0))
+            aiu_u = Decimal(str(cot.aiu_utilidad or 0))
             costos_directos = cot.subtotal - cot.descuento
-            aiu_monto = costos_directos * (aiu_a + aiu_i + aiu_u) / 100
-            cot.aiu_administracion = aiu_a
-            cot.aiu_imprevistos = aiu_i
-            cot.aiu_utilidad = aiu_u
+            aiu_monto, aiu_iva_monto = _calc_aiu(cot.con_aiu, aiu_a, aiu_i, aiu_u, costos_directos)
             cot.aiu_monto = aiu_monto
-            cot.total = costos_directos + cot.impuesto + aiu_monto
+            cot.aiu_iva_monto = aiu_iva_monto
+            cot.total = costos_directos + cot.impuesto + aiu_monto + aiu_iva_monto
         self.db.commit()
         return self.repo.get_with_items(cot.id)

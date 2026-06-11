@@ -65,12 +65,31 @@ def send_cotizacion_email(
     terminos = getattr(cotizacion, "terminos", "") or ""
     fecha_emision = str(getattr(cotizacion, "fecha_emision", ""))
     fecha_vencimiento = str(getattr(cotizacion, "fecha_vencimiento", "") or "Indefinida")
+    con_aiu = getattr(cotizacion, "con_aiu", False)
+    aiu_administracion = getattr(cotizacion, "aiu_administracion", 0) or 0
+    aiu_imprevistos = getattr(cotizacion, "aiu_imprevistos", 0) or 0
+    aiu_utilidad = getattr(cotizacion, "aiu_utilidad", 0) or 0
+    aiu_monto = getattr(cotizacion, "aiu_monto", 0) or 0
+    aiu_iva_monto = getattr(cotizacion, "aiu_iva_monto", 0) or 0
 
     asunto_email = asunto or f"Cotización {numero} — {titulo}"
 
     descuento_row = ""
     if float(descuento) > 0:
         descuento_row = f'<tr><td style="padding:4px 0;font-size:13px;color:#dc2626;">Descuento:</td><td style="padding:4px 0;text-align:right;font-size:13px;color:#dc2626;">- {fmt(descuento)}</td></tr>'
+
+    aiu_rows = ""
+    if con_aiu and float(aiu_monto) > 0:
+        costos_dir = float(subtotal) - float(descuento)
+        total_pct = float(aiu_administracion) + float(aiu_imprevistos) + float(aiu_utilidad)
+        aiu_rows = (
+            f'<tr><td colspan="2" style="padding:6px 0 2px;font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;">AIU</td></tr>'
+            f'<tr><td style="padding:2px 0;font-size:12px;color:#475569;">Administración ({aiu_administracion}%):</td><td style="padding:2px 0;text-align:right;font-size:12px;">{fmt(costos_dir * float(aiu_administracion) / 100)}</td></tr>'
+            f'<tr><td style="padding:2px 0;font-size:12px;color:#475569;">Imprevistos ({aiu_imprevistos}%):</td><td style="padding:2px 0;text-align:right;font-size:12px;">{fmt(costos_dir * float(aiu_imprevistos) / 100)}</td></tr>'
+            f'<tr><td style="padding:2px 0;font-size:12px;color:#475569;">Utilidad ({aiu_utilidad}%):</td><td style="padding:2px 0;text-align:right;font-size:12px;">{fmt(costos_dir * float(aiu_utilidad) / 100)}</td></tr>'
+            f'<tr><td style="padding:3px 0;font-size:13px;font-weight:600;color:#1d4ed8;">Total AIU ({total_pct:.4g}%):</td><td style="padding:3px 0;text-align:right;font-size:13px;font-weight:600;color:#1d4ed8;">{fmt(aiu_monto)}</td></tr>'
+            f'<tr><td style="padding:2px 0;font-size:12px;color:#475569;">IVA s/ Utilidad (19%):</td><td style="padding:2px 0;text-align:right;font-size:12px;">{fmt(aiu_iva_monto)}</td></tr>'
+        )
 
     mensaje_extra_html = f'<p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 20px;padding:12px 16px;background:#f8fafc;border-left:3px solid #1d4ed8;border-radius:4px;">{mensaje_extra}</p>' if mensaje_extra else ""
 
@@ -152,6 +171,7 @@ def send_cotizacion_email(
               <tr><td style="padding:4px 0;font-size:13px;color:#64748b;width:150px;">Subtotal:</td><td style="padding:4px 0;text-align:right;font-size:13px;color:#475569;">{fmt(subtotal)}</td></tr>
               {descuento_row}
               <tr><td style="padding:4px 0;font-size:13px;color:#64748b;">IVA:</td><td style="padding:4px 0;text-align:right;font-size:13px;color:#475569;">{fmt(impuesto)}</td></tr>
+              {aiu_rows}
               <tr>
                 <td colspan="2"><hr style="border:none;border-top:2px solid #e2e8f0;margin:8px 0;"></td>
               </tr>

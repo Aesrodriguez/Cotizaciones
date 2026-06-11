@@ -45,6 +45,7 @@ class CotizacionCreate(BaseModel):
     condiciones_pago: Optional[str] = None
     terminos: Optional[str] = None
     observaciones: Optional[str] = None
+    con_aiu: bool = False
     aiu_administracion: Optional[Decimal] = Decimal("0")
     aiu_imprevistos: Optional[Decimal] = Decimal("0")
     aiu_utilidad: Optional[Decimal] = Decimal("0")
@@ -70,6 +71,7 @@ class CotizacionUpdate(BaseModel):
     condiciones_pago: Optional[str] = None
     terminos: Optional[str] = None
     observaciones: Optional[str] = None
+    con_aiu: Optional[bool] = None
     aiu_administracion: Optional[Decimal] = None
     aiu_imprevistos: Optional[Decimal] = None
     aiu_utilidad: Optional[Decimal] = None
@@ -97,10 +99,12 @@ class CotizacionOut(CotizacionList):
     descripcion: Optional[str] = None
     impuesto: Decimal
     descuento: Decimal
+    con_aiu: bool = False
     aiu_administracion: Decimal = Decimal("0")
     aiu_imprevistos: Decimal = Decimal("0")
     aiu_utilidad: Decimal = Decimal("0")
     aiu_monto: Decimal = Decimal("0")
+    aiu_iva_monto: Decimal = Decimal("0")
     condiciones_pago: Optional[str] = None
     terminos: Optional[str] = None
     observaciones: Optional[str] = None
