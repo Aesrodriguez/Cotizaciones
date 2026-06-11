@@ -6,9 +6,9 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_session, require_admin
 from app.models.auth import EstadoUsuario, Rol, Usuario
-from app.schemas.auth import AdminPasswordReset, UsuarioAdminUpdate, UsuarioOut
+from app.schemas.auth import AdminPasswordReset, UsuarioAdminUpdate, UsuarioCreate, UsuarioOut
 from app.schemas.common import MessageResponse
-from app.services.auth_service import hash_password
+from app.services.auth_service import AuthService, hash_password
 
 router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
 
@@ -20,6 +20,19 @@ def _get_user_or_404(user_id: UUID, db: Session) -> Usuario:
     ).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+    return user
+
+
+@router.post("", response_model=UsuarioOut, status_code=201)
+def create_user(
+    data: UsuarioCreate,
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(require_admin),
+):
+    try:
+        user = AuthService(db).register(data, rol_nombre=data.rol)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     return user
 
 

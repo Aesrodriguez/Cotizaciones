@@ -3,6 +3,21 @@
 Revision ID: 008
 Revises: 007
 Create Date: 2026-06-11 00:00:00.000000
+
+Root cause of previous failure
+--------------------------------
+The original migration called op.execute("CREATE TYPE estadoacta ...") and then
+passed sa.Enum(..., name='estadoacta') to op.create_table(). SQLAlchemy's ENUM
+type emits its own CREATE TYPE statement before the CREATE TABLE, so the type was
+created twice → DuplicateObject error.
+
+Fix
+---
+* Types are created with an idempotent DO $$ … $$ block (safe to run many times).
+* Column definitions use postgresql.ENUM(..., create_type=False) so SQLAlchemy
+  never tries to emit a second CREATE TYPE.
+* downgrade() drops tables first, then types with IF EXISTS (no CASCADE needed
+  because the tables are gone by then).
 """
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -13,20 +28,51 @@ down_revision = '007'
 branch_labels = None
 depends_on = None
 
+# ---------------------------------------------------------------------------
+# Reusable ENUM references (create_type=False → type created by the DO block,
+# SQLAlchemy must not emit a second CREATE TYPE).
+# ---------------------------------------------------------------------------
+_estadoacta = postgresql.ENUM(
+    'BORRADOR', 'APROBADA', 'PAGADA',
+    name='estadoacta',
+    create_type=False,
+)
+
+_categoriagasto = postgresql.ENUM(
+    'MATERIALES', 'MANO_OBRA', 'EQUIPOS', 'TRANSPORTE', 'COMBUSTIBLE',
+    'VIATICOS', 'HOSPEDAJE', 'ADMINISTRACION', 'IMPREVISTOS', 'OTROS',
+    name='categoriagastocontrato',
+    create_type=False,
+)
+
 
 def upgrade() -> None:
     # ------------------------------------------------------------------
-    # 1. Create new PostgreSQL ENUM types
+    # 1. Create ENUM types — idempotent (safe on reruns / Render redeploys)
     # ------------------------------------------------------------------
-    op.execute("CREATE TYPE estadoacta AS ENUM ('BORRADOR', 'APROBADA', 'PAGADA')")
-    op.execute(
-        "CREATE TYPE categoriagastocontrato AS ENUM ("
-        "'MATERIALES', 'MANO_OBRA', 'EQUIPOS', 'TRANSPORTE', 'COMBUSTIBLE',"
-        "'VIATICOS', 'HOSPEDAJE', 'ADMINISTRACION', 'IMPREVISTOS', 'OTROS')"
-    )
+    op.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'estadoacta') THEN
+                CREATE TYPE estadoacta AS ENUM ('BORRADOR', 'APROBADA', 'PAGADA');
+            END IF;
+        END$$;
+    """)
+
+    op.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'categoriagastocontrato') THEN
+                CREATE TYPE categoriagastocontrato AS ENUM (
+                    'MATERIALES', 'MANO_OBRA', 'EQUIPOS', 'TRANSPORTE', 'COMBUSTIBLE',
+                    'VIATICOS', 'HOSPEDAJE', 'ADMINISTRACION', 'IMPREVISTOS', 'OTROS'
+                );
+            END IF;
+        END$$;
+    """)
 
     # ------------------------------------------------------------------
-    # 2. Add new columns to existing contratos table
+    # 2. Add new columns to the existing contratos table
     # ------------------------------------------------------------------
     op.add_column('contratos', sa.Column('objeto', sa.Text(), nullable=True))
     op.add_column('contratos', sa.Column('nombre', sa.VARCHAR(255), nullable=True))
@@ -42,11 +88,12 @@ def upgrade() -> None:
     op.add_column('contratos', sa.Column('nit_cliente', sa.VARCHAR(50), nullable=True))
 
     # ------------------------------------------------------------------
-    # 3. Create contrato_capitulos
+    # 3. contrato_capitulos  (self-referential: padre_id → id)
     # ------------------------------------------------------------------
     op.create_table(
         'contrato_capitulos',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True,
+                  server_default=sa.text('gen_random_uuid()')),
         sa.Column('contrato_id', postgresql.UUID(as_uuid=True),
                   sa.ForeignKey('contratos.id', ondelete='CASCADE'), nullable=False),
         sa.Column('padre_id', postgresql.UUID(as_uuid=True),
@@ -61,11 +108,12 @@ def upgrade() -> None:
     op.create_index('idx_capitulos_contrato_id', 'contrato_capitulos', ['contrato_id'])
 
     # ------------------------------------------------------------------
-    # 4. Create contrato_items
+    # 4. contrato_items
     # ------------------------------------------------------------------
     op.create_table(
         'contrato_items',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True,
+                  server_default=sa.text('gen_random_uuid()')),
         sa.Column('capitulo_id', postgresql.UUID(as_uuid=True),
                   sa.ForeignKey('contrato_capitulos.id', ondelete='CASCADE'), nullable=False),
         sa.Column('codigo', sa.VARCHAR(50), nullable=True),
@@ -81,11 +129,13 @@ def upgrade() -> None:
     op.create_index('idx_items_capitulo_id', 'contrato_items', ['capitulo_id'])
 
     # ------------------------------------------------------------------
-    # 5. Create contrato_actas (before ejecuciones; ejecuciones references it)
+    # 5. contrato_actas  (must exist before ejecuciones references it)
+    #    Uses _estadoacta with create_type=False — no second CREATE TYPE.
     # ------------------------------------------------------------------
     op.create_table(
         'contrato_actas',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True,
+                  server_default=sa.text('gen_random_uuid()')),
         sa.Column('contrato_id', postgresql.UUID(as_uuid=True),
                   sa.ForeignKey('contratos.id', ondelete='CASCADE'), nullable=False),
         sa.Column('numero', sa.VARCHAR(50), nullable=False),
@@ -93,8 +143,7 @@ def upgrade() -> None:
         sa.Column('responsable', sa.VARCHAR(255), nullable=True),
         sa.Column('observaciones', sa.Text(), nullable=True),
         sa.Column('valor_total', sa.Numeric(15, 2), nullable=False, server_default='0'),
-        sa.Column('estado', sa.Enum('BORRADOR', 'APROBADA', 'PAGADA', name='estadoacta'),
-                  nullable=False, server_default='BORRADOR'),
+        sa.Column('estado', _estadoacta, nullable=False, server_default='BORRADOR'),
         sa.Column('created_by_id', postgresql.UUID(as_uuid=True),
                   sa.ForeignKey('usuarios.id', ondelete='SET NULL'), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
@@ -105,11 +154,13 @@ def upgrade() -> None:
     op.create_index('idx_actas_contrato_id', 'contrato_actas', ['contrato_id'])
 
     # ------------------------------------------------------------------
-    # 6. Create contrato_ejecuciones
+    # 6. contrato_ejecuciones  (references items + actas)
+    #    No SoftDelete → no deleted_at column.
     # ------------------------------------------------------------------
     op.create_table(
         'contrato_ejecuciones',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True,
+                  server_default=sa.text('gen_random_uuid()')),
         sa.Column('item_id', postgresql.UUID(as_uuid=True),
                   sa.ForeignKey('contrato_items.id', ondelete='CASCADE'), nullable=False),
         sa.Column('acta_id', postgresql.UUID(as_uuid=True),
@@ -130,11 +181,12 @@ def upgrade() -> None:
     op.create_index('idx_ejecuciones_acta_id', 'contrato_ejecuciones', ['acta_id'])
 
     # ------------------------------------------------------------------
-    # 7. Create contrato_pagos
+    # 7. contrato_pagos
     # ------------------------------------------------------------------
     op.create_table(
         'contrato_pagos',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True,
+                  server_default=sa.text('gen_random_uuid()')),
         sa.Column('contrato_id', postgresql.UUID(as_uuid=True),
                   sa.ForeignKey('contratos.id', ondelete='CASCADE'), nullable=False),
         sa.Column('acta_id', postgresql.UUID(as_uuid=True),
@@ -155,18 +207,16 @@ def upgrade() -> None:
     op.create_index('idx_pagos_contrato_id', 'contrato_pagos', ['contrato_id'])
 
     # ------------------------------------------------------------------
-    # 8. Create contrato_gastos
+    # 8. contrato_gastos
+    #    Uses _categoriagasto with create_type=False — no second CREATE TYPE.
     # ------------------------------------------------------------------
     op.create_table(
         'contrato_gastos',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True,
+                  server_default=sa.text('gen_random_uuid()')),
         sa.Column('contrato_id', postgresql.UUID(as_uuid=True),
                   sa.ForeignKey('contratos.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('categoria',
-                  sa.Enum('MATERIALES', 'MANO_OBRA', 'EQUIPOS', 'TRANSPORTE', 'COMBUSTIBLE',
-                          'VIATICOS', 'HOSPEDAJE', 'ADMINISTRACION', 'IMPREVISTOS', 'OTROS',
-                          name='categoriagastocontrato'),
-                  nullable=False),
+        sa.Column('categoria', _categoriagasto, nullable=False),
         sa.Column('fecha', sa.Date(), nullable=False),
         sa.Column('descripcion', sa.VARCHAR(500), nullable=False),
         sa.Column('proveedor', sa.VARCHAR(255), nullable=True),
@@ -184,7 +234,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Drop tables in reverse dependency order
+    # Drop tables in reverse FK dependency order
     op.drop_table('contrato_gastos')
     op.drop_table('contrato_pagos')
     op.drop_table('contrato_ejecuciones')
@@ -192,20 +242,13 @@ def downgrade() -> None:
     op.drop_table('contrato_items')
     op.drop_table('contrato_capitulos')
 
-    # Drop new columns from contratos
-    op.drop_column('contratos', 'nit_cliente')
-    op.drop_column('contratos', 'plazo_dias')
-    op.drop_column('contratos', 'condiciones_pago')
-    op.drop_column('contratos', 'valor_final')
-    op.drop_column('contratos', 'impuesto')
-    op.drop_column('contratos', 'aiu_monto')
-    op.drop_column('contratos', 'aiu_utilidad')
-    op.drop_column('contratos', 'aiu_imprevistos')
-    op.drop_column('contratos', 'aiu_administracion')
-    op.drop_column('contratos', 'con_aiu')
-    op.drop_column('contratos', 'nombre')
-    op.drop_column('contratos', 'objeto')
+    # Remove columns added to contratos
+    for col in ('nit_cliente', 'plazo_dias', 'condiciones_pago', 'valor_final',
+                'impuesto', 'aiu_monto', 'aiu_utilidad', 'aiu_imprevistos',
+                'aiu_administracion', 'con_aiu', 'nombre', 'objeto'):
+        op.drop_column('contratos', col)
 
-    # Drop ENUM types
+    # Drop ENUM types — tables are already gone, no CASCADE needed.
+    # IF EXISTS makes the downgrade idempotent as well.
     op.execute('DROP TYPE IF EXISTS categoriagastocontrato')
     op.execute('DROP TYPE IF EXISTS estadoacta')

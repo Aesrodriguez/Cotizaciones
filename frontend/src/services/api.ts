@@ -106,6 +106,7 @@ export const authAPI = {
 
 export const usuariosAPI = {
   getAll: () => api.get<Usuario[]>('/usuarios'),
+  create: (data: object) => api.post<Usuario>('/usuarios', data),
   update: (id: string, data: object) => api.put<Usuario>(`/usuarios/${id}`, data),
   resetPassword: (id: string, data: { new_password: string }) =>
     api.patch<{ message: string }>(`/usuarios/${id}/password`, data),

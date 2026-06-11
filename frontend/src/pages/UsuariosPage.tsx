@@ -14,6 +14,16 @@ const estadoBadge: Record<string, string> = {
   SUSPENDIDO: 'bg-red-100 text-red-700',
 }
 
+interface CreateForm {
+  nombres: string
+  apellidos: string
+  email: string
+  telefono: string
+  password: string
+  confirm_password: string
+  rol: string
+}
+
 interface EditForm {
   nombres: string
   apellidos: string
@@ -31,10 +41,12 @@ interface PwdForm {
 export default function UsuariosPage() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [loading, setLoading] = useState(true)
+  const [showCreate, setShowCreate] = useState(false)
   const [editUser, setEditUser] = useState<Usuario | null>(null)
   const [pwdUser, setPwdUser] = useState<Usuario | null>(null)
   const [saving, setSaving] = useState(false)
 
+  const createForm = useForm<CreateForm>({ defaultValues: { rol: 'VENDEDOR' } })
   const editForm = useForm<EditForm>()
   const pwdForm = useForm<PwdForm>()
 
@@ -48,6 +60,30 @@ export default function UsuariosPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  const onCreateUser = async (data: CreateForm) => {
+    if (data.password !== data.confirm_password) {
+      createForm.setError('confirm_password', { message: 'Las contraseñas no coinciden' })
+      return
+    }
+    setSaving(true)
+    try {
+      const res = await usuariosAPI.create({
+        nombres: data.nombres,
+        apellidos: data.apellidos,
+        email: data.email,
+        telefono: data.telefono || undefined,
+        password: data.password,
+        rol: data.rol,
+      })
+      setUsuarios((prev) => [...prev, res.data])
+      toast.success('Usuario creado')
+      setShowCreate(false)
+      createForm.reset({ rol: 'VENDEDOR' })
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const openEdit = (u: Usuario) => {
     setEditUser(u)
@@ -102,7 +138,9 @@ export default function UsuariosPage() {
           <h1 className="text-2xl font-bold text-gray-900">Gestión de usuarios</h1>
           <p className="text-sm text-gray-500 mt-0.5">Administra cuentas, roles y contraseñas</p>
         </div>
-        <span className="text-sm text-gray-400">{usuarios.length} usuario{usuarios.length !== 1 ? 's' : ''}</span>
+        <button onClick={() => { setShowCreate(true); createForm.reset({ rol: 'VENDEDOR' }) }} className="btn-primary">
+          + Nuevo usuario
+        </button>
       </div>
 
       {loading ? (
@@ -161,6 +199,76 @@ export default function UsuariosPage() {
           </table>
         </div>
       )}
+
+      {/* Modal crear usuario */}
+      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Nuevo usuario" size="sm">
+        <form onSubmit={createForm.handleSubmit(onCreateUser)} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">Nombres *</label>
+              <input {...createForm.register('nombres', { required: true })} className="input" />
+              {createForm.formState.errors.nombres && <p className="text-red-600 text-xs mt-1">Requerido</p>}
+            </div>
+            <div>
+              <label className="label">Apellidos *</label>
+              <input {...createForm.register('apellidos', { required: true })} className="input" />
+              {createForm.formState.errors.apellidos && <p className="text-red-600 text-xs mt-1">Requerido</p>}
+            </div>
+          </div>
+          <div>
+            <label className="label">Correo electrónico *</label>
+            <input type="email" {...createForm.register('email', { required: true })} className="input" />
+            {createForm.formState.errors.email && <p className="text-red-600 text-xs mt-1">Requerido</p>}
+          </div>
+          <div>
+            <label className="label">Teléfono</label>
+            <input {...createForm.register('telefono')} className="input" placeholder="Opcional" />
+          </div>
+          <div>
+            <label className="label">Rol</label>
+            <select {...createForm.register('rol')} className="input">
+              {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">Contraseña *</label>
+              <input
+                type="password"
+                {...createForm.register('password', {
+                  required: 'Requerido',
+                  minLength: { value: 8, message: 'Mínimo 8 caracteres' },
+                  pattern: { value: /^(?=.*[A-Z])(?=.*\d)/, message: 'Mayúscula y número' },
+                })}
+                className="input"
+                placeholder="••••••••"
+              />
+              {createForm.formState.errors.password && (
+                <p className="text-red-600 text-xs mt-1">{createForm.formState.errors.password.message}</p>
+              )}
+            </div>
+            <div>
+              <label className="label">Confirmar *</label>
+              <input
+                type="password"
+                {...createForm.register('confirm_password', { required: 'Requerido' })}
+                className="input"
+                placeholder="••••••••"
+              />
+              {createForm.formState.errors.confirm_password && (
+                <p className="text-red-600 text-xs mt-1">{createForm.formState.errors.confirm_password.message}</p>
+              )}
+            </div>
+          </div>
+          <p className="text-xs text-gray-400">Mínimo 8 caracteres, una mayúscula y un número.</p>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={() => setShowCreate(false)} className="btn-secondary">Cancelar</button>
+            <button type="submit" disabled={saving} className="btn-primary">
+              {saving ? 'Creando...' : 'Crear usuario'}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Modal editar usuario */}
       <Modal open={!!editUser} onClose={() => setEditUser(null)} title="Editar usuario" size="sm">
