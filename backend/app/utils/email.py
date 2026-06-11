@@ -1,4 +1,5 @@
-import resend
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 from typing import Optional
 
 from app.config.settings import get_settings
@@ -6,21 +7,21 @@ from app.config.settings import get_settings
 
 def _send_email(to_email: str, subject: str, html: str) -> bool:
     settings = get_settings()
-    if not settings.RESEND_API_KEY:
-        print("[EMAIL] ABORTADO: RESEND_API_KEY no configurado en las variables de entorno", flush=True)
+    if not settings.SENDGRID_API_KEY:
+        print("[EMAIL] ABORTADO: SENDGRID_API_KEY no configurado en las variables de entorno", flush=True)
         return False
 
-    resend.api_key = settings.RESEND_API_KEY
-    print(f"[EMAIL] Enviando via Resend a {to_email}...", flush=True)
+    print(f"[EMAIL] Enviando via SendGrid a {to_email}...", flush=True)
     try:
-        resend.Emails.send({
-            "from": settings.EMAIL_FROM,
-            "to": [to_email],
-            "reply_to": settings.EMAIL_REPLY_TO,
-            "subject": subject,
-            "html": html,
-        })
-        print(f"[EMAIL] OK — enviado a {to_email}", flush=True)
+        message = Mail(
+            from_email=settings.EMAIL_FROM,
+            to_emails=to_email,
+            subject=subject,
+            html_content=html,
+        )
+        sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+        response = sg.send(message)
+        print(f"[EMAIL] OK — status {response.status_code} enviado a {to_email}", flush=True)
         return True
     except Exception as exc:
         print(f"[EMAIL] ERROR — {type(exc).__name__}: {exc}", flush=True)
@@ -192,8 +193,8 @@ def send_cotizacion_email(
 
 def send_reset_email(to_email: str, reset_url: str) -> bool:
     settings = get_settings()
-    if not settings.RESEND_API_KEY:
-        print("[EMAIL] ABORTADO: RESEND_API_KEY no configurado en las variables de entorno", flush=True)
+    if not settings.SENDGRID_API_KEY:
+        print("[EMAIL] ABORTADO: SENDGRID_API_KEY no configurado en las variables de entorno", flush=True)
         return False
 
     html = f"""

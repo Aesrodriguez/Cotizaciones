@@ -30,10 +30,9 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: List[str] = Field(default=["http://localhost:5173"])
 
-    # Email — Resend API (SMTP reemplazado por API HTTPS)
-    RESEND_API_KEY: str = Field(default="")
-    EMAIL_FROM: str = Field(default="Triple A Construcciones <onboarding@resend.dev>")
-    EMAIL_REPLY_TO: str = Field(default="tripleaconstruccionessas@gmail.com")
+    # Email — SendGrid API (HTTPS, sin bloqueo de Render)
+    SENDGRID_API_KEY: str = Field(default="")
+    EMAIL_FROM: str = Field(default="Triple A Construcciones <tripleaconstruccionessas@gmail.com>")
     # Mantener SMTP_USER solo para compatibilidad con código existente
     SMTP_USER: str = Field(default="tripleaconstruccionessas@gmail.com")
     SMTP_PASSWORD: str = Field(default="")
