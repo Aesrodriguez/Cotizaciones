@@ -4,87 +4,137 @@ import { useForm, useFieldArray } from 'react-hook-form'
 import { cotizacionesAPI, clientesAPI, productosAPI } from '../services/api'
 import { formatCurrency } from '../utils/format'
 import Modal from '../components/common/Modal'
+import ClienteAutocomplete from '../components/common/ClienteAutocomplete'
+import ProductoBuscador from '../components/common/ProductoBuscador'
 import toast from 'react-hot-toast'
-import type { Cliente, Producto } from '../types'
+import type { Producto } from '../types'
 
 interface ItemForm {
-  producto_id: string; descripcion: string; cantidad: number
-  precio_unitario: number; descuento_porcentaje: number; impuesto_porcentaje: number; orden: number
+  producto_id: string
+  descripcion: string
+  cantidad: number
+  precio_unitario: number
+  descuento_porcentaje: number
+  impuesto_porcentaje: number
+  orden: number
 }
+
 interface FormData {
-  cliente_id: string; titulo: string; descripcion?: string
-  fecha_emision: string; fecha_vencimiento?: string; moneda: string
-  validez_dias?: number; condiciones_pago?: string; terminos?: string; observaciones?: string
+  cliente_id: string
+  titulo: string
+  descripcion?: string
+  fecha_emision: string
+  fecha_vencimiento?: string
+  moneda: string
+  validez_dias?: number
+  condiciones_pago?: string
+  terminos?: string
+  observaciones?: string
   con_aiu: boolean
-  aiu_administracion: number; aiu_imprevistos: number; aiu_utilidad: number
+  aiu_administracion: number
+  aiu_imprevistos: number
+  aiu_utilidad: number
   items: ItemForm[]
 }
-interface ClienteForm { codigo: string; nombre: string; contacto_email: string; contacto_telefono: string; ciudad: string }
-interface ProductoForm { codigo: string; nombre: string; precio_unitario: number; impuesto_porcentaje: number; unidad_medida: string }
 
-const defaultItem: ItemForm = { producto_id: '', descripcion: '', cantidad: 1, precio_unitario: 0, descuento_porcentaje: 0, impuesto_porcentaje: 19, orden: 0 }
+interface ClienteForm {
+  codigo: string
+  nombre: string
+  contacto_email: string
+  contacto_telefono: string
+  ciudad: string
+}
+
+interface ProductoForm {
+  codigo: string
+  nombre: string
+  precio_unitario: number
+  impuesto_porcentaje: number
+  unidad_medida: string
+}
+
+const defaultItem: ItemForm = {
+  producto_id: '',
+  descripcion: '',
+  cantidad: 1,
+  precio_unitario: 0,
+  descuento_porcentaje: 0,
+  impuesto_porcentaje: 19,
+  orden: 0,
+}
 
 export default function CotizacionFormPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const isEdit = Boolean(id)
-  const [clientes, setClientes] = useState<Cliente[]>([])
-  const [productos, setProductos] = useState<Producto[]>([])
-  const [totals, setTotals] = useState({ subtotal: 0, descuento: 0, impuesto: 0, aiuAdm: 0, aiuImp: 0, aiuUtil: 0, aiu: 0, aiuIva: 0, total: 0 })
+
+  const [clienteDisplayName, setClienteDisplayName] = useState('')
   const [clienteModal, setClienteModal] = useState(false)
   const [productoModal, setProductoModal] = useState(false)
   const [savingCliente, setSavingCliente] = useState(false)
   const [savingProducto, setSavingProducto] = useState(false)
-  const [productoTargetIdx, setProductoTargetIdx] = useState<number | null>(null)
+  const [totals, setTotals] = useState({
+    subtotal: 0, descuento: 0, impuesto: 0,
+    aiuAdm: 0, aiuImp: 0, aiuUtil: 0, aiu: 0, aiuIva: 0, total: 0,
+  })
 
   const mainForm = useForm<FormData>({
     defaultValues: {
-      moneda: 'COP', fecha_emision: new Date().toISOString().slice(0, 10),
+      moneda: 'COP',
+      fecha_emision: new Date().toISOString().slice(0, 10),
       fecha_vencimiento: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
       con_aiu: false,
-      aiu_administracion: 0, aiu_imprevistos: 0, aiu_utilidad: 0,
+      aiu_administracion: 0,
+      aiu_imprevistos: 0,
+      aiu_utilidad: 0,
       items: [{ ...defaultItem }],
     },
   })
-  const { register, control, handleSubmit, watch, setValue, reset, formState: { isSubmitting } } = mainForm
+
+  const { register, control, handleSubmit, watch, setValue, reset, formState: { isSubmitting, errors } } = mainForm
   const { fields, append, remove } = useFieldArray({ control, name: 'items' })
   const watchItems = watch('items')
   const watchAiu = watch(['aiu_administracion', 'aiu_imprevistos', 'aiu_utilidad'])
   const watchConAiu = watch('con_aiu')
+  const watchClienteId = watch('cliente_id')
 
   const clienteForm = useForm<ClienteForm>()
   const productoForm = useForm<ProductoForm>({ defaultValues: { impuesto_porcentaje: 19, unidad_medida: 'UN' } })
 
-  const loadClientes = () => clientesAPI.getAll({ limit: 200 }).then((r) => setClientes(r.data.data))
-  const loadProductos = () => productosAPI.getAll().then((r) => setProductos(r.data))
-
   useEffect(() => {
-    Promise.all([loadClientes(), loadProductos()])
     if (isEdit && id) {
       cotizacionesAPI.getById(id).then((r) => {
         const q = r.data
+        setClienteDisplayName(q.cliente_nombre ?? '')
         reset({
-          cliente_id: q.cliente_id ?? '', titulo: q.titulo, descripcion: q.descripcion ?? '',
-          fecha_emision: q.fecha_emision, fecha_vencimiento: q.fecha_vencimiento ?? '',
-          moneda: q.moneda, validez_dias: q.validez_dias ?? 30,
-          condiciones_pago: q.condiciones_pago ?? '', terminos: q.terminos ?? '',
+          cliente_id: q.cliente_id ?? '',
+          titulo: q.titulo,
+          descripcion: q.descripcion ?? '',
+          fecha_emision: q.fecha_emision,
+          fecha_vencimiento: q.fecha_vencimiento ?? '',
+          moneda: q.moneda,
+          validez_dias: q.validez_dias ?? 30,
+          condiciones_pago: q.condiciones_pago ?? '',
+          terminos: q.terminos ?? '',
           observaciones: q.observaciones ?? '',
           con_aiu: q.con_aiu ?? false,
           aiu_administracion: Number(q.aiu_administracion ?? 0),
           aiu_imprevistos: Number(q.aiu_imprevistos ?? 0),
           aiu_utilidad: Number(q.aiu_utilidad ?? 0),
           items: (q.items ?? []).map((i, idx) => ({
-            producto_id: i.producto_id, descripcion: i.descripcion ?? '',
-            cantidad: Number(i.cantidad), precio_unitario: Number(i.precio_unitario),
+            producto_id: i.producto_id,
+            descripcion: i.descripcion ?? '',
+            cantidad: Number(i.cantidad),
+            precio_unitario: Number(i.precio_unitario),
             descuento_porcentaje: Number(i.descuento_porcentaje ?? 0),
-            impuesto_porcentaje: Number(i.impuesto_porcentaje ?? 19), orden: idx,
+            impuesto_porcentaje: Number(i.impuesto_porcentaje ?? 19),
+            orden: idx,
           })),
         })
       }).catch(() => navigate('/cotizaciones'))
     }
   }, [id, isEdit])
 
-  // Zero out IVA on all items when AIU is toggled on
   useEffect(() => {
     if (watchConAiu) {
       fields.forEach((_, index) => setValue(`items.${index}.impuesto_porcentaje`, 0))
@@ -98,7 +148,9 @@ export default function CotizacionFormPage() {
       const base = (Number(item.cantidad) || 0) * (Number(item.precio_unitario) || 0)
       const disc = base * ((Number(item.descuento_porcentaje) || 0) / 100)
       const taxable = base - disc
-      subtotal += base; descuento += disc; impuesto += taxable * ((Number(item.impuesto_porcentaje) || 0) / 100)
+      subtotal += base
+      descuento += disc
+      impuesto += taxable * ((Number(item.impuesto_porcentaje) || 0) / 100)
     })
     const [a, i, u] = watchAiu.map((v) => Number(v) || 0)
     const costosDirect = subtotal - descuento
@@ -111,15 +163,27 @@ export default function CotizacionFormPage() {
     setTotals({ subtotal, descuento, impuesto, aiuAdm, aiuImp, aiuUtil, aiu, aiuIva, total })
   }, [watchItems, watchAiu, watchConAiu])
 
-  const selectProducto = (index: number, productoId: string) => {
-    const p = productos.find((x) => x.id === productoId)
-    if (!p) return
-    setValue(`items.${index}.descripcion`, p.nombre)
-    setValue(`items.${index}.precio_unitario`, Number(p.precio_unitario))
-    setValue(`items.${index}.impuesto_porcentaje`, watchConAiu ? 0 : Number(p.impuesto_porcentaje ?? 19))
+  const addProducto = (p: Producto) => {
+    append({
+      producto_id: p.id,
+      descripcion: p.nombre,
+      cantidad: 1,
+      precio_unitario: Number(p.precio_unitario),
+      descuento_porcentaje: 0,
+      impuesto_porcentaje: watchConAiu ? 0 : Number(p.impuesto_porcentaje ?? 0),
+      orden: fields.length,
+    })
+  }
+
+  const addEmptyItem = () => {
+    append({ ...defaultItem, impuesto_porcentaje: watchConAiu ? 0 : 19 })
   }
 
   const onSubmit = async (data: FormData) => {
+    if (!data.cliente_id) {
+      toast.error('Selecciona un cliente')
+      return
+    }
     if (data.con_aiu) {
       const hasAIU = Number(data.aiu_administracion) > 0 || Number(data.aiu_imprevistos) > 0 || Number(data.aiu_utilidad) > 0
       if (!hasAIU) {
@@ -134,8 +198,13 @@ export default function CotizacionFormPage() {
       }
     }
     try {
-      if (isEdit && id) { await cotizacionesAPI.update(id, data); toast.success('Cotización actualizada') }
-      else { const res = await cotizacionesAPI.create(data); toast.success(`Cotización ${res.data.numero} creada`) }
+      if (isEdit && id) {
+        await cotizacionesAPI.update(id, data)
+        toast.success('Cotización actualizada')
+      } else {
+        const res = await cotizacionesAPI.create(data)
+        toast.success(`Cotización ${res.data.numero} creada`)
+      }
       navigate('/cotizaciones')
     } catch {}
   }
@@ -144,221 +213,383 @@ export default function CotizacionFormPage() {
     setSavingCliente(true)
     try {
       const res = await clientesAPI.create(data)
-      await loadClientes()
       setValue('cliente_id', res.data.id)
+      setClienteDisplayName(res.data.nombre)
       toast.success(`Cliente "${res.data.nombre}" creado`)
       setClienteModal(false)
       clienteForm.reset()
-    } finally {
-      setSavingCliente(false)
-    }
+    } finally { setSavingCliente(false) }
   }
 
   const onCreateProducto = async (data: ProductoForm) => {
     setSavingProducto(true)
     try {
       const res = await productosAPI.create(data)
-      await loadProductos()
-      if (productoTargetIdx !== null) {
-        setValue(`items.${productoTargetIdx}.producto_id`, res.data.id)
-        setValue(`items.${productoTargetIdx}.descripcion`, res.data.nombre)
-        setValue(`items.${productoTargetIdx}.precio_unitario`, Number(res.data.precio_unitario))
-        setValue(`items.${productoTargetIdx}.impuesto_porcentaje`, Number(res.data.impuesto_porcentaje ?? 19))
-      }
+      addProducto(res.data)
       toast.success(`Producto "${res.data.nombre}" creado`)
       setProductoModal(false)
       productoForm.reset({ impuesto_porcentaje: 19, unidad_medida: 'UN' })
-    } finally {
-      setSavingProducto(false)
-    }
+    } finally { setSavingProducto(false) }
   }
 
+  const aiuPctTotal = (Number(watch('aiu_administracion')) || 0) + (Number(watch('aiu_imprevistos')) || 0) + (Number(watch('aiu_utilidad')) || 0)
+
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div>
-        <button onClick={() => navigate(-1)} className="text-sm text-gray-500 hover:text-gray-700 mb-1">← Volver</button>
-        <h1 className="text-2xl font-bold text-gray-900">{isEdit ? 'Editar cotización' : 'Nueva cotización'}</h1>
+    <div className="max-w-7xl mx-auto">
+      <div className="mb-6">
+        <button onClick={() => navigate(-1)} className="text-sm text-gray-500 hover:text-gray-700 mb-1 flex items-center gap-1">
+          ← Volver
+        </button>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {isEdit ? 'Editar cotización' : 'Nueva cotización'}
+        </h1>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        {/* Encabezado */}
-        <div className="card grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Cliente */}
-          <div>
-            <label className="label">Cliente *</label>
-            <div className="flex gap-2">
-              <select {...register('cliente_id', { required: true })} className="input flex-1">
-                <option value="">Selecciona un cliente</option>
-                {clientes.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-              </select>
-              <button
-                type="button"
-                onClick={() => { clienteForm.reset(); setClienteModal(true) }}
-                className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-blue-600 font-bold text-lg"
-                title="Crear nuevo cliente"
-              >+</button>
-            </div>
-            {clientes.length === 0 && (
-              <p className="text-xs text-amber-600 mt-1">
-                No hay clientes.{' '}
-                <button type="button" onClick={() => setClienteModal(true)} className="underline font-medium">Crear uno ahora</button>
-              </p>
-            )}
-          </div>
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <div className="flex gap-6 items-start flex-col lg:flex-row">
 
-          <div><label className="label">Título *</label><input {...register('titulo', { required: true })} className="input" placeholder="Ej: Propuesta de servicios" /></div>
-          <div>
-            <label className="label">Moneda</label>
-            <select {...register('moneda')} className="input">
-              <option value="COP">COP - Peso colombiano</option>
-              <option value="USD">USD - Dólar</option>
-            </select>
-          </div>
-          <div><label className="label">Fecha emisión *</label><input type="date" {...register('fecha_emision', { required: true })} className="input" /></div>
-          <div><label className="label">Válida hasta</label><input type="date" {...register('fecha_vencimiento')} className="input" /></div>
-          <div><label className="label">Días vigencia</label><input type="number" {...register('validez_dias')} className="input" /></div>
-        </div>
+          {/* ── LEFT COLUMN ─────────────────────────────── */}
+          <div className="flex-1 space-y-5 min-w-0">
 
-        {/* Ítems */}
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Ítems</h2>
-            <button type="button" onClick={() => append({ ...defaultItem })} className="btn-secondary text-sm">+ Agregar ítem</button>
-          </div>
-          <div className="space-y-4">
-            {fields.map((field, index) => (
-              <div key={field.id} className="border border-gray-200 rounded-xl p-4 space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Ítem {index + 1}</span>
-                  {fields.length > 1 && <button type="button" onClick={() => remove(index)} className="text-red-500 text-xs hover:text-red-700">Eliminar</button>}
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Producto con botón crear */}
-                  <div>
-                    <label className="label text-xs">Producto</label>
-                    <div className="flex gap-2">
-                      <select
-                        className="input text-sm flex-1"
-                        onChange={(e) => selectProducto(index, e.target.value)}
-                        defaultValue=""
-                      >
-                        <option value="">Seleccionar producto...</option>
-                        {productos.map((p) => <option key={p.id} value={p.id}>{p.nombre} — {formatCurrency(p.precio_unitario)}</option>)}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => { setProductoTargetIdx(index); productoForm.reset({ impuesto_porcentaje: 19, unidad_medida: 'UN' }); setProductoModal(true) }}
-                        className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-blue-600 font-bold text-lg"
-                        title="Crear nuevo producto"
-                      >+</button>
-                    </div>
-                    {productos.length === 0 && (
-                      <p className="text-xs text-amber-600 mt-1">
-                        No hay productos.{' '}
-                        <button type="button" onClick={() => { setProductoTargetIdx(index); setProductoModal(true) }} className="underline font-medium">Crear uno</button>
-                      </p>
-                    )}
-                  </div>
-                  <div><label className="label text-xs">Descripción *</label><input {...register(`items.${index}.descripcion`, { required: true })} className="input text-sm" /></div>
-                </div>
-                <div className={`grid gap-3 ${watchConAiu ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2 sm:grid-cols-4'}`}>
-                  <div><label className="label text-xs">Cantidad</label><input type="number" step="0.01" min="0.01" {...register(`items.${index}.cantidad`)} className="input text-sm" /></div>
-                  <div><label className="label text-xs">Precio unit.</label><input type="number" step="0.01" min="0" {...register(`items.${index}.precio_unitario`)} className="input text-sm" /></div>
-                  <div><label className="label text-xs">Desc. %</label><input type="number" step="0.1" min="0" max="100" {...register(`items.${index}.descuento_porcentaje`)} className="input text-sm" /></div>
-                  {!watchConAiu && (
-                    <div><label className="label text-xs">IVA %</label><input type="number" step="0.1" min="0" {...register(`items.${index}.impuesto_porcentaje`)} className="input text-sm" /></div>
+            {/* Información general */}
+            <div className="form-section">
+              <div className="form-section-header">
+                <h2 className="text-sm font-semibold text-gray-800">Información general</h2>
+              </div>
+              <div className="form-section-body grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <label className="label">Cliente *</label>
+                  <input type="hidden" {...register('cliente_id', { required: true })} />
+                  <ClienteAutocomplete
+                    value={watchClienteId ?? ''}
+                    displayName={clienteDisplayName}
+                    onChange={(cid, nombre, email) => {
+                      setValue('cliente_id', cid, { shouldValidate: true })
+                      setClienteDisplayName(nombre)
+                    }}
+                    onCreateNew={() => { clienteForm.reset(); setClienteModal(true) }}
+                    error={!!errors.cliente_id}
+                  />
+                  {errors.cliente_id && (
+                    <p className="text-red-500 text-xs mt-1">Selecciona un cliente</p>
                   )}
                 </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-6 pt-4 border-t max-w-xs ml-auto space-y-1.5 text-sm">
-            <div className="flex justify-between text-gray-600"><span>Costos directos:</span><span>{formatCurrency(totals.subtotal - totals.descuento)}</span></div>
-            {totals.descuento > 0 && <div className="flex justify-between text-red-600 text-xs"><span>Descuento incluido:</span><span>— {formatCurrency(totals.descuento)}</span></div>}
-            {!watchConAiu && <div className="flex justify-between text-gray-600"><span>IVA (19%):</span><span>{formatCurrency(totals.impuesto)}</span></div>}
-            {watchConAiu && (
-              <div className="border-t pt-1.5 mt-1 space-y-1">
-                <div className="flex justify-between text-xs text-gray-500"><span>Administración ({Number(watch('aiu_administracion'))||0}%):</span><span>{formatCurrency(totals.aiuAdm)}</span></div>
-                <div className="flex justify-between text-xs text-gray-500"><span>Imprevistos ({Number(watch('aiu_imprevistos'))||0}%):</span><span>{formatCurrency(totals.aiuImp)}</span></div>
-                <div className="flex justify-between text-xs text-gray-500"><span>Utilidad ({Number(watch('aiu_utilidad'))||0}%):</span><span>{formatCurrency(totals.aiuUtil)}</span></div>
-                <div className="flex justify-between text-blue-700 font-medium"><span>AIU Total ({(Number(watch('aiu_administracion'))||0)+(Number(watch('aiu_imprevistos'))||0)+(Number(watch('aiu_utilidad'))||0)}%):</span><span>{formatCurrency(totals.aiu)}</span></div>
-                <div className="flex justify-between text-xs text-gray-500"><span>IVA s/ Utilidad (19%):</span><span>{formatCurrency(totals.aiuIva)}</span></div>
-              </div>
-            )}
-            <div className="flex justify-between font-bold text-lg border-t pt-2 text-gray-900"><span>Total:</span><span>{formatCurrency(totals.total)}</span></div>
-          </div>
-        </div>
 
-        {/* AIU */}
-        <div className="card">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold">AIU — Administración, Imprevistos y Utilidad</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Impuesto específico del sector construcción (Colombia)</p>
+                <div className="sm:col-span-2">
+                  <label className="label">Título *</label>
+                  <input
+                    {...register('titulo', { required: true })}
+                    className={`input ${errors.titulo ? 'border-red-400' : ''}`}
+                    placeholder="Ej: Propuesta de servicios de construcción"
+                  />
+                </div>
+
+                <div>
+                  <label className="label">Moneda</label>
+                  <select {...register('moneda')} className="input">
+                    <option value="COP">COP — Peso colombiano</option>
+                    <option value="USD">USD — Dólar</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="label">Días de vigencia</label>
+                  <input type="number" {...register('validez_dias')} className="input" placeholder="30" />
+                </div>
+
+                <div>
+                  <label className="label">Fecha de emisión *</label>
+                  <input type="date" {...register('fecha_emision', { required: true })} className="input" />
+                </div>
+
+                <div>
+                  <label className="label">Válida hasta</label>
+                  <input type="date" {...register('fecha_vencimiento')} className="input" />
+                </div>
+              </div>
             </div>
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input type="checkbox" {...register('con_aiu')} className="w-4 h-4 accent-blue-600" />
-              <span className="text-sm font-medium text-gray-700">Con AIU</span>
-            </label>
-          </div>
 
-          {watchConAiu && (
-            <div className="mt-4">
-              <p className="text-xs text-gray-500 mb-4">Aplicado sobre costos directos. El IVA 19% aplica únicamente sobre la Utilidad.</p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="label">Administración %</label>
-                  <input type="number" step="0.01" min="0" max="100"
-                    {...register('aiu_administracion', { valueAsNumber: true })}
-                    className="input" placeholder="10" />
-                  <p className="text-xs text-gray-400 mt-1">Gastos de oficina, personal administrativo</p>
-                </div>
-                <div>
-                  <label className="label">Imprevistos %</label>
-                  <input type="number" step="0.01" min="0" max="100"
-                    {...register('aiu_imprevistos', { valueAsNumber: true })}
-                    className="input" placeholder="5" />
-                  <p className="text-xs text-gray-400 mt-1">Contingencias y riesgos del proyecto</p>
-                </div>
-                <div>
-                  <label className="label">Utilidad %</label>
-                  <input type="number" step="0.01" min="0" max="100"
-                    {...register('aiu_utilidad', { valueAsNumber: true })}
-                    className="input" placeholder="10" />
-                  <p className="text-xs text-gray-400 mt-1">Margen de ganancia — lleva IVA 19%</p>
-                </div>
+            {/* Ítems */}
+            <div className="form-section">
+              <div className="form-section-header justify-between">
+                <h2 className="text-sm font-semibold text-gray-800">Ítems de la cotización</h2>
+                <span className="text-xs text-gray-400">{fields.length} ítem{fields.length !== 1 ? 's' : ''}</span>
               </div>
-              {totals.aiu > 0 && (
-                <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-100 space-y-2">
-                  <p className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-2">Desglose AIU sobre costos directos ({formatCurrency(totals.subtotal - totals.descuento)})</p>
-                  <div className="flex justify-between text-sm text-gray-700"><span>Administración ({Number(watch('aiu_administracion'))||0}%):</span><span>{formatCurrency(totals.aiuAdm)}</span></div>
-                  <div className="flex justify-between text-sm text-gray-700"><span>Imprevistos ({Number(watch('aiu_imprevistos'))||0}%):</span><span>{formatCurrency(totals.aiuImp)}</span></div>
-                  <div className="flex justify-between text-sm text-gray-700"><span>Utilidad ({Number(watch('aiu_utilidad'))||0}%):</span><span>{formatCurrency(totals.aiuUtil)}</span></div>
-                  <div className="border-t border-blue-200 pt-2 flex justify-between font-semibold text-blue-700"><span>AIU Total ({(Number(watch('aiu_administracion'))||0)+(Number(watch('aiu_imprevistos'))||0)+(Number(watch('aiu_utilidad'))||0)}%):</span><span>{formatCurrency(totals.aiu)}</span></div>
-                  <div className="flex justify-between text-sm text-gray-600"><span>IVA s/ Utilidad ({Number(watch('aiu_utilidad'))||0}%) al 19%:</span><span>{formatCurrency(totals.aiuIva)}</span></div>
-                  <div className="border-t border-blue-200 pt-2 flex justify-between font-bold text-blue-900"><span>Total con AIU:</span><span>{formatCurrency(totals.total)}</span></div>
+              <div className="form-section-body space-y-4">
+                <ProductoBuscador
+                  onSelect={addProducto}
+                  onCreateNew={() => { productoForm.reset({ impuesto_porcentaje: 19, unidad_medida: 'UN' }); setProductoModal(true) }}
+                />
+
+                {fields.length > 0 && (
+                  <div className="overflow-x-auto -mx-5 px-5">
+                    <table className="w-full text-sm min-w-[560px]">
+                      <thead>
+                        <tr className="border-b border-gray-100">
+                          <th className="pb-2 pr-2 text-left text-xs text-gray-400 font-medium w-7">#</th>
+                          <th className="pb-2 pr-2 text-left text-xs text-gray-400 font-medium">Descripción</th>
+                          <th className="pb-2 pr-2 text-xs text-gray-400 font-medium w-20 text-center">Cant.</th>
+                          <th className="pb-2 pr-2 text-xs text-gray-400 font-medium w-28 text-right">Precio</th>
+                          <th className="pb-2 pr-2 text-xs text-gray-400 font-medium w-16 text-center">Desc%</th>
+                          {!watchConAiu && (
+                            <th className="pb-2 pr-2 text-xs text-gray-400 font-medium w-16 text-center">IVA%</th>
+                          )}
+                          <th className="pb-2 pr-2 text-xs text-gray-400 font-medium w-28 text-right">Subtotal</th>
+                          <th className="pb-2 w-7" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {fields.map((field, index) => {
+                          const item = watchItems?.[index]
+                          const base = (Number(item?.cantidad) || 0) * (Number(item?.precio_unitario) || 0)
+                          const disc = base * ((Number(item?.descuento_porcentaje) || 0) / 100)
+                          const taxable = base - disc
+                          const rowTotal = watchConAiu
+                            ? taxable
+                            : taxable + taxable * ((Number(item?.impuesto_porcentaje) || 0) / 100)
+
+                          return (
+                            <tr key={field.id} className="group border-t border-gray-50 first:border-t-0">
+                              <td className="py-2 pr-2 text-gray-400 text-xs align-middle">{index + 1}</td>
+                              <td className="py-2 pr-2 align-middle">
+                                <input type="hidden" {...register(`items.${index}.producto_id`)} />
+                                <input
+                                  {...register(`items.${index}.descripcion`, { required: true })}
+                                  className="input text-xs py-1.5"
+                                  placeholder="Descripción del ítem"
+                                />
+                              </td>
+                              <td className="py-2 pr-2 align-middle">
+                                <input
+                                  type="number" step="0.01" min="0.01"
+                                  {...register(`items.${index}.cantidad`)}
+                                  className="input text-xs py-1.5 text-center"
+                                />
+                              </td>
+                              <td className="py-2 pr-2 align-middle">
+                                <input
+                                  type="number" step="0.01" min="0"
+                                  {...register(`items.${index}.precio_unitario`)}
+                                  className="input text-xs py-1.5 text-right"
+                                />
+                              </td>
+                              <td className="py-2 pr-2 align-middle">
+                                <input
+                                  type="number" step="0.1" min="0" max="100"
+                                  {...register(`items.${index}.descuento_porcentaje`)}
+                                  className="input text-xs py-1.5 text-center"
+                                />
+                              </td>
+                              {!watchConAiu && (
+                                <td className="py-2 pr-2 align-middle">
+                                  <input
+                                    type="number" step="0.1" min="0"
+                                    {...register(`items.${index}.impuesto_porcentaje`)}
+                                    className="input text-xs py-1.5 text-center"
+                                  />
+                                </td>
+                              )}
+                              <td className="py-2 pr-2 text-right font-semibold text-gray-700 text-xs align-middle whitespace-nowrap">
+                                {formatCurrency(rowTotal)}
+                              </td>
+                              <td className="py-2 align-middle">
+                                {fields.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => remove(index)}
+                                    className="opacity-0 group-hover:opacity-100 w-7 h-7 flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all text-base"
+                                  >×</button>
+                                )}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={addEmptyItem}
+                  className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                >
+                  + Agregar fila vacía
+                </button>
+              </div>
+            </div>
+
+            {/* AIU */}
+            <div className="form-section">
+              <div className="form-section-header justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-800">AIU — Administración, Imprevistos y Utilidad</h2>
+                  <p className="text-xs text-gray-400 mt-0.5">Impuesto del sector construcción (Colombia)</p>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer select-none flex-shrink-0 ml-4">
+                  <input type="checkbox" {...register('con_aiu')} className="w-4 h-4 accent-blue-600" />
+                  <span className="text-sm font-medium text-gray-700">Con AIU</span>
+                </label>
+              </div>
+
+              {watchConAiu && (
+                <div className="form-section-body">
+                  <p className="text-xs text-gray-500 mb-4">
+                    Calculado sobre costos directos. El IVA 19% aplica únicamente sobre la Utilidad.
+                  </p>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="label">Administración %</label>
+                      <input
+                        type="number" step="0.01" min="0" max="100"
+                        {...register('aiu_administracion', { valueAsNumber: true })}
+                        className="input" placeholder="10"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">Gestión y oficina</p>
+                    </div>
+                    <div>
+                      <label className="label">Imprevistos %</label>
+                      <input
+                        type="number" step="0.01" min="0" max="100"
+                        {...register('aiu_imprevistos', { valueAsNumber: true })}
+                        className="input" placeholder="5"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">Contingencias</p>
+                    </div>
+                    <div>
+                      <label className="label">Utilidad %</label>
+                      <input
+                        type="number" step="0.01" min="0" max="100"
+                        {...register('aiu_utilidad', { valueAsNumber: true })}
+                        className="input" placeholder="10"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">Margen · lleva IVA 19%</p>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
-          )}
-        </div>
 
-        {/* Notas */}
-        <div className="card grid sm:grid-cols-2 gap-4">
-          <div><label className="label">Condiciones de pago</label><input {...register('condiciones_pago')} className="input" placeholder="Ej: 50% anticipo, 50% entrega" /></div>
-          <div><label className="label">Observaciones</label><textarea {...register('observaciones')} rows={2} className="input resize-none" /></div>
-          <div className="sm:col-span-2"><label className="label">Términos y condiciones</label><textarea {...register('terminos')} rows={3} className="input resize-none" /></div>
-        </div>
+            {/* Notas */}
+            <div className="form-section">
+              <div className="form-section-header">
+                <h2 className="text-sm font-semibold text-gray-800">Notas y condiciones</h2>
+              </div>
+              <div className="form-section-body grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Condiciones de pago</label>
+                  <input
+                    {...register('condiciones_pago')}
+                    className="input"
+                    placeholder="Ej: 50% anticipo, 50% entrega"
+                  />
+                </div>
+                <div>
+                  <label className="label">Observaciones</label>
+                  <textarea {...register('observaciones')} rows={2} className="input resize-none" />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="label">Términos y condiciones</label>
+                  <textarea {...register('terminos')} rows={3} className="input resize-none" />
+                </div>
+              </div>
+            </div>
+          </div>
 
-        <div className="flex justify-end gap-3">
-          <button type="button" onClick={() => navigate(-1)} className="btn-secondary">Cancelar</button>
-          <button type="submit" disabled={isSubmitting} className="btn-primary">
-            {isSubmitting ? 'Guardando...' : isEdit ? 'Actualizar cotización' : 'Crear cotización'}
-          </button>
+          {/* ── RIGHT COLUMN (sticky) ─────────────────── */}
+          <div className="w-full lg:w-72 flex-shrink-0 space-y-4 lg:sticky lg:top-4">
+
+            {/* Resumen financiero */}
+            <div className="bg-slate-800 text-white rounded-xl p-5 space-y-3">
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Resumen financiero</h3>
+
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Subtotal bruto</span>
+                  <span className="text-slate-100">{formatCurrency(totals.subtotal)}</span>
+                </div>
+                {totals.descuento > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">Descuento</span>
+                    <span className="text-red-400">− {formatCurrency(totals.descuento)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm pt-2 border-t border-slate-700">
+                  <span className="text-slate-300 font-medium">Costos directos</span>
+                  <span className="text-white font-medium">{formatCurrency(totals.subtotal - totals.descuento)}</span>
+                </div>
+              </div>
+
+              {!watchConAiu && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">IVA (ítems)</span>
+                  <span className="text-slate-100">{formatCurrency(totals.impuesto)}</span>
+                </div>
+              )}
+
+              {watchConAiu && (
+                <div className="space-y-2 pt-2 border-t border-slate-700">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider">AIU ({aiuPctTotal}%)</p>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">Administración ({Number(watch('aiu_administracion')) || 0}%)</span>
+                    <span className="text-slate-100">{formatCurrency(totals.aiuAdm)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">Imprevistos ({Number(watch('aiu_imprevistos')) || 0}%)</span>
+                    <span className="text-slate-100">{formatCurrency(totals.aiuImp)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">Utilidad ({Number(watch('aiu_utilidad')) || 0}%)</span>
+                    <span className="text-slate-100">{formatCurrency(totals.aiuUtil)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-medium">
+                    <span className="text-slate-300">AIU Total</span>
+                    <span className="text-white">{formatCurrency(totals.aiu)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">IVA s/ Utilidad (19%)</span>
+                    <span className="text-slate-100">{formatCurrency(totals.aiuIva)}</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-3 border-t border-slate-600">
+                <div className="flex justify-between items-end">
+                  <span className="text-slate-300 font-semibold text-sm uppercase tracking-wide">Total</span>
+                  <span className="text-2xl font-bold text-white">{formatCurrency(totals.total)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Acciones */}
+            <div className="card space-y-3 p-4">
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="btn-primary w-full justify-center py-2.5"
+              >
+                {isSubmitting ? 'Guardando...' : isEdit ? 'Actualizar cotización' : 'Crear cotización'}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                className="btn-secondary w-full justify-center"
+              >
+                Cancelar
+              </button>
+            </div>
+
+            {watchConAiu && (
+              <div className="card p-4 bg-blue-50 border-blue-100 text-xs text-blue-700">
+                <p className="font-semibold mb-1">Modo AIU activo</p>
+                <p>IVA por ítem desactivado. El impuesto se aplica sólo sobre la Utilidad al 19%.</p>
+              </div>
+            )}
+          </div>
         </div>
       </form>
 
-      {/* Modal crear cliente rápido */}
+      {/* Modal — Nuevo cliente */}
       <Modal open={clienteModal} onClose={() => setClienteModal(false)} title="Nuevo cliente" size="sm">
         <form onSubmit={clienteForm.handleSubmit(onCreateCliente)} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -396,7 +627,7 @@ export default function CotizacionFormPage() {
         </form>
       </Modal>
 
-      {/* Modal crear producto rápido */}
+      {/* Modal — Nuevo producto */}
       <Modal open={productoModal} onClose={() => setProductoModal(false)} title="Nuevo producto" size="sm">
         <form onSubmit={productoForm.handleSubmit(onCreateProducto)} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -414,11 +645,19 @@ export default function CotizacionFormPage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="label">Precio unitario *</label>
-              <input type="number" step="0.01" min="0" {...productoForm.register('precio_unitario', { required: true, valueAsNumber: true })} className="input" />
+              <input
+                type="number" step="0.01" min="0"
+                {...productoForm.register('precio_unitario', { required: true, valueAsNumber: true })}
+                className="input"
+              />
             </div>
             <div>
               <label className="label">IVA %</label>
-              <input type="number" step="0.1" min="0" {...productoForm.register('impuesto_porcentaje', { valueAsNumber: true })} className="input" />
+              <input
+                type="number" step="0.1" min="0"
+                {...productoForm.register('impuesto_porcentaje', { valueAsNumber: true })}
+                className="input"
+              />
             </div>
           </div>
           <div>
