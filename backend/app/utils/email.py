@@ -1,39 +1,27 @@
-import smtplib
-import ssl
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+import resend
 from typing import Optional
 
 from app.config.settings import get_settings
 
 
-def _smtp_send(settings, to_email: str, msg) -> bool:
-    host = settings.SMTP_HOST
-    port = settings.SMTP_PORT
-    user = settings.SMTP_USER
-    print(f"[EMAIL] Conectando a {host}:{port} user={user}...", flush=True)
+def _send_email(to_email: str, subject: str, html: str) -> bool:
+    settings = get_settings()
+    if not settings.RESEND_API_KEY:
+        print("[EMAIL] ABORTADO: RESEND_API_KEY no configurado en las variables de entorno", flush=True)
+        return False
+
+    resend.api_key = settings.RESEND_API_KEY
+    print(f"[EMAIL] Enviando via Resend a {to_email}...", flush=True)
     try:
-        ctx = ssl.create_default_context()
-        if port == 465:
-            # SSL directo
-            with smtplib.SMTP_SSL(host, port, context=ctx) as server:
-                server.login(user, settings.SMTP_PASSWORD)
-                server.sendmail(user, to_email, msg.as_string())
-        else:
-            # STARTTLS (puerto 587)
-            with smtplib.SMTP(host, port, timeout=15) as server:
-                server.ehlo()
-                server.starttls(context=ctx)
-                server.ehlo()
-                server.login(user, settings.SMTP_PASSWORD)
-                server.sendmail(user, to_email, msg.as_string())
+        resend.Emails.send({
+            "from": settings.EMAIL_FROM,
+            "to": [to_email],
+            "reply_to": settings.EMAIL_REPLY_TO,
+            "subject": subject,
+            "html": html,
+        })
         print(f"[EMAIL] OK — enviado a {to_email}", flush=True)
         return True
-    except smtplib.SMTPAuthenticationError as exc:
-        print(f"[EMAIL] ERROR DE AUTENTICACIÓN — Gmail requiere App Password (no la contraseña de la cuenta). "
-              f"Activa 2FA en la cuenta y genera una App Password en: "
-              f"myaccount.google.com/apppasswords — detalle: {exc}", flush=True)
-        return False
     except Exception as exc:
         print(f"[EMAIL] ERROR — {type(exc).__name__}: {exc}", flush=True)
         return False
@@ -46,11 +34,6 @@ def send_cotizacion_email(
     asunto: Optional[str] = None,
     mensaje_extra: Optional[str] = None,
 ) -> bool:
-    settings = get_settings()
-    if not settings.SMTP_PASSWORD:
-        print("[EMAIL] ABORTADO: SMTP_PASSWORD no configurado", flush=True)
-        return False
-
     def fmt(amount) -> str:
         try:
             return f"$ {float(amount):,.0f}"
@@ -110,7 +93,6 @@ def send_cotizacion_email(
         )
 
     mensaje_extra_html = f'<p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 20px;padding:12px 16px;background:#f8fafc;border-left:3px solid #1d4ed8;border-radius:4px;">{mensaje_extra}</p>' if mensaje_extra else ""
-
     condiciones_html = f'<p style="font-size:12px;color:#64748b;margin:12px 0 4px;"><strong>Condiciones de pago:</strong> {condiciones_pago}</p>' if condiciones_pago else ""
     terminos_html = f'<div style="font-size:12px;color:#64748b;margin:8px 0;"><strong>Términos y condiciones:</strong><br>{terminos.replace(chr(10), "<br>")}</div>' if terminos else ""
 
@@ -122,7 +104,6 @@ def send_cotizacion_email(
     <tr><td align="center">
       <table width="620" cellpadding="0" cellspacing="0"
              style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
-        <!-- Header -->
         <tr>
           <td style="background:#1e3a8a;padding:28px 36px;">
             <table width="100%" cellpadding="0" cellspacing="0">
@@ -145,7 +126,6 @@ def send_cotizacion_email(
             </table>
           </td>
         </tr>
-        <!-- Info cliente -->
         <tr>
           <td style="padding:24px 36px 0;">
             <table width="100%" cellpadding="0" cellspacing="0">
@@ -164,9 +144,7 @@ def send_cotizacion_email(
             <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0 0;">
           </td>
         </tr>
-        <!-- Mensaje extra -->
         {'<tr><td style="padding:16px 36px 0;">' + mensaje_extra_html + '</td></tr>' if mensaje_extra_html else ''}
-        <!-- Items -->
         <tr>
           <td style="padding:0 36px;">
             <table width="100%" cellpadding="0" cellspacing="0">
@@ -182,7 +160,6 @@ def send_cotizacion_email(
             </table>
           </td>
         </tr>
-        <!-- Totales -->
         <tr>
           <td style="padding:16px 36px;">
             <table style="margin-left:auto;" cellpadding="0" cellspacing="0">
@@ -190,16 +167,12 @@ def send_cotizacion_email(
               {descuento_row}
               <tr><td style="padding:4px 0;font-size:13px;color:#64748b;">IVA:</td><td style="padding:4px 0;text-align:right;font-size:13px;color:#475569;">{fmt(impuesto)}</td></tr>
               {aiu_rows}
-              <tr>
-                <td colspan="2"><hr style="border:none;border-top:2px solid #e2e8f0;margin:8px 0;"></td>
-              </tr>
+              <tr><td colspan="2"><hr style="border:none;border-top:2px solid #e2e8f0;margin:8px 0;"></td></tr>
               <tr><td style="padding:4px 0;font-size:15px;font-weight:700;color:#1e293b;">TOTAL {moneda}:</td><td style="padding:4px 0;text-align:right;font-size:15px;font-weight:700;color:#1d4ed8;">{fmt(total)}</td></tr>
             </table>
           </td>
         </tr>
-        <!-- Condiciones -->
         {('<tr><td style="padding:0 36px 24px;">' + condiciones_html + terminos_html + '</td></tr>') if (condiciones_html or terminos_html) else ''}
-        <!-- Footer -->
         <tr>
           <td style="background:#f8fafc;padding:20px 36px;border-top:1px solid #e2e8f0;">
             <p style="color:#94a3b8;font-size:11px;margin:0;text-align:center;">
@@ -214,22 +187,13 @@ def send_cotizacion_email(
 </body>
 </html>"""
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = asunto_email
-    msg["From"] = f"Triple A Construcciones <{settings.SMTP_USER}>"
-    msg["To"] = to_email
-    msg.attach(MIMEText(html, "html", "utf-8"))
-
-    return _smtp_send(settings, to_email, msg)
+    return _send_email(to_email, asunto_email, html)
 
 
 def send_reset_email(to_email: str, reset_url: str) -> bool:
     settings = get_settings()
-    pwd_set = bool(settings.SMTP_PASSWORD)
-    print(f"[EMAIL] to={to_email} smtp={settings.SMTP_HOST}:{settings.SMTP_PORT} "
-          f"user={settings.SMTP_USER} password_set={pwd_set}", flush=True)
-    if not pwd_set:
-        print("[EMAIL] ABORTADO: SMTP_PASSWORD no configurado en las variables de entorno", flush=True)
+    if not settings.RESEND_API_KEY:
+        print("[EMAIL] ABORTADO: RESEND_API_KEY no configurado en las variables de entorno", flush=True)
         return False
 
     html = f"""
@@ -242,7 +206,6 @@ def send_reset_email(to_email: str, reset_url: str) -> bool:
           <table width="480" cellpadding="0" cellspacing="0"
                  style="background:#ffffff;border-radius:12px;overflow:hidden;
                         box-shadow:0 2px 12px rgba(0,0,0,0.08);">
-            <!-- Header -->
             <tr>
               <td align="center" style="background:#1e3a8a;padding:32px 40px;">
                 <div style="display:inline-block;width:56px;height:56px;background:#1d4ed8;
@@ -255,7 +218,6 @@ def send_reset_email(to_email: str, reset_url: str) -> bool:
                 <p style="color:#93c5fd;margin:0;font-size:12px;">NIT 901650581-4</p>
               </td>
             </tr>
-            <!-- Body -->
             <tr>
               <td style="padding:40px;">
                 <h2 style="color:#1e293b;margin:0 0 16px;font-size:20px;">
@@ -284,11 +246,10 @@ def send_reset_email(to_email: str, reset_url: str) -> bool:
                 </p>
               </td>
             </tr>
-            <!-- Footer -->
             <tr>
               <td style="background:#f8fafc;padding:20px 40px;text-align:center;">
                 <p style="color:#94a3b8;font-size:11px;margin:0;">
-                  &copy; 2024 Triple A Construcciones SAS — Sistema de Cotizaciones
+                  &copy; 2026 Triple A Construcciones SAS — Sistema de Cotizaciones
                 </p>
               </td>
             </tr>
@@ -299,10 +260,4 @@ def send_reset_email(to_email: str, reset_url: str) -> bool:
     </html>
     """
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = "Restablecer contraseña — Triple A Construcciones"
-    msg["From"] = f"Triple A Construcciones <{settings.SMTP_USER}>"
-    msg["To"] = to_email
-    msg.attach(MIMEText(html, "html", "utf-8"))
-
-    return _smtp_send(settings, to_email, msg)
+    return _send_email(to_email, "Restablecer contraseña — Triple A Construcciones", html)

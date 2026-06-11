@@ -12,3 +12,4 @@ python-dotenv==1.0.0
 pytest==7.4.3
 httpx==0.25.2
 aiofiles==23.2.1
+resend==2.7.0

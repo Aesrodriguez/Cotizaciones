@@ -30,9 +30,11 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: List[str] = Field(default=["http://localhost:5173"])
 
-    # Email SMTP (Gmail)
-    SMTP_HOST: str = Field(default="smtp.gmail.com")
-    SMTP_PORT: int = Field(default=587)
+    # Email — Resend API (SMTP reemplazado por API HTTPS)
+    RESEND_API_KEY: str = Field(default="")
+    EMAIL_FROM: str = Field(default="Triple A Construcciones <onboarding@resend.dev>")
+    EMAIL_REPLY_TO: str = Field(default="tripleaconstruccionessas@gmail.com")
+    # Mantener SMTP_USER solo para compatibilidad con código existente
     SMTP_USER: str = Field(default="tripleaconstruccionessas@gmail.com")
     SMTP_PASSWORD: str = Field(default="")
     FRONTEND_URL: str = Field(default="https://cotizaciones-web.onrender.com")
