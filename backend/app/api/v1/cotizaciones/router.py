@@ -5,7 +5,9 @@ from app.api.deps import get_db_session, get_authenticated_user, require_admin
 from app.models.auth import Usuario
 from app.repositories.cotizacion import CotizacionRepository
 from app.services.cotizacion_service import CotizacionService
-from app.schemas.cotizacion import CotizacionCreate, CotizacionUpdate, CotizacionOut, CotizacionList, StatsOut
+from app.schemas.cotizacion import CotizacionCreate, CotizacionUpdate, CotizacionOut, CotizacionList, StatsOut, EstadoUpdate, EnviarEmailRequest
+from app.schemas.common import MessageResponse
+from app.utils.email import send_cotizacion_email
 from app.schemas.common import PaginatedResponse
 import math
 
@@ -46,6 +48,7 @@ def get_cotizacion(id: UUID, db: Session = Depends(get_db_session), _: Usuario =
     if not cot:
         raise HTTPException(404, "Cotización no encontrada")
     cot.cliente_nombre = cot.cliente.nombre if cot.cliente else None
+    cot.cliente_email = cot.cliente.contacto_email if cot.cliente else None
     cot.usuario_nombre = f"{cot.usuario.nombres} {cot.usuario.apellidos}" if cot.usuario else None
     for item in cot.items:
         item.producto_nombre = item.producto.nombre if item.producto else None
@@ -74,3 +77,50 @@ def delete_cotizacion(id: UUID, db: Session = Depends(get_db_session), _: Usuari
     if not cot:
         raise HTTPException(404, "Cotización no encontrada")
     repo.delete(cot)
+
+
+@router.patch("/{id}/estado", response_model=MessageResponse)
+def update_estado(
+    id: UUID,
+    body: EstadoUpdate,
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    estados_validos = {"BORRADOR", "PENDIENTE", "ACEPTADA", "RECHAZADA", "CANCELADA"}
+    if body.estado not in estados_validos:
+        raise HTTPException(400, f"Estado inválido: {body.estado}")
+    cot = CotizacionRepository(db).get(id)
+    if not cot:
+        raise HTTPException(404, "Cotización no encontrada")
+    cot.estado = body.estado
+    db.commit()
+    return {"message": f"Estado actualizado a {body.estado}"}
+
+
+@router.post("/{id}/enviar-email", response_model=MessageResponse)
+def enviar_email_cotizacion(
+    id: UUID,
+    body: EnviarEmailRequest,
+    db: Session = Depends(get_db_session),
+    user: Usuario = Depends(get_authenticated_user),
+):
+    cot = CotizacionRepository(db).get_with_items(id)
+    if not cot:
+        raise HTTPException(404, "Cotización no encontrada")
+    cot.cliente_nombre = cot.cliente.nombre if cot.cliente else None
+    cot.usuario_nombre = f"{cot.usuario.nombres} {cot.usuario.apellidos}" if cot.usuario else None
+    for item in cot.items:
+        item.producto_nombre = item.producto.nombre if item.producto else None
+        item.producto_codigo = item.producto.codigo if item.producto else None
+
+    sender_nombre = f"{user.nombres} {user.apellidos}"
+    sent = send_cotizacion_email(
+        to_email=body.email,
+        cotizacion=cot,
+        sender_nombre=sender_nombre,
+        asunto=body.asunto,
+        mensaje_extra=body.mensaje,
+    )
+    if not sent:
+        raise HTTPException(500, "No se pudo enviar el correo. Verifica la configuración SMTP.")
+    return {"message": f"Cotización enviada a {body.email}"}

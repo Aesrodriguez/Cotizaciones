@@ -20,3 +20,27 @@ html, body, #root {
   .card { @apply bg-white rounded-xl shadow-sm border border-gray-100 p-6; }
   .badge { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium; }
 }
+
+@media print {
+  html, body, #root {
+    height: auto !important;
+    overflow: visible !important;
+    background: white !important;
+  }
+  /* Hide layout chrome */
+  aside, header { display: none !important; }
+  /* Undo overflow-hidden on root flex container */
+  #root > div {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  main {
+    overflow: visible !important;
+    height: auto !important;
+    padding: 0 !important;
+  }
+  .no-print { display: none !important; }
+  .print-only { display: block !important; }
+  @page { margin: 15mm; size: A4; }
+}

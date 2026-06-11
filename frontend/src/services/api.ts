@@ -118,6 +118,10 @@ export const cotizacionesAPI = {
   update: (id: string, data: object) => api.put<Cotizacion>(`/cotizaciones/${id}`, data),
   remove: (id: string) => api.delete(`/cotizaciones/${id}`),
   getStats: () => api.get<Stats>('/cotizaciones/stats'),
+  updateEstado: (id: string, estado: string) =>
+    api.patch<{ message: string }>(`/cotizaciones/${id}/estado`, { estado }),
+  enviarEmail: (id: string, data: { email: string; asunto?: string; mensaje?: string }) =>
+    api.post<{ message: string }>(`/cotizaciones/${id}/enviar-email`, data),
 }
 
 export const clientesAPI = {

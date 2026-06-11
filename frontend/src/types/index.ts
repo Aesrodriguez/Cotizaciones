@@ -72,6 +72,7 @@ export interface Cotizacion {
   fecha_vencimiento?: string
   cliente_id?: string
   cliente_nombre?: string
+  cliente_email?: string
   usuario_nombre?: string
   validez_dias?: number
   condiciones_pago?: string

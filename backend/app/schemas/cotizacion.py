@@ -2,7 +2,7 @@ from uuid import UUID
 from typing import Optional, List, Dict, Any
 from decimal import Decimal
 from datetime import date, datetime
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, EmailStr, field_validator
 
 
 class CotizacionItemCreate(BaseModel):
@@ -94,9 +94,20 @@ class CotizacionOut(CotizacionList):
     condiciones_pago: Optional[str] = None
     terminos: Optional[str] = None
     observaciones: Optional[str] = None
+    cliente_email: Optional[str] = None
     items: List[CotizacionItemOut] = []
 
     model_config = {"from_attributes": True}
+
+
+class EstadoUpdate(BaseModel):
+    estado: str
+
+
+class EnviarEmailRequest(BaseModel):
+    email: EmailStr
+    asunto: Optional[str] = None
+    mensaje: Optional[str] = None
 
 
 class StatsOut(BaseModel):
