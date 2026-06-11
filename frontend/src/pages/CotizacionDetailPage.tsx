@@ -177,7 +177,7 @@ export default function CotizacionDetailPage() {
                 <th className="pb-2 pr-4 text-right">Cant.</th>
                 <th className="pb-2 pr-4 text-right">P. Unit.</th>
                 <th className="pb-2 pr-4 text-right">Desc.</th>
-                <th className="pb-2 pr-4 text-right">{quote.con_aiu ? 'IVA % (ref.)' : 'IVA'}</th>
+                {!quote.con_aiu && <th className="pb-2 pr-4 text-right">IVA</th>}
                 <th className="pb-2 text-right">Total</th>
               </tr>
             </thead>
@@ -191,7 +191,7 @@ export default function CotizacionDetailPage() {
                   <td className="py-2.5 pr-4 text-right text-gray-600">{item.cantidad}</td>
                   <td className="py-2.5 pr-4 text-right text-gray-600">{formatCurrency(item.precio_unitario, quote.moneda)}</td>
                   <td className="py-2.5 pr-4 text-right text-gray-600">{item.descuento_porcentaje ?? 0}%</td>
-                  <td className="py-2.5 pr-4 text-right text-gray-600">{item.impuesto_porcentaje ?? 0}%</td>
+                  {!quote.con_aiu && <td className="py-2.5 pr-4 text-right text-gray-600">{item.impuesto_porcentaje ?? 0}%</td>}
                   <td className="py-2.5 text-right font-semibold text-gray-900">{formatCurrency(item.total, quote.moneda)}</td>
                 </tr>
               ))}
@@ -200,10 +200,7 @@ export default function CotizacionDetailPage() {
           <div className="mt-5 pt-4 border-t max-w-xs ml-auto space-y-1.5 text-sm">
             <div className="flex justify-between text-gray-600"><span>Costos directos:</span><span>{formatCurrency(Number(quote.subtotal) - Number(quote.descuento), quote.moneda)}</span></div>
             {Number(quote.descuento) > 0 && <div className="flex justify-between text-red-600 text-xs"><span>Descuento incluido:</span><span>- {formatCurrency(quote.descuento, quote.moneda)}</span></div>}
-            {!quote.con_aiu
-              ? <div className="flex justify-between text-gray-600"><span>IVA (ítems):</span><span>{formatCurrency(quote.impuesto, quote.moneda)}</span></div>
-              : Number(quote.impuesto) > 0 && <div className="flex justify-between text-xs text-gray-400"><span>IVA ítems (ref., no aplica):</span><span>{formatCurrency(quote.impuesto, quote.moneda)}</span></div>
-            }
+            {!quote.con_aiu && <div className="flex justify-between text-gray-600"><span>IVA (ítems):</span><span>{formatCurrency(quote.impuesto, quote.moneda)}</span></div>}
             {quote.con_aiu && (
               <div className="border-t pt-1.5 mt-1.5 space-y-1">
                 <div className="flex justify-between text-xs text-gray-500"><span>Administración ({quote.aiu_administracion}%):</span><span>{formatCurrency(Number(quote.subtotal - quote.descuento) * Number(quote.aiu_administracion) / 100, quote.moneda)}</span></div>
@@ -275,7 +272,7 @@ export default function CotizacionDetailPage() {
                 <th style={{ padding: '8px 10px', textAlign: 'center', fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase' }}>Cant.</th>
                 <th style={{ padding: '8px 10px', textAlign: 'right', fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase' }}>P. Unit.</th>
                 <th style={{ padding: '8px 10px', textAlign: 'right', fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase' }}>Desc. %</th>
-                <th style={{ padding: '8px 10px', textAlign: 'right', fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase' }}>{quote.con_aiu ? 'IVA % (ref.)' : 'IVA %'}</th>
+                {!quote.con_aiu && <th style={{ padding: '8px 10px', textAlign: 'right', fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase' }}>IVA %</th>}
                 <th style={{ padding: '8px 10px', textAlign: 'right', fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase' }}>Total</th>
               </tr>
             </thead>
@@ -289,7 +286,7 @@ export default function CotizacionDetailPage() {
                   <td style={{ padding: '8px 10px', textAlign: 'center' }}>{item.cantidad}</td>
                   <td style={{ padding: '8px 10px', textAlign: 'right' }}>{formatCurrency(item.precio_unitario, quote.moneda)}</td>
                   <td style={{ padding: '8px 10px', textAlign: 'right' }}>{item.descuento_porcentaje ?? 0}%</td>
-                  <td style={{ padding: '8px 10px', textAlign: 'right' }}>{item.impuesto_porcentaje ?? 0}%</td>
+                  {!quote.con_aiu && <td style={{ padding: '8px 10px', textAlign: 'right' }}>{item.impuesto_porcentaje ?? 0}%</td>}
                   <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: '700' }}>{formatCurrency(item.total, quote.moneda)}</td>
                 </tr>
               ))}
@@ -302,10 +299,7 @@ export default function CotizacionDetailPage() {
               <tbody>
                 <tr><td style={{ padding: '3px 8px', color: '#64748b' }}>Costos directos:</td><td style={{ padding: '3px 8px', textAlign: 'right' }}>{formatCurrency(Number(quote.subtotal) - Number(quote.descuento), quote.moneda)}</td></tr>
                 {Number(quote.descuento) > 0 && <tr><td style={{ padding: '3px 8px', color: '#dc2626', fontSize: '11px' }}>Descuento:</td><td style={{ padding: '3px 8px', textAlign: 'right', color: '#dc2626', fontSize: '11px' }}>- {formatCurrency(quote.descuento, quote.moneda)}</td></tr>}
-                {!quote.con_aiu
-                  ? <tr><td style={{ padding: '3px 8px', color: '#64748b' }}>IVA (ítems):</td><td style={{ padding: '3px 8px', textAlign: 'right' }}>{formatCurrency(quote.impuesto, quote.moneda)}</td></tr>
-                  : Number(quote.impuesto) > 0 && <tr><td style={{ padding: '3px 8px', fontSize: '11px', color: '#94a3b8' }}>IVA ítems (ref., no aplica):</td><td style={{ padding: '3px 8px', textAlign: 'right', fontSize: '11px', color: '#94a3b8' }}>{formatCurrency(quote.impuesto, quote.moneda)}</td></tr>
-                }
+                {!quote.con_aiu && <tr><td style={{ padding: '3px 8px', color: '#64748b' }}>IVA (ítems):</td><td style={{ padding: '3px 8px', textAlign: 'right' }}>{formatCurrency(quote.impuesto, quote.moneda)}</td></tr>}
                 {quote.con_aiu && <>
                   <tr><td colSpan={2} style={{ padding: '4px 8px 2px', fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>AIU</td></tr>
                   <tr><td style={{ padding: '2px 8px', fontSize: '11px', color: '#475569' }}>Administración ({quote.aiu_administracion}%):</td><td style={{ padding: '2px 8px', textAlign: 'right', fontSize: '11px' }}>{formatCurrency(Number(quote.subtotal - quote.descuento) * Number(quote.aiu_administracion) / 100, quote.moneda)}</td></tr>

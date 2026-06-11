@@ -239,15 +239,13 @@ export default function CotizacionFormPage() {
                   </div>
                   <div><label className="label text-xs">Descripción *</label><input {...register(`items.${index}.descripcion`, { required: true })} className="input text-sm" /></div>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className={`grid gap-3 ${watchConAiu ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2 sm:grid-cols-4'}`}>
                   <div><label className="label text-xs">Cantidad</label><input type="number" step="0.01" min="0.01" {...register(`items.${index}.cantidad`)} className="input text-sm" /></div>
                   <div><label className="label text-xs">Precio unit.</label><input type="number" step="0.01" min="0" {...register(`items.${index}.precio_unitario`)} className="input text-sm" /></div>
                   <div><label className="label text-xs">Desc. %</label><input type="number" step="0.1" min="0" max="100" {...register(`items.${index}.descuento_porcentaje`)} className="input text-sm" /></div>
-                  <div>
-                    <label className="label text-xs">{watchConAiu ? 'IVA % (ref.)' : 'IVA %'}</label>
-                    <input type="number" step="0.1" min="0" {...register(`items.${index}.impuesto_porcentaje`)} className={`input text-sm ${watchConAiu ? 'bg-gray-50 text-gray-400' : ''}`} />
-                    {watchConAiu && <p className="text-xs text-gray-400 mt-0.5">No aplica en AIU</p>}
-                  </div>
+                  {!watchConAiu && (
+                    <div><label className="label text-xs">IVA %</label><input type="number" step="0.1" min="0" {...register(`items.${index}.impuesto_porcentaje`)} className="input text-sm" /></div>
+                  )}
                 </div>
               </div>
             ))}
@@ -256,7 +254,6 @@ export default function CotizacionFormPage() {
             <div className="flex justify-between text-gray-600"><span>Costos directos:</span><span>{formatCurrency(totals.subtotal - totals.descuento)}</span></div>
             {totals.descuento > 0 && <div className="flex justify-between text-red-600 text-xs"><span>Descuento incluido:</span><span>- {formatCurrency(totals.descuento)}</span></div>}
             {!watchConAiu && <div className="flex justify-between text-gray-600"><span>IVA (ítems):</span><span>{formatCurrency(totals.impuesto)}</span></div>}
-            {watchConAiu && totals.impuesto > 0 && <div className="flex justify-between text-xs text-gray-400"><span>IVA ítems (ref., no aplica):</span><span>{formatCurrency(totals.impuesto)}</span></div>}
             {watchConAiu && totals.aiu > 0 && (
               <>
                 <div className="flex justify-between text-blue-700 font-medium">
