@@ -120,6 +120,19 @@ export default function CotizacionFormPage() {
   }
 
   const onSubmit = async (data: FormData) => {
+    if (data.con_aiu) {
+      const hasAIU = Number(data.aiu_administracion) > 0 || Number(data.aiu_imprevistos) > 0 || Number(data.aiu_utilidad) > 0
+      if (!hasAIU) {
+        toast.error('Con AIU activo debe ingresar al menos un porcentaje (A, I o U)')
+        return
+      }
+    } else {
+      const hasIVA = data.items.some((item) => Number(item.impuesto_porcentaje) > 0)
+      if (!hasIVA) {
+        toast.error('Debe aplicar IVA en al menos un ítem, o activar el AIU')
+        return
+      }
+    }
     try {
       if (isEdit && id) { await cotizacionesAPI.update(id, data); toast.success('Cotización actualizada') }
       else { const res = await cotizacionesAPI.create(data); toast.success(`Cotización ${res.data.numero} creada`) }
