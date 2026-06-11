@@ -402,7 +402,7 @@ export default function CotizacionFormPage() {
                               </td>
                               <td className="py-2 pr-2 align-middle">
                                 <input
-                                  type="number" step="0.01" min="0.01"
+                                  type="number" step="1" min="1"
                                   {...register(`items.${index}.cantidad`)}
                                   className="input text-xs py-1.5 text-center"
                                 />

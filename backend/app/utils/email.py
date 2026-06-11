@@ -1,4 +1,5 @@
 import smtplib
+import ssl
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Optional
@@ -7,15 +8,32 @@ from app.config.settings import get_settings
 
 
 def _smtp_send(settings, to_email: str, msg) -> bool:
-    print(f"[EMAIL] Conectando a {settings.SMTP_HOST}:{settings.SMTP_PORT}...", flush=True)
+    host = settings.SMTP_HOST
+    port = settings.SMTP_PORT
+    user = settings.SMTP_USER
+    print(f"[EMAIL] Conectando a {host}:{port} user={user}...", flush=True)
     try:
-        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
-            server.ehlo()
-            server.starttls()
-            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-            server.sendmail(settings.SMTP_USER, to_email, msg.as_string())
+        ctx = ssl.create_default_context()
+        if port == 465:
+            # SSL directo
+            with smtplib.SMTP_SSL(host, port, context=ctx) as server:
+                server.login(user, settings.SMTP_PASSWORD)
+                server.sendmail(user, to_email, msg.as_string())
+        else:
+            # STARTTLS (puerto 587)
+            with smtplib.SMTP(host, port, timeout=15) as server:
+                server.ehlo()
+                server.starttls(context=ctx)
+                server.ehlo()
+                server.login(user, settings.SMTP_PASSWORD)
+                server.sendmail(user, to_email, msg.as_string())
         print(f"[EMAIL] OK — enviado a {to_email}", flush=True)
         return True
+    except smtplib.SMTPAuthenticationError as exc:
+        print(f"[EMAIL] ERROR DE AUTENTICACIÓN — Gmail requiere App Password (no la contraseña de la cuenta). "
+              f"Activa 2FA en la cuenta y genera una App Password en: "
+              f"myaccount.google.com/apppasswords — detalle: {exc}", flush=True)
+        return False
     except Exception as exc:
         print(f"[EMAIL] ERROR — {type(exc).__name__}: {exc}", flush=True)
         return False
