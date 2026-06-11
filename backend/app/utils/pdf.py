@@ -16,6 +16,13 @@ def _fmt(amount) -> str:
         return "$ 0"
 
 
+def _safe(text) -> str:
+    """Convierte a str y elimina caracteres fuera de latin-1 para fuentes core de fpdf2."""
+    if not text:
+        return ""
+    return str(text).encode("latin-1", errors="replace").decode("latin-1")
+
+
 def _truncate(pdf: FPDF, text: str, max_w: float) -> str:
     while pdf.get_string_width(text) > max_w and len(text) > 3:
         text = text[:-4] + "..."
@@ -31,18 +38,18 @@ class _PDF(FPDF):
 
 
 def generate_cotizacion_pdf(cotizacion) -> bytes:
-    numero          = getattr(cotizacion, "numero", "")
-    titulo          = getattr(cotizacion, "titulo", "")
-    cliente_nombre  = getattr(cotizacion, "cliente_nombre", "") or ""
-    moneda          = getattr(cotizacion, "moneda", "COP")
+    numero          = _safe(getattr(cotizacion, "numero", ""))
+    titulo          = _safe(getattr(cotizacion, "titulo", ""))
+    cliente_nombre  = _safe(getattr(cotizacion, "cliente_nombre", "") or "")
+    moneda          = _safe(getattr(cotizacion, "moneda", "COP"))
     subtotal        = float(getattr(cotizacion, "subtotal", 0) or 0)
     descuento       = float(getattr(cotizacion, "descuento", 0) or 0)
     impuesto        = float(getattr(cotizacion, "impuesto", 0) or 0)
     total           = float(getattr(cotizacion, "total", 0) or 0)
-    condiciones_pago = getattr(cotizacion, "condiciones_pago", "") or ""
-    terminos        = getattr(cotizacion, "terminos", "") or ""
-    fecha_emision   = str(getattr(cotizacion, "fecha_emision", ""))
-    fecha_vto       = str(getattr(cotizacion, "fecha_vencimiento", "") or "Indefinida")
+    condiciones_pago = _safe(getattr(cotizacion, "condiciones_pago", "") or "")
+    terminos        = _safe(getattr(cotizacion, "terminos", "") or "")
+    fecha_emision   = _safe(getattr(cotizacion, "fecha_emision", ""))
+    fecha_vto       = _safe(getattr(cotizacion, "fecha_vencimiento", "") or "Indefinida")
     con_aiu         = getattr(cotizacion, "con_aiu", False)
     aiu_adm         = float(getattr(cotizacion, "aiu_administracion", 0) or 0)
     aiu_imp         = float(getattr(cotizacion, "aiu_imprevistos", 0) or 0)
@@ -135,7 +142,7 @@ def generate_cotizacion_pdf(cotizacion) -> bytes:
     pdf.set_font("Helvetica", "", 9)
     items = getattr(cotizacion, "items", [])
     for idx, item in enumerate(items):
-        nombre   = getattr(item, "descripcion", None) or getattr(item, "producto_nombre", "") or ""
+        nombre   = _safe(getattr(item, "descripcion", None) or getattr(item, "producto_nombre", "") or "")
         cantidad = float(getattr(item, "cantidad", 0) or 0)
         precio   = float(getattr(item, "precio_unitario", 0) or 0)
         desc_p   = float(getattr(item, "descuento_porcentaje", 0) or 0)
