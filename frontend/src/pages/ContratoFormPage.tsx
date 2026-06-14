@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { contratosAPI, clientesAPI, usuariosAPI } from '../services/api'
+import { formatDate } from '../utils/format'
 import toast from 'react-hot-toast'
 import type { Cliente, Usuario } from '../types'
 
