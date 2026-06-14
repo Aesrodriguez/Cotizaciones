@@ -1,7 +1,9 @@
 import base64
+import html as _html
+from decimal import Decimal
+from typing import Optional
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition
-from typing import Optional
 
 from app.config.settings import get_settings
 
@@ -46,7 +48,8 @@ def send_cotizacion_email(
 ) -> bool:
     def fmt(amount) -> str:
         try:
-            return f"$ {float(amount):,.0f}"
+            val = Decimal(str(amount)).quantize(Decimal('1'))
+            return f"$ {val:,.0f}"
         except Exception:
             return "$ 0"
 
@@ -102,7 +105,11 @@ def send_cotizacion_email(
             f'<tr><td style="padding:2px 0;font-size:12px;color:#475569;">IVA s/ Utilidad (19%):</td><td style="padding:2px 0;text-align:right;font-size:12px;">{fmt(aiu_iva_monto)}</td></tr>'
         )
 
-    mensaje_extra_html = f'<p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 20px;padding:12px 16px;background:#f8fafc;border-left:3px solid #1d4ed8;border-radius:4px;">{mensaje_extra}</p>' if mensaje_extra else ""
+    mensaje_extra_html = (
+        f'<p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 20px;'
+        f'padding:12px 16px;background:#f8fafc;border-left:3px solid #1d4ed8;border-radius:4px;">'
+        f'{_html.escape(mensaje_extra)}</p>'
+    ) if mensaje_extra else ""
     condiciones_html = f'<p style="font-size:12px;color:#64748b;margin:12px 0 4px;"><strong>Condiciones de pago:</strong> {condiciones_pago}</p>' if condiciones_pago else ""
     terminos_html = f'<div style="font-size:12px;color:#64748b;margin:8px 0;"><strong>Términos y condiciones:</strong><br>{terminos.replace(chr(10), "<br>")}</div>' if terminos else ""
 
