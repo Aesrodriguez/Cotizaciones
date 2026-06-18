@@ -104,9 +104,21 @@ def descargar_pdf(id: UUID, db: Session = Depends(get_db_session), _: Usuario = 
     cot = CotizacionRepository(db).get_with_items(id)
     if not cot:
         raise HTTPException(404, "Cotización no encontrada")
-    cot.cliente_nombre = cot.cliente.nombre if cot.cliente else None
+    if cot.cliente:
+        cot.cliente_nombre          = cot.cliente.nombre
+        cot.cliente_nit             = cot.cliente.rut or ""
+        cot.cliente_ciudad          = cot.cliente.ciudad or ""
+        cot.cliente_telefono        = cot.cliente.contacto_telefono or ""
+        cot.cliente_contacto_nombre = cot.cliente.contacto_nombre or ""
+        cot.cliente_contacto_email  = cot.cliente.contacto_email or "tripleaconstruccionessas@gmail.com"
+    else:
+        cot.cliente_nombre = cot.cliente_nit = cot.cliente_ciudad = ""
+        cot.cliente_telefono = cot.cliente_contacto_nombre = ""
+        cot.cliente_contacto_email = "tripleaconstruccionessas@gmail.com"
     for item in cot.items:
-        item.producto_nombre = item.producto.nombre if item.producto else None
+        item.producto_nombre  = item.producto.nombre if item.producto else None
+        item.unidad           = item.producto.unidad_medida if item.producto else "Unidad"
+        item.producto_unidad  = item.unidad
     try:
         pdf_bytes = generate_cotizacion_pdf(cot)
     except Exception as exc:
