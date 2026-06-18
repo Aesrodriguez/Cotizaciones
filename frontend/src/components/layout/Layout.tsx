@@ -6,7 +6,7 @@ import Header from './Header'
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   return (
-    <div className="flex h-screen bg-[#111111] overflow-hidden">
+    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="flex flex-col flex-1 overflow-hidden min-w-0">
         <Header onMenuClick={() => setSidebarOpen(true)} />

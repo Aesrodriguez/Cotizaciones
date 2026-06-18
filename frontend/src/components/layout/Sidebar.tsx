@@ -68,10 +68,10 @@ export default function Sidebar({ open, onClose }: Props) {
 
   return (
     <>
-      {/* Mobile overlay */}
       {open && (
         <div
-          className="fixed inset-0 bg-black/70 z-20 md:hidden backdrop-blur-sm"
+          className="fixed inset-0 z-20 md:hidden backdrop-blur-sm"
+          style={{ background: 'rgba(0,0,0,0.6)' }}
           onClick={onClose}
         />
       )}
@@ -79,74 +79,77 @@ export default function Sidebar({ open, onClose }: Props) {
       <aside
         className={`
           fixed inset-y-0 left-0 z-30 w-60 flex flex-col
-          bg-[#111111] border-r border-[#2a2a2a]
           transform duration-200 ease-out
           md:relative md:translate-x-0
           ${open ? 'translate-x-0' : '-translate-x-full'}
         `}
+        style={{
+          background: 'var(--bg)',
+          borderRight: '1px solid var(--border)',
+        }}
       >
         {/* Brand */}
-        <div className="px-5 py-5 border-b border-[#2a2a2a]">
-          <p className="text-[15px] font-bold text-[#e8e4da] tracking-wide leading-tight">
+        <div className="px-5 py-5" style={{ borderBottom: '1px solid var(--border)' }}>
+          <p className="text-[16px] font-bold tracking-wide leading-tight" style={{ color: 'var(--text)' }}>
             Triple A
           </p>
-          <p className="text-[15px] font-bold text-[#c8f135] tracking-wide leading-tight">
+          <p className="text-[16px] font-bold tracking-wide leading-tight" style={{ color: 'var(--lime)' }}>
             Construcciones
           </p>
-          <p className="text-[10px] text-[#555] font-mono tracking-widest mt-1">SAS</p>
+          <p className="text-[10px] font-mono tracking-widest mt-1" style={{ color: 'var(--text-faint)' }}>
+            SAS
+          </p>
         </div>
 
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {navItems.map((item) => (
+          {[...navItems, ...(isAdmin ? [{ to: '/usuarios', icon: <IconUser />, label: 'Usuarios' }] : [])].map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               onClick={onClose}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-100 ${
-                  isActive
-                    ? 'bg-[#c8f135]/10 text-[#c8f135] border border-[#c8f135]/20'
-                    : 'text-[#888] hover:text-[#e8e4da] hover:bg-[#1a1a1a]'
-                }`
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-100"
+              style={({ isActive }) => isActive
+                ? { background: 'var(--lime-dim)', color: 'var(--lime)', border: '1px solid var(--lime-border)' }
+                : { color: 'var(--text-muted)', border: '1px solid transparent' }
               }
+              onMouseEnter={(e) => {
+                const el = e.currentTarget
+                if (!el.getAttribute('aria-current')) {
+                  el.style.color = 'var(--text)'
+                  el.style.background = 'var(--surface)'
+                }
+              }}
+              onMouseLeave={(e) => {
+                const el = e.currentTarget
+                if (!el.getAttribute('aria-current')) {
+                  el.style.color = 'var(--text-muted)'
+                  el.style.background = ''
+                }
+              }}
             >
               {item.icon}
               {item.label}
             </NavLink>
           ))}
-
-          {isAdmin && (
-            <NavLink
-              to="/usuarios"
-              onClick={onClose}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-100 ${
-                  isActive
-                    ? 'bg-[#c8f135]/10 text-[#c8f135] border border-[#c8f135]/20'
-                    : 'text-[#888] hover:text-[#e8e4da] hover:bg-[#1a1a1a]'
-                }`
-              }
-            >
-              <IconUser />
-              Usuarios
-            </NavLink>
-          )}
         </nav>
 
         {/* User footer */}
-        <div className="px-4 py-3 border-t border-[#2a2a2a]">
+        <div className="px-4 py-3" style={{ borderTop: '1px solid var(--border)' }}>
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-full bg-[#c8f135]/15 flex items-center justify-center flex-shrink-0">
-              <span className="text-[#c8f135] text-xs font-bold">
+            <div
+              className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{ background: 'var(--lime-dim)' }}
+            >
+              <span className="text-xs font-bold" style={{ color: 'var(--lime)' }}>
                 {user?.nombres?.[0]}{user?.apellidos?.[0]}
               </span>
             </div>
             <div className="min-w-0">
-              <p className="text-[13px] font-semibold text-[#e8e4da] truncate">
+              <p className="text-[13px] font-semibold truncate" style={{ color: 'var(--text)' }}>
                 {user?.nombres} {user?.apellidos}
               </p>
-              <p className="text-[10px] text-[#888] truncate">
+              <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>
                 {user?.roles?.[0]?.nombre ?? 'Usuario'}
               </p>
             </div>

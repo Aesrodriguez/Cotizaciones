@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { useAuthStore } from './stores/authStore'
+import { useThemeStore } from './stores/themeStore'
 import Layout from './components/layout/Layout'
 
 // Lazy loading — cada página se carga solo cuando se necesita
@@ -35,6 +36,9 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  const theme = useThemeStore((s) => s.theme)
+  const isDark = theme === 'dark'
+
   return (
     <>
       <Suspense fallback={<PageLoader />}>
@@ -74,15 +78,16 @@ export default function App() {
         toastOptions={{
           duration: 4000,
           style: {
-            background: '#1a1a1a',
-            color: '#e8e4da',
-            border: '1px solid #2a2a2a',
+            background: isDark ? '#1a1a1a' : '#ffffff',
+            color:      isDark ? '#e8e4da' : '#1a1a1a',
+            border:     isDark ? '1px solid #2a2a2a' : '1px solid #e0e0e0',
             fontFamily: 'IBM Plex Sans, sans-serif',
             fontSize: '13px',
             borderRadius: '10px',
+            boxShadow: isDark ? '0 4px 20px rgba(0,0,0,0.5)' : '0 4px 20px rgba(0,0,0,0.12)',
           },
-          success: { iconTheme: { primary: '#c8f135', secondary: '#111111' } },
-          error:   { iconTheme: { primary: '#e84040', secondary: '#111111' } },
+          success: { iconTheme: { primary: '#c8f135', secondary: isDark ? '#111111' : '#fff' } },
+          error:   { iconTheme: { primary: '#e84040', secondary: isDark ? '#111111' : '#fff' } },
         }}
       />
     </>
