@@ -24,7 +24,7 @@ const TrabajadorDetailPage = lazy(() => import('./pages/TrabajadorDetailPage'))
 function PageLoader() {
   return (
     <div className="flex items-center justify-center h-64">
-      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-700" />
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#c8f135]" />
     </div>
   )
 }
@@ -73,8 +73,16 @@ export default function App() {
         position="top-right"
         toastOptions={{
           duration: 4000,
-          style: { fontFamily: 'inherit', fontSize: '14px' },
-          success: { iconTheme: { primary: '#1d4ed8', secondary: '#fff' } },
+          style: {
+            background: '#1a1a1a',
+            color: '#e8e4da',
+            border: '1px solid #2a2a2a',
+            fontFamily: 'IBM Plex Sans, sans-serif',
+            fontSize: '13px',
+            borderRadius: '10px',
+          },
+          success: { iconTheme: { primary: '#c8f135', secondary: '#111111' } },
+          error:   { iconTheme: { primary: '#e84040', secondary: '#111111' } },
         }}
       />
     </>

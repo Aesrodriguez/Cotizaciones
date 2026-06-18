@@ -1,62 +1,136 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+:root {
+  --bg:      #111111;
+  --surface: #1a1a1a;
+  --card:    #1e1e1e;
+  --border:  #2a2a2a;
+  --lime:    #c8f135;
+  --text:    #e8e4da;
+  --muted:   #888888;
+  --amber:   #f5a623;
+  --danger:  #e84040;
+}
+
 html, body, #root {
   width: 100%; height: 100%;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--surface); }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #444; }
+
 @layer base {
-  h1 { @apply text-2xl font-bold text-gray-900 tracking-tight; }
-  h2 { @apply text-base font-semibold text-gray-800; }
+  h1 { @apply text-2xl font-bold text-text tracking-tight; }
+  h2 { @apply text-base font-semibold text-text; }
 }
 
 @layer components {
-  .btn { @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed; }
-  .btn-primary { @apply btn bg-blue-700 text-white hover:bg-blue-800 active:bg-blue-900 shadow-sm; }
-  .btn-secondary { @apply btn bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 shadow-sm; }
-  .btn-danger { @apply btn bg-red-600 text-white hover:bg-red-700 shadow-sm; }
 
-  .input {
-    @apply block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900
-           placeholder-gray-400 shadow-sm transition-all
-           focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none;
+  /* ── Buttons ─────────────────────────────────────────────────────────── */
+  .btn {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm
+           transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed
+           select-none;
+  }
+  .btn-primary {
+    @apply btn bg-lime text-bg hover:bg-lime-hover active:scale-95 font-semibold shadow-sm;
+  }
+  .btn-secondary {
+    @apply btn bg-surface text-text border border-border hover:bg-card hover:border-[#3a3a3a];
+  }
+  .btn-danger {
+    @apply btn bg-danger text-white hover:bg-danger-hover active:scale-95;
+  }
+  .btn-ghost {
+    @apply btn text-muted hover:text-text hover:bg-card;
   }
 
-  .label { @apply block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5; }
+  /* ── Inputs ──────────────────────────────────────────────────────────── */
+  .input {
+    @apply block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm
+           text-text placeholder-muted transition-all outline-none
+           focus:border-lime focus:ring-2 focus:ring-lime/20;
+  }
+  .label {
+    @apply block text-xs font-semibold text-muted uppercase tracking-widest mb-1.5;
+  }
+  select.input {
+    @apply cursor-pointer;
+  }
 
-  .card { @apply bg-white rounded-xl border border-gray-200 shadow-sm p-5; }
+  /* ── Cards ───────────────────────────────────────────────────────────── */
+  .card {
+    @apply bg-card rounded-xl border border-border p-5;
+  }
+  .card-surface {
+    @apply bg-surface rounded-xl border border-border p-5;
+  }
 
-  .badge { @apply inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold; }
+  /* ── Badges ──────────────────────────────────────────────────────────── */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold;
+  }
+  .badge-lime    { @apply badge bg-lime/15 text-lime; }
+  .badge-amber   { @apply badge bg-amber/15 text-amber; }
+  .badge-danger  { @apply badge bg-danger/15 text-danger; }
+  .badge-muted   { @apply badge bg-white/10 text-muted; }
 
-  .form-section { @apply bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden; }
-  .form-section-header { @apply px-5 py-3.5 bg-gray-50/80 border-b border-gray-100 flex items-center gap-2; }
-  .form-section-body { @apply p-5; }
+  /* ── Form sections ───────────────────────────────────────────────────── */
+  .form-section        { @apply bg-card rounded-xl border border-border overflow-hidden; }
+  .form-section-header { @apply px-5 py-3.5 bg-surface border-b border-border flex items-center gap-2; }
+  .form-section-body   { @apply p-5; }
+
+  /* ── Tables ──────────────────────────────────────────────────────────── */
+  .table-dark thead tr {
+    @apply bg-surface border-b border-border;
+  }
+  .table-dark thead th {
+    @apply px-4 py-3 text-left text-xs font-semibold text-muted uppercase tracking-widest;
+  }
+  .table-dark tbody tr {
+    @apply border-b border-border/50 hover:bg-surface/60 transition-colors cursor-pointer;
+  }
+  .table-dark tbody td {
+    @apply px-4 py-3 text-sm text-text;
+  }
+
+  /* ── Dividers ────────────────────────────────────────────────────────── */
+  .divider { @apply border-t border-border my-4; }
 
 }
 
+/* ── Animations ──────────────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fadeIn 0.18s ease-out; }
+
+/* ── Print ───────────────────────────────────────────────────────────────── */
 @media print {
   html, body, #root {
     height: auto !important;
     overflow: visible !important;
     background: white !important;
+    color: black !important;
   }
   aside, header { display: none !important; }
-  #root > div {
-    display: block !important;
-    height: auto !important;
-    overflow: visible !important;
-  }
-  main {
-    overflow: visible !important;
-    height: auto !important;
-    padding: 0 !important;
-  }
-  .no-print { display: none !important; }
+  #root > div { display: block !important; height: auto !important; }
+  main { overflow: visible !important; height: auto !important; padding: 0 !important; }
+  .no-print  { display: none !important; }
   .print-only { display: block !important; }
   @page { margin: 15mm; size: A4; }
 }

@@ -21,46 +21,73 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-700 to-blue-900 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-800 rounded-2xl mb-4">
-            <span className="text-white text-2xl font-black">3A</span>
-          </div>
-          <h1 className="text-xl font-black text-gray-900 uppercase tracking-wide">TRIPLE A CONSTRUCCIONES</h1>
-          <p className="text-sm text-gray-500 font-medium">SAS &nbsp;·&nbsp; NIT 901650581-4</p>
-          <p className="text-gray-400 text-xs mt-2">Sistema de Cotizaciones — Ingresa a tu cuenta</p>
+    <div className="min-h-screen bg-[#111111] flex items-center justify-center p-4">
+      {/* Background grid pattern */}
+      <div
+        className="absolute inset-0 opacity-[0.03]"
+        style={{
+          backgroundImage: 'linear-gradient(#c8f135 1px, transparent 1px), linear-gradient(90deg, #c8f135 1px, transparent 1px)',
+          backgroundSize: '40px 40px',
+        }}
+      />
+
+      <div className="relative w-full max-w-sm">
+        {/* Logo */}
+        <div className="flex justify-center mb-8">
+          <img src="/logo.png" alt="Triple A Construcciones" className="h-20 w-auto object-contain" />
         </div>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-          <div>
-            <label className="label">Correo electrónico</label>
-            <input
-              type="email"
-              {...register('email', { required: 'El email es requerido' })}
-              className="input"
-              placeholder="usuario@empresa.com"
-            />
-            {errors.email && <p className="text-red-600 text-xs mt-1">{errors.email.message}</p>}
+
+        {/* Card */}
+        <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-8 shadow-2xl">
+          <div className="mb-7 text-center">
+            <h1 className="text-lg font-bold text-[#e8e4da] tracking-wide uppercase">
+              Triple A Construcciones
+            </h1>
+            <p className="text-[11px] text-[#888] font-mono tracking-widest mt-1">
+              SAS · NIT 901.650.581-4
+            </p>
+            <div className="mt-3 h-px bg-[#2a2a2a]" />
+            <p className="text-[12px] text-[#888] mt-3">Ingresa a tu cuenta</p>
           </div>
-          <div>
-            <label className="label">Contraseña</label>
-            <input
-              type="password"
-              {...register('password', { required: 'La contraseña es requerida' })}
-              className="input"
-              placeholder="••••••••"
-            />
-            {errors.password && <p className="text-red-600 text-xs mt-1">{errors.password.message}</p>}
-          </div>
-          <button type="submit" disabled={isSubmitting} className="btn-primary w-full justify-center py-2.5">
-            {isSubmitting ? 'Ingresando...' : 'Iniciar sesión'}
-          </button>
-        </form>
-        <p className="text-center text-sm text-gray-500 mt-5">
-          <Link to="/forgot-password" className="text-blue-700 font-medium hover:underline">
-            ¿Olvidaste tu contraseña?
-          </Link>
-        </p>
+
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <div>
+              <label className="label">Correo electrónico</label>
+              <input
+                type="email"
+                {...register('email', { required: 'El email es requerido' })}
+                className="input"
+                placeholder="usuario@empresa.com"
+                autoComplete="email"
+              />
+              {errors.email && <p className="text-danger text-xs mt-1">{errors.email.message}</p>}
+            </div>
+            <div>
+              <label className="label">Contraseña</label>
+              <input
+                type="password"
+                {...register('password', { required: 'La contraseña es requerida' })}
+                className="input"
+                placeholder="••••••••"
+                autoComplete="current-password"
+              />
+              {errors.password && <p className="text-danger text-xs mt-1">{errors.password.message}</p>}
+            </div>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="btn-primary w-full justify-center py-3 mt-2 text-[13px]"
+            >
+              {isSubmitting ? 'Ingresando…' : 'Iniciar sesión'}
+            </button>
+          </form>
+
+          <p className="text-center text-[12px] text-[#888] mt-5">
+            <Link to="/forgot-password" className="text-[#c8f135] hover:underline font-medium">
+              ¿Olvidaste tu contraseña?
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   )
