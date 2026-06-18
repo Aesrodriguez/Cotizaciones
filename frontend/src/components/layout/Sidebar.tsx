@@ -93,7 +93,7 @@ export default function Sidebar({ open, onClose }: Props) {
           <p className="text-[16px] font-bold tracking-wide leading-tight" style={{ color: 'var(--text)' }}>
             Triple A
           </p>
-          <p className="text-[16px] font-bold tracking-wide leading-tight" style={{ color: 'var(--lime)' }}>
+          <p className="text-[16px] font-bold tracking-wide leading-tight" style={{ color: 'var(--lime-text)' }}>
             Construcciones
           </p>
           <p className="text-[10px] font-mono tracking-widest mt-1" style={{ color: 'var(--text-faint)' }}>
@@ -110,7 +110,7 @@ export default function Sidebar({ open, onClose }: Props) {
               onClick={onClose}
               className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-100"
               style={({ isActive }) => isActive
-                ? { background: 'var(--lime-dim)', color: 'var(--lime)', border: '1px solid var(--lime-border)' }
+                ? { background: 'var(--lime-dim)', color: 'var(--lime-text)', border: '1px solid var(--lime-border)' }
                 : { color: 'var(--text-muted)', border: '1px solid transparent' }
               }
               onMouseEnter={(e) => {
@@ -141,7 +141,7 @@ export default function Sidebar({ open, onClose }: Props) {
               className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
               style={{ background: 'var(--lime-dim)' }}
             >
-              <span className="text-xs font-bold" style={{ color: 'var(--lime)' }}>
+              <span className="text-xs font-bold" style={{ color: 'var(--lime-text)' }}>
                 {user?.nombres?.[0]}{user?.apellidos?.[0]}
               </span>
             </div>

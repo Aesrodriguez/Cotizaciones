@@ -11,9 +11,9 @@ export const formatDate = (date?: string | null) => {
 }
 
 export const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
-  BORRADOR: { label: 'Borrador', className: 'bg-gray-100 text-gray-700' },
-  PENDIENTE: { label: 'Pendiente', className: 'bg-blue-100 text-blue-700' },
-  ACEPTADA: { label: 'Aceptada', className: 'bg-green-100 text-green-700' },
-  RECHAZADA: { label: 'Rechazada', className: 'bg-red-100 text-red-700' },
-  CANCELADA: { label: 'Cancelada', className: 'bg-yellow-100 text-yellow-700' },
+  BORRADOR:  { label: 'Borrador',  className: 'badge-status-gray' },
+  PENDIENTE: { label: 'Pendiente', className: 'badge-status-blue' },
+  ACEPTADA:  { label: 'Aceptada',  className: 'badge-status-green' },
+  RECHAZADA: { label: 'Rechazada', className: 'badge-status-red' },
+  CANCELADA: { label: 'Cancelada', className: 'badge-status-amber' },
 }

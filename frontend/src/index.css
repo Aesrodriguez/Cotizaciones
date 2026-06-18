@@ -4,7 +4,10 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── CSS Variables — Dark (default) ─────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════════
+   CSS VARIABLES
+   ══════════════════════════════════════════════════════════════════════════ */
+
 :root,
 [data-theme="dark"] {
   --bg:           #111111;
@@ -13,8 +16,10 @@
   --border:       #2a2a2a;
   --border-light: #333333;
   --lime:         #c8f135;
-  --lime-dim:     rgba(200,241,53,0.12);
-  --lime-border:  rgba(200,241,53,0.25);
+  --lime-hover:   #b8e020;
+  --lime-dim:     rgba(200,241,53,0.10);
+  --lime-border:  rgba(200,241,53,0.22);
+  --lime-text:    #c8f135;
   --text:         #e8e4da;
   --text-muted:   #888888;
   --text-faint:   #555555;
@@ -24,26 +29,30 @@
   color-scheme: dark;
 }
 
-/* ── CSS Variables — Light ───────────────────────────────────────────────── */
 [data-theme="light"] {
-  --bg:           #f0f0f0;
+  --bg:           #f2f2f2;
   --surface:      #ffffff;
-  --card:         #f8f8f8;
+  --card:         #f9f9f9;
   --border:       #e0e0e0;
   --border-light: #ebebeb;
   --lime:         #c8f135;
-  --lime-dim:     rgba(100,130,0,0.08);
-  --lime-border:  rgba(100,130,0,0.20);
-  --text:         #1a1a1a;
-  --text-muted:   #666666;
+  --lime-hover:   #b8e020;
+  --lime-dim:     rgba(80,108,0,0.08);
+  --lime-border:  rgba(80,108,0,0.20);
+  --lime-text:    #4d6a00;
+  --text:         #111111;
+  --text-muted:   #555555;
   --text-faint:   #aaaaaa;
-  --amber:        #d48a00;
+  --amber:        #b86e00;
   --danger:       #cc2222;
-  --shadow:       0 4px 24px rgba(0,0,0,0.10);
+  --shadow:       0 4px 24px rgba(0,0,0,0.09);
   color-scheme: light;
 }
 
-/* ── Reset & Base ────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════════
+   BASE
+   ══════════════════════════════════════════════════════════════════════════ */
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 html, body, #root {
@@ -52,10 +61,9 @@ html, body, #root {
   color: var(--text);
   font-family: 'IBM Plex Sans', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: background-color 0.2s ease, color 0.15s ease;
 }
 
-/* ── Scrollbar ───────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--surface); }
 ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
@@ -66,114 +74,135 @@ html, body, #root {
   h2 { @apply text-base font-semibold; color: var(--text); }
 }
 
-@layer components {
+/* ══════════════════════════════════════════════════════════════════════════
+   COMPONENTS
+   ══════════════════════════════════════════════════════════════════════════ */
 
-  /* ── Buttons ─────────────────────────────────────────────────────────── */
+@layer components {
+  /* Buttons */
   .btn {
     @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm
            transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed select-none;
   }
-  .btn-primary {
-    @apply btn font-semibold shadow-sm active:scale-95;
-    background: var(--lime);
-    color: #111111;
-  }
-  .btn-primary:hover { filter: brightness(0.92); }
+  .btn-primary  { @apply btn font-semibold shadow-sm active:scale-95; background: var(--lime); color: #111111; }
+  .btn-secondary { @apply btn; background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  .btn-danger   { @apply btn active:scale-95; background: var(--danger); color: #fff; }
+  .btn-ghost    { @apply btn; color: var(--text-muted); }
 
-  .btn-secondary {
-    @apply btn;
-    background: var(--surface);
-    color: var(--text);
-    border: 1px solid var(--border);
-  }
-  .btn-secondary:hover { background: var(--card); border-color: var(--border-light); }
-
-  .btn-danger {
-    @apply btn active:scale-95;
-    background: var(--danger);
-    color: #fff;
-  }
-  .btn-danger:hover { filter: brightness(0.9); }
-
-  .btn-ghost {
-    @apply btn;
-    color: var(--text-muted);
-  }
-  .btn-ghost:hover { color: var(--text); background: var(--card); }
-
-  /* ── Inputs ──────────────────────────────────────────────────────────── */
+  /* Inputs */
   .input {
     @apply block w-full rounded-lg px-3 py-2.5 text-sm transition-all outline-none;
-    background: var(--surface);
-    color: var(--text);
-    border: 1px solid var(--border);
+    background: var(--surface); color: var(--text); border: 1px solid var(--border);
   }
-  .input::placeholder { color: var(--text-faint); }
-  .input:focus {
-    border-color: var(--lime);
-    box-shadow: 0 0 0 3px var(--lime-dim);
-  }
-  select.input { cursor: pointer; }
+  .label { @apply block text-xs font-semibold uppercase tracking-widest mb-1.5; color: var(--text-muted); }
 
-  .label {
-    @apply block text-xs font-semibold uppercase tracking-widest mb-1.5;
-    color: var(--text-muted);
-  }
+  /* Cards */
+  .card         { @apply rounded-xl p-5; background: var(--card);    border: 1px solid var(--border); }
+  .card-surface { @apply rounded-xl p-5; background: var(--surface); border: 1px solid var(--border); }
 
-  /* ── Cards ───────────────────────────────────────────────────────────── */
-  .card {
-    @apply rounded-xl p-5;
-    background: var(--card);
-    border: 1px solid var(--border);
-  }
-  .card-surface {
-    @apply rounded-xl p-5;
-    background: var(--surface);
-    border: 1px solid var(--border);
-  }
+  /* Badges */
+  .badge          { @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold; }
+  .badge-lime     { @apply badge; background: var(--lime-dim);              color: var(--lime-text); border: 1px solid var(--lime-border); }
+  .badge-amber    { @apply badge; background: rgba(245,166,35,0.12);        color: var(--amber); }
+  .badge-danger   { @apply badge; background: rgba(220,40,40,0.12);         color: var(--danger); }
+  .badge-muted    { @apply badge; background: var(--card);                  color: var(--text-muted); border: 1px solid var(--border); }
 
-  /* ── Badges ──────────────────────────────────────────────────────────── */
-  .badge {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold;
-  }
-  .badge-lime   { @apply badge; background: var(--lime-dim); color: var(--lime); }
-  .badge-amber  { @apply badge; background: rgba(245,166,35,0.12); color: var(--amber); }
-  .badge-danger { @apply badge; background: rgba(232,64,64,0.12); color: var(--danger); }
-  .badge-muted  { @apply badge; background: var(--card); color: var(--text-muted); border: 1px solid var(--border); }
+  /* Status badges (formato.ts) */
+  .badge-status-gray  { @apply badge; background: var(--card);                color: var(--text-muted); border: 1px solid var(--border); }
+  .badge-status-blue  { @apply badge; background: rgba(59,130,246,0.12);      color: #2563eb; }
+  .badge-status-green { @apply badge; background: rgba(34,197,94,0.12);       color: #16a34a; }
+  .badge-status-red   { @apply badge; background: rgba(220,38,38,0.12);       color: var(--danger); }
+  .badge-status-amber { @apply badge; background: rgba(245,158,11,0.12);      color: var(--amber); }
 
-  /* ── Form sections ───────────────────────────────────────────────────── */
+  /* Form sections */
   .form-section        { @apply rounded-xl overflow-hidden; background: var(--card); border: 1px solid var(--border); }
   .form-section-header { @apply px-5 py-3.5 flex items-center gap-2; background: var(--surface); border-bottom: 1px solid var(--border); }
   .form-section-body   { @apply p-5; }
-
-  /* ── Dividers ────────────────────────────────────────────────────────── */
-  .divider { @apply my-4; border-top: 1px solid var(--border); }
-
+  .divider             { @apply my-4; border-top: 1px solid var(--border); }
 }
 
-/* ── Animations ──────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════════
+   HOVER / FOCUS STATES (require CSS properties, not @apply)
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.btn-primary:hover  { background: var(--lime-hover); }
+.btn-secondary:hover { background: var(--card); border-color: var(--border-light); }
+.btn-danger:hover   { filter: brightness(0.9); }
+.btn-ghost:hover    { color: var(--text); background: var(--card); }
+.input::placeholder { color: var(--text-faint); }
+.input:focus        { border-color: var(--lime); box-shadow: 0 0 0 3px var(--lime-dim); }
+select.input        { cursor: pointer; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DARK MODE — REMAP TAILWIND HARDCODED CLASSES
+   Hace que páginas existentes cambien de tema sin modificar cada archivo.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Fondos */
+[data-theme="dark"] .bg-white    { background-color: var(--card) !important; }
+[data-theme="dark"] .bg-gray-50  { background-color: var(--surface) !important; }
+[data-theme="dark"] .bg-gray-100 { background-color: var(--surface) !important; }
+
+/* Textos */
+[data-theme="dark"] .text-gray-900 { color: var(--text) !important; }
+[data-theme="dark"] .text-gray-800 { color: var(--text) !important; }
+[data-theme="dark"] .text-gray-700 { color: var(--text-muted) !important; }
+[data-theme="dark"] .text-gray-600 { color: var(--text-muted) !important; }
+[data-theme="dark"] .text-gray-500 { color: var(--text-muted) !important; }
+[data-theme="dark"] .text-gray-400 { color: var(--text-faint) !important; }
+[data-theme="dark"] .text-gray-300 { color: var(--text-faint) !important; }
+
+/* Bordes */
+[data-theme="dark"] .border-gray-100 { border-color: var(--border) !important; }
+[data-theme="dark"] .border-gray-200 { border-color: var(--border) !important; }
+[data-theme="dark"] .border-gray-300 { border-color: var(--border-light) !important; }
+[data-theme="dark"] .divide-gray-100 > * + * { border-color: var(--border) !important; }
+[data-theme="dark"] .divide-gray-200 > * + * { border-color: var(--border) !important; }
+
+/* Filas de tabla hover */
+[data-theme="dark"] tr:hover { background-color: var(--surface) !important; }
+
+/* Badges de status en oscuro — texto más claro para mejor contraste */
+[data-theme="dark"] .badge-status-green { color: #4ade80 !important; }
+[data-theme="dark"] .badge-status-blue  { color: #60a5fa !important; }
+
+/* Spinners azules → lima */
+[data-theme="dark"] .border-blue-600 { border-color: var(--lime) !important; }
+[data-theme="dark"] .border-blue-700 { border-color: var(--lime) !important; }
+[data-theme="dark"] .text-blue-700   { color: #60a5fa !important; }
+[data-theme="dark"] .text-blue-600   { color: #60a5fa !important; }
+[data-theme="dark"] .shadow-sm       { box-shadow: 0 1px 4px rgba(0,0,0,0.4) !important; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LIGHT MODE — AJUSTES
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Spinners → verde oscuro */
+[data-theme="light"] .border-blue-600 { border-color: #4d6a00 !important; }
+[data-theme="light"] .border-blue-700 { border-color: #4d6a00 !important; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ANIMACIONES
+   ══════════════════════════════════════════════════════════════════════════ */
+
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 .animate-fade-in { animation: fadeIn 0.18s ease-out; }
 
-/* ── Modals dark overlay ─────────────────────────────────────────────────── */
-[data-theme="light"] .modal-overlay { background: rgba(0,0,0,0.4); }
-[data-theme="dark"]  .modal-overlay { background: rgba(0,0,0,0.65); }
+/* ══════════════════════════════════════════════════════════════════════════
+   PRINT
+   ══════════════════════════════════════════════════════════════════════════ */
 
-/* ── Print ───────────────────────────────────────────────────────────────── */
 @media print {
   html, body, #root {
-    height: auto !important;
-    overflow: visible !important;
-    background: white !important;
-    color: black !important;
+    height: auto !important; overflow: visible !important;
+    background: white !important; color: black !important;
   }
   aside, header { display: none !important; }
-  #root > div { display: block !important; height: auto !important; }
   main { overflow: visible !important; height: auto !important; padding: 0 !important; }
-  .no-print  { display: none !important; }
+  .no-print   { display: none !important; }
   .print-only { display: block !important; }
   @page { margin: 15mm; size: A4; }
 }

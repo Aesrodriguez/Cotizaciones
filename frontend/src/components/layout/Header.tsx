@@ -70,7 +70,7 @@ export default function Header({ onMenuClick }: Props) {
             color: 'var(--text-muted)',
             border: '1px solid var(--border)',
           }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--lime)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--lime-border)'; }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--lime-text)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--lime-border)'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; }}
         >
           {theme === 'dark' ? <IconSun /> : <IconMoon />}
