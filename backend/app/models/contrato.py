@@ -305,155 +305,169 @@ class EstadoTrabajador(str, Enum):
 
 
 class Trabajador(Base, UUIDPrimaryKey, TimestampedMixin, SoftDeleteMixin):
-    """
-    Workers/Employees table.
-    
-    Worker and employee information including contract details,
-    salary information, and employment status.
-    """
+    """Workers/Employees table."""
     __tablename__ = "trabajadores"
 
-    codigo = Column(
-        VARCHAR(50),
-        unique=True,
-        nullable=False,
-        comment="Worker code (unique)"
-    )
+    codigo = Column(VARCHAR(50), unique=True, nullable=False, comment="Worker code (unique)")
     nombres = Column(VARCHAR(100), nullable=False, comment="First names")
     apellidos = Column(VARCHAR(100), nullable=False, comment="Last names")
-    rut = Column(
-        VARCHAR(20),
-        unique=True,
-        nullable=True,
-        comment="Worker RUT (Chilean tax ID)"
-    )
-    email = Column(VARCHAR(255), nullable=True, comment="Email address")
-    telefono = Column(VARCHAR(20), nullable=True, comment="Phone number")
-    direccion = Column(VARCHAR(255), nullable=True, comment="Home address")
-    ciudad = Column(VARCHAR(100), nullable=True, comment="City")
-    cargo = Column(VARCHAR(100), nullable=True, comment="Job position/title")
-    tipo_contrato = Column(
-        VARCHAR(50),
-        nullable=True,
-        comment="Contract type (PERMANENTE, TEMPORAL, SUBCONTRATISTA)"
-    )
-    salario_diario = Column(
-        Numeric(15, 2),
-        nullable=True,
-        comment="Daily wage"
-    )
+    rut = Column(VARCHAR(20), unique=True, nullable=True, comment="Worker RUT / cédula")
+    cedula = Column(VARCHAR(30), nullable=True, comment="Cédula colombiana")
+    email = Column(VARCHAR(255), nullable=True)
+    telefono = Column(VARCHAR(20), nullable=True)
+    direccion = Column(VARCHAR(255), nullable=True)
+    ciudad = Column(VARCHAR(100), nullable=True)
+    cargo = Column(VARCHAR(100), nullable=True)
+    especialidad = Column(VARCHAR(100), nullable=True)
+    tipo_contrato = Column(VARCHAR(50), nullable=True, comment="PERMANENTE, TEMPORAL, SUBCONTRATISTA")
+    tipo = Column(VARCHAR(50), nullable=True, server_default="Empleado", comment="Empleado / Subcontratista")
+    salario_diario = Column(Numeric(15, 2), nullable=True)
+    salario_base = Column(Numeric(15, 2), nullable=True, comment="Base salary / valor acordado general")
     estado = Column(
         PGENUM(EstadoTrabajador),
         default=EstadoTrabajador.ACTIVO,
         nullable=False,
-        comment="Worker status"
     )
-    fecha_ingreso = Column(Date, nullable=True, comment="Hire date")
-    fecha_termino = Column(Date, nullable=True, comment="Termination date")
+    fecha_ingreso = Column(Date, nullable=True)
+    fecha_termino = Column(Date, nullable=True)
+    banco = Column(VARCHAR(100), nullable=True)
+    tipo_cuenta = Column(VARCHAR(50), nullable=True)
+    numero_cuenta = Column(VARCHAR(50), nullable=True)
 
     # Relationships
-    pagos = relationship(
-        "TrabajadorPago",
-        back_populates="trabajador",
-        cascade="all, delete-orphan",
-    )
+    pagos = relationship("TrabajadorPago", back_populates="trabajador", cascade="all, delete-orphan")
+    asignaciones = relationship("TrabajadorAsignacion", back_populates="trabajador", cascade="all, delete-orphan")
+    cortes = relationship("TrabajadorCorte", back_populates="trabajador", cascade="all, delete-orphan")
 
-    # Indexes
     __table_args__ = (
         Index("idx_trabajadores_codigo", "codigo"),
         Index("idx_trabajadores_rut", "rut"),
         Index("idx_trabajadores_estado", "estado"),
-        Index("idx_trabajadores_deleted_at", "deleted_at", postgresql_where=text('deleted_at IS NOT NULL')),
+        Index("idx_trabajadores_deleted_at", "deleted_at", postgresql_where=text("deleted_at IS NOT NULL")),
     )
 
     def __repr__(self):
         return f"<Trabajador codigo={self.codigo} nombres={self.nombres}>"
 
 
-class EstadoPago(str, Enum):
-    """Payment status enumeration."""
-    PENDIENTE = "PENDIENTE"
-    PAGADO = "PAGADO"
-    ANULADO = "ANULADO"
+class EstadoAsignacion(str, Enum):
+    ACTIVA = "ACTIVA"
+    COMPLETADA = "COMPLETADA"
+    CANCELADA = "CANCELADA"
 
 
-class TrabajadorPago(Base, UUIDPrimaryKey, TimestampedMixin):
-    """
-    Worker payment records.
-    
-    Tracks payments to workers including gross amount, deductions,
-    and net payment amount per payment period.
-    """
-    __tablename__ = "trabajador_pagos"
+class TrabajadorAsignacion(Base, UUIDPrimaryKey, TimestampedMixin, SoftDeleteMixin):
+    """Assignment of a worker to a contract item."""
+    __tablename__ = "trabajador_asignaciones"
 
-    trabajador_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("trabajadores.id", ondelete="CASCADE"),
-        nullable=False,
-        comment="Foreign key to trabajadores"
-    )
-    periodo = Column(
-        Date,
-        nullable=False,
-        comment="Payment period (first day of month)"
-    )
-    fecha_pago = Column(
-        Date,
-        nullable=True,
-        comment="Actual payment date"
-    )
-    cantidad_dias = Column(
-        Numeric(5, 2),
-        nullable=False,
-        comment="Days worked in period"
-    )
-    monto_bruto = Column(
-        Numeric(15, 2),
-        nullable=False,
-        comment="Gross payment amount"
-    )
-    descuentos = Column(
-        Numeric(15, 2),
-        nullable=False,
-        default=0,
-        comment="Total deductions"
-    )
-    monto_neto = Column(
-        Numeric(15, 2),
-        nullable=False,
-        comment="Net payment amount"
-    )
-    estado = Column(
-        PGENUM(EstadoPago),
-        default=EstadoPago.PENDIENTE,
-        nullable=False,
-        comment="Payment status"
-    )
-    referencia = Column(
-        VARCHAR(100),
-        nullable=True,
-        comment="Payment reference (check number, transfer ID, etc.)"
-    )
+    trabajador_id = Column(UUID(as_uuid=True), ForeignKey("trabajadores.id", ondelete="CASCADE"), nullable=False)
+    contrato_id = Column(UUID(as_uuid=True), ForeignKey("contratos.id", ondelete="CASCADE"), nullable=False)
+    item_id = Column(UUID(as_uuid=True), ForeignKey("contrato_items.id", ondelete="SET NULL"), nullable=True)
+    descripcion_item = Column(VARCHAR(500), nullable=True)
+    unidad_item = Column(VARCHAR(30), nullable=True)
+    cantidad_item = Column(Numeric(15, 4), nullable=True)
+    valor_acordado = Column(Numeric(15, 2), nullable=False, default=0)
+    fecha_inicio = Column(Date, nullable=True)
+    fecha_fin = Column(Date, nullable=True)
+    estado = Column(PGENUM(EstadoAsignacion), default=EstadoAsignacion.ACTIVA, nullable=False)
+    observaciones = Column(Text, nullable=True)
 
     # Relationships
-    trabajador = relationship(
-        "Trabajador",
-        back_populates="pagos",
-    )
+    trabajador = relationship("Trabajador", back_populates="asignaciones")
+    contrato = relationship("Contrato")
+    item = relationship("ContratoItem")
+    pagos = relationship("TrabajadorPago", back_populates="asignacion", cascade="all, delete-orphan")
 
-    # Indexes
     __table_args__ = (
-        Index("idx_trabajador_pagos_trabajador_id", "trabajador_id"),
-        Index("idx_trabajador_pagos_trabajador_periodo", "trabajador_id", "periodo"),
-        Index("idx_trabajador_pagos_estado", "estado"),
-        CheckConstraint("cantidad_dias > 0", name="ck_trabajador_pagos_cantidad_dias"),
-        CheckConstraint("monto_bruto >= 0", name="ck_trabajador_pagos_monto_bruto"),
-        CheckConstraint("descuentos >= 0", name="ck_trabajador_pagos_descuentos"),
-        CheckConstraint("monto_neto >= 0 AND monto_neto <= monto_bruto", name="ck_trabajador_pagos_neto"),
+        Index("idx_trab_asig_trabajador_id", "trabajador_id"),
+        Index("idx_trab_asig_contrato_id", "contrato_id"),
     )
 
     def __repr__(self):
-        return f"<TrabajadorPago trabajador_id={self.trabajador_id} periodo={self.periodo}>"
+        return f"<TrabajadorAsignacion trabajador_id={self.trabajador_id}>"
+
+
+class TrabajadorPago(Base, UUIDPrimaryKey, TimestampedMixin):
+    """Direct payment record to a worker."""
+    __tablename__ = "trabajador_pagos"
+
+    trabajador_id = Column(UUID(as_uuid=True), ForeignKey("trabajadores.id", ondelete="CASCADE"), nullable=False)
+    asignacion_id = Column(UUID(as_uuid=True), ForeignKey("trabajador_asignaciones.id", ondelete="SET NULL"), nullable=True)
+    contrato_id = Column(UUID(as_uuid=True), ForeignKey("contratos.id", ondelete="SET NULL"), nullable=True)
+    fecha_pago = Column(Date, nullable=False)
+    valor = Column(Numeric(15, 2), nullable=False)
+    metodo = Column(VARCHAR(50), nullable=True, server_default="Transferencia")
+    referencia = Column(VARCHAR(200), nullable=True)
+    observaciones = Column(Text, nullable=True)
+    registrado_por = Column(VARCHAR(255), nullable=True)
+
+    # Keep legacy columns nullable for backward compat
+    periodo = Column(Date, nullable=True)
+    cantidad_dias = Column(Numeric(5, 2), nullable=True)
+    monto_bruto = Column(Numeric(15, 2), nullable=True)
+    descuentos = Column(Numeric(15, 2), nullable=True, default=0)
+    monto_neto = Column(Numeric(15, 2), nullable=True)
+
+    # Relationships
+    trabajador = relationship("Trabajador", back_populates="pagos")
+    asignacion = relationship("TrabajadorAsignacion", back_populates="pagos")
+
+    __table_args__ = (
+        Index("idx_trabajador_pagos_trabajador_id", "trabajador_id"),
+        Index("idx_trabajador_pagos_asignacion_id", "asignacion_id"),
+        Index("idx_trabajador_pagos_fecha", "fecha_pago"),
+        CheckConstraint("valor >= 0", name="ck_trabajador_pagos_valor"),
+    )
+
+    def __repr__(self):
+        return f"<TrabajadorPago trabajador_id={self.trabajador_id} valor={self.valor}>"
+
+
+class TrabajadorCorte(Base, UUIDPrimaryKey, TimestampedMixin):
+    """Quincenal pay cut record for a worker."""
+    __tablename__ = "trabajador_cortes"
+
+    trabajador_id = Column(UUID(as_uuid=True), ForeignKey("trabajadores.id", ondelete="CASCADE"), nullable=False)
+    fecha_inicio = Column(Date, nullable=False)
+    fecha_fin = Column(Date, nullable=False)
+    total_pagos = Column(Numeric(15, 2), nullable=False, default=0)
+    total_descuentos = Column(Numeric(15, 2), nullable=False, default=0)
+    total_deudas = Column(Numeric(15, 2), nullable=False, default=0)
+    total_neto = Column(Numeric(15, 2), nullable=False, default=0)
+    descuentos_json = Column(Text, nullable=True, comment="JSON array of {concepto, valor}")
+    deudas_json = Column(Text, nullable=True, comment="JSON array of {concepto, valor}")
+    creado_por = Column(VARCHAR(255), nullable=True)
+
+    # Relationships
+    trabajador = relationship("Trabajador", back_populates="cortes")
+    detalle = relationship("TrabajadorCorteDetalle", back_populates="corte", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("idx_trab_cortes_trabajador_id", "trabajador_id"),
+        Index("idx_trab_cortes_fechas", "trabajador_id", "fecha_inicio", "fecha_fin"),
+    )
+
+    def __repr__(self):
+        return f"<TrabajadorCorte trabajador_id={self.trabajador_id} {self.fecha_inicio}-{self.fecha_fin}>"
+
+
+class TrabajadorCorteDetalle(Base, UUIDPrimaryKey, TimestampedMixin):
+    """Detail line of a quincenal corte (one row per payment included)."""
+    __tablename__ = "trabajador_cortes_detalle"
+
+    corte_id = Column(UUID(as_uuid=True), ForeignKey("trabajador_cortes.id", ondelete="CASCADE"), nullable=False)
+    pago_id = Column(UUID(as_uuid=True), ForeignKey("trabajador_pagos.id", ondelete="SET NULL"), nullable=True)
+    fecha_pago = Column(Date, nullable=False)
+    contrato_consecutivo = Column(VARCHAR(50), nullable=True)
+    descripcion_item = Column(VARCHAR(500), nullable=True)
+    valor = Column(Numeric(15, 2), nullable=False)
+    referencia = Column(VARCHAR(200), nullable=True)
+    observaciones = Column(Text, nullable=True)
+
+    # Relationships
+    corte = relationship("TrabajadorCorte", back_populates="detalle")
+
+    __table_args__ = (Index("idx_trab_corte_det_corte_id", "corte_id"),)
 
 
 # ---------------------------------------------------------------------------

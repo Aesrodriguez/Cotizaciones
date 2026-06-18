@@ -40,7 +40,8 @@ from .apu import (
 # Contracts, Expenses, Workers
 from .contrato import (
     Contrato, Gasto, Trabajador, TrabajadorPago,
-    EstadoContrato, EstadoGasto, EstadoTrabajador, EstadoPago,
+    TrabajadorAsignacion, TrabajadorCorte, TrabajadorCorteDetalle,
+    EstadoContrato, EstadoGasto, EstadoTrabajador, EstadoAsignacion,
     ContratoCapitulo, ContratoItem, ContratoEjecucion,
     ContratoActa, ContratoPago, ContratoGasto,
     EstadoActa, CategoriaGastoContrato,
@@ -87,10 +88,13 @@ __all__ = [
     "Gasto",
     "Trabajador",
     "TrabajadorPago",
+    "TrabajadorAsignacion",
+    "TrabajadorCorte",
+    "TrabajadorCorteDetalle",
     "EstadoContrato",
     "EstadoGasto",
     "EstadoTrabajador",
-    "EstadoPago",
+    "EstadoAsignacion",
     # Construction contract management
     "ContratoCapitulo",
     "ContratoItem",

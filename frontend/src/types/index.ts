@@ -243,3 +243,107 @@ export interface ContratoDashboard {
   pct_gasto: number
   dias_restantes?: number
 }
+
+// ── Trabajadores ───────────────────────────────────────────────────────────
+
+export interface Trabajador {
+  id: string
+  codigo: string
+  nombres: string
+  apellidos: string
+  nombre_completo?: string
+  cedula?: string
+  rut?: string
+  email?: string
+  telefono?: string
+  direccion?: string
+  ciudad?: string
+  cargo?: string
+  especialidad?: string
+  tipo?: string
+  tipo_contrato?: string
+  salario_base?: number
+  salario_diario?: number
+  estado: string
+  fecha_ingreso?: string
+  fecha_termino?: string
+  banco?: string
+  tipo_cuenta?: string
+  numero_cuenta?: string
+  total_acordado?: number
+  total_pagado?: number
+  saldo?: number
+  estado_saldo?: string
+  asignaciones_count?: number
+  pagos_count?: number
+}
+
+export interface TrabajadorAsignacion {
+  id: string
+  trabajador_id: string
+  contrato_id: string
+  item_id?: string
+  descripcion_item?: string
+  unidad_item?: string
+  cantidad_item?: number
+  valor_acordado: number
+  fecha_inicio?: string
+  fecha_fin?: string
+  estado: string
+  observaciones?: string
+  contrato_numero?: string
+  contrato_titulo?: string
+  total_pagado?: number
+}
+
+export interface TrabajadorPago {
+  id: string
+  trabajador_id: string
+  asignacion_id?: string
+  contrato_id?: string
+  fecha_pago: string
+  valor: number
+  metodo?: string
+  referencia?: string
+  observaciones?: string
+  registrado_por?: string
+  contrato_numero?: string
+  descripcion_item?: string
+}
+
+export interface CorteDetalleLine {
+  fecha_pago: string
+  contrato_consecutivo?: string
+  descripcion_item?: string
+  valor: number
+  referencia?: string
+  observaciones?: string
+}
+
+export interface CorteQuincenal {
+  id: string
+  trabajador_id: string
+  fecha_inicio: string
+  fecha_fin: string
+  total_pagos: number
+  total_descuentos: number
+  total_deudas: number
+  total_neto: number
+  descuentos_json?: string
+  deudas_json?: string
+  detalle: CorteDetalleLine[]
+}
+
+export interface TrabajadorDetalle {
+  trabajador: Trabajador
+  asignaciones: TrabajadorAsignacion[]
+  pagos: TrabajadorPago[]
+  resumen: {
+    total_acordado: number
+    total_pagado: number
+    saldo: number
+    estado_saldo: string
+    asignaciones_count: number
+    pagos_count: number
+  }
+}

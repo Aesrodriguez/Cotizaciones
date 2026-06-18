@@ -48,3 +48,6 @@ env/
 
 # Knex (legacy, no longer used)
 .knex_migrations_lock
+
+# Contexto local (referencia Apps Script original — no subir al repo)
+Contexto/

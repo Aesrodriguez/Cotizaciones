@@ -1,7 +1,7 @@
 import axios, { AxiosError, AxiosRequestConfig } from 'axios'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../stores/authStore'
-import type { Cliente, Contrato, ContratoActa, ContratoCapitulo, ContratoDashboard, ContratoGasto, ContratoListItem, ContratoPago, Cotizacion, PaginatedResponse, Producto, Stats, Usuario } from '../types'
+import type { Cliente, Contrato, ContratoActa, ContratoCapitulo, ContratoDashboard, ContratoGasto, ContratoListItem, ContratoPago, CorteQuincenal, Cotizacion, PaginatedResponse, Producto, Stats, Trabajador, TrabajadorAsignacion, TrabajadorDetalle, TrabajadorPago, Usuario } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'https://cotizaciones-api-3uuy.onrender.com/api/v1'
 
@@ -177,6 +177,34 @@ export const contratosAPI = {
   getGastos: (id: string) => api.get<ContratoGasto[]>(`/contratos/${id}/gastos`),
   createGasto: (id: string, data: object) => api.post<ContratoGasto>(`/contratos/${id}/gastos`, data),
   deleteGasto: (id: string, gastoId: string) => api.delete(`/contratos/${id}/gastos/${gastoId}`),
+}
+
+export const trabajadoresAPI = {
+  getAll: (params?: object) => api.get<PaginatedResponse<Trabajador>>('/trabajadores', { params }),
+  getById: (id: string) => api.get<TrabajadorDetalle>(`/trabajadores/${id}`),
+  create: (data: object) => api.post<Trabajador>('/trabajadores', data),
+  update: (id: string, data: object) => api.put<Trabajador>(`/trabajadores/${id}`, data),
+  remove: (id: string) => api.delete(`/trabajadores/${id}`),
+
+  // Asignaciones
+  getAsignaciones: (id: string) => api.get<TrabajadorAsignacion[]>(`/trabajadores/${id}/asignaciones`),
+  createAsignacion: (id: string, data: object) => api.post<TrabajadorAsignacion>(`/trabajadores/${id}/asignaciones`, data),
+  updateAsignacion: (id: string, asigId: string, data: object) => api.put<TrabajadorAsignacion>(`/trabajadores/${id}/asignaciones/${asigId}`, data),
+  deleteAsignacion: (id: string, asigId: string) => api.delete(`/trabajadores/${id}/asignaciones/${asigId}`),
+
+  // Pagos
+  getPagos: (id: string) => api.get<TrabajadorPago[]>(`/trabajadores/${id}/pagos`),
+  createPago: (id: string, data: object) => api.post<TrabajadorPago>(`/trabajadores/${id}/pagos`, data),
+  updatePago: (id: string, pagoId: string, data: object) => api.put<TrabajadorPago>(`/trabajadores/${id}/pagos/${pagoId}`, data),
+  deletePago: (id: string, pagoId: string) => api.delete(`/trabajadores/${id}/pagos/${pagoId}`),
+
+  // Corte quincenal
+  getCortes: (id: string) => api.get<CorteQuincenal[]>(`/trabajadores/${id}/cortes`),
+  generarCorte: (id: string, data: object) => api.post<{ ok: boolean; id_corte: string; html: string; resumen: object }>(`/trabajadores/${id}/corte-quincenal`, data),
+
+  // Apoyo
+  getContratosDisponibles: () => api.get<{ id: string; numero: string; titulo: string }[]>('/trabajadores/contratos-disponibles/list'),
+  getItemsContrato: (contratoId: string) => api.get<{ id: string; descripcion: string; unidad: string; cantidad_contratada: number; valor_unitario: number }[]>(`/trabajadores/contratos-disponibles/${contratoId}/items`),
 }
 
 export default api

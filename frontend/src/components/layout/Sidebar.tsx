@@ -49,10 +49,19 @@ function IconUser() {
   )
 }
 
+function IconHardHat() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-5 h-5 flex-shrink-0">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 2C7.03 2 3 6.03 3 11H2v2h20v-2h-1C21 6.03 16.97 2 12 2Zm0 2c3.31 0 6.13 2.08 7.27 5H4.73C5.87 6.08 8.69 4 12 4ZM2 14v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2H2Z" />
+    </svg>
+  )
+}
+
 const navItems = [
   { to: '/dashboard',    icon: <IconDashboard />, label: 'Dashboard' },
   { to: '/cotizaciones', icon: <IconDocument />,  label: 'Cotizaciones' },
   { to: '/contratos',    icon: <IconContract />,  label: 'Contratos' },
+  { to: '/trabajadores', icon: <IconHardHat />,   label: 'Trabajadores' },
   { to: '/clientes',     icon: <IconUsers />,     label: 'Clientes' },
   { to: '/productos',    icon: <IconBox />,       label: 'Productos' },
 ]
