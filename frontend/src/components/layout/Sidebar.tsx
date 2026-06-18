@@ -85,20 +85,15 @@ export default function Sidebar({ open, onClose }: Props) {
           ${open ? 'translate-x-0' : '-translate-x-full'}
         `}
       >
-        {/* Logo area */}
-        <div className="flex items-center justify-center px-4 py-5 border-b border-[#2a2a2a]">
-          <img
-            src="/logo.png"
-            alt="Triple A Construcciones"
-            className="h-14 w-auto object-contain"
-          />
-        </div>
-
-        {/* Company name strip */}
-        <div className="px-4 py-2 border-b border-[#2a2a2a]">
-          <p className="text-[10px] font-semibold text-[#c8f135] uppercase tracking-[0.18em] text-center">
-            Triple A Construcciones
+        {/* Brand */}
+        <div className="px-5 py-5 border-b border-[#2a2a2a]">
+          <p className="text-[15px] font-bold text-[#e8e4da] tracking-wide leading-tight">
+            Triple A
           </p>
+          <p className="text-[15px] font-bold text-[#c8f135] tracking-wide leading-tight">
+            Construcciones
+          </p>
+          <p className="text-[10px] text-[#555] font-mono tracking-widest mt-1">SAS</p>
         </div>
 
         {/* Navigation */}

@@ -138,11 +138,14 @@ def generate_cotizacion_pdf(cotizacion) -> bytes:
     pdf.line(_LM + logo_w + mid_w, y0 + header_h, _LM + _CW, y0 + header_h)
 
     # Logo (left cell)
-    logo_path = os.path.join(_STATIC_DIR, "logo.png")
-    if os.path.exists(logo_path):
-        img_h = header_h - 3
-        img_w = logo_w - 4
-        pdf.image(logo_path, x=_LM + 2, y=y0 + 1.5, w=img_w, h=img_h, keep_aspect_ratio=True)
+    # Try original white-bg logo first (better for PDF), then transparent PNG fallback
+    for logo_name in ("logo_pdf.jpg", "logo.png"):
+        logo_path = os.path.join(_STATIC_DIR, logo_name)
+        if os.path.exists(logo_path):
+            img_h = header_h - 3
+            img_w = logo_w - 4
+            pdf.image(logo_path, x=_LM + 2, y=y0 + 1.5, w=img_w, h=img_h, keep_aspect_ratio=True)
+            break
 
     # Company name (center cell row 1)
     set_font("B", 15)
