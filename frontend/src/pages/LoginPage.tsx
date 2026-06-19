@@ -32,14 +32,14 @@ export default function LoginPage() {
       />
 
       <div className="relative w-full max-w-sm">
-        {/* Logo */}
-        <div className="flex justify-center mb-8">
-          <img src="/logo.png" alt="Triple A Construcciones" className="h-20 w-auto object-contain" />
-        </div>
-
         {/* Card */}
         <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-8 shadow-2xl">
           <div className="mb-7 text-center">
+            {/* Monograma */}
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4"
+                 style={{ background: '#c8f135' }}>
+              <span className="text-[28px] font-black text-[#111111] leading-none tracking-tighter">3A</span>
+            </div>
             <h1 className="text-lg font-bold text-[#e8e4da] tracking-wide uppercase">
               Triple A Construcciones
             </h1>
