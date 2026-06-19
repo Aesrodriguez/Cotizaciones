@@ -38,7 +38,7 @@ export default function LoginPage() {
             {/* Monograma */}
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4"
                  style={{ background: '#c8f135' }}>
-              <span className="text-[28px] font-black text-[#111111] leading-none tracking-tighter">3A</span>
+              <span className="text-[36px] font-black text-[#111111] leading-none">A</span>
             </div>
             <h1 className="text-lg font-bold text-[#e8e4da] tracking-wide uppercase">
               Triple A Construcciones
