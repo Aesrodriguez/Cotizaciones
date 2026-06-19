@@ -40,6 +40,8 @@ export default function CotizacionDetailPage() {
   const [sendingEmail, setSendingEmail] = useState(false)
   const [changingEstado, setChangingEstado] = useState<string | null>(null)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null)
+  const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false)
 
   const { register, handleSubmit, reset: resetEmail, formState: { errors } } = useForm<EmailForm>()
 
@@ -78,22 +80,33 @@ export default function CotizacionDetailPage() {
     }
   }
 
-  const handleDownloadPdf = async () => {
+  const handlePreviewPdf = async () => {
     if (!id || !quote) return
     setDownloadingPdf(true)
     try {
       const res = await cotizacionesAPI.downloadPdf(id)
-      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `Cotizacion-${quote.numero}.pdf`
-      a.click()
-      URL.revokeObjectURL(url)
+      const blob = new Blob([res.data], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl)
+      setPdfPreviewUrl(url)
+      setPdfPreviewOpen(true)
     } catch {
       toast.error('No se pudo generar el PDF')
     } finally {
       setDownloadingPdf(false)
     }
+  }
+
+  const handleDownloadPdf = () => {
+    if (!pdfPreviewUrl || !quote) return
+    const a = document.createElement('a')
+    a.href = pdfPreviewUrl
+    a.download = `Cotizacion-${quote.numero}.pdf`
+    a.click()
+  }
+
+  const closePdfPreview = () => {
+    setPdfPreviewOpen(false)
   }
 
   const handleEstado = async (nuevoEstado: string) => {
@@ -154,11 +167,11 @@ export default function CotizacionDetailPage() {
               </svg>
               Enviar por correo
             </button>
-            <button onClick={handleDownloadPdf} disabled={downloadingPdf} className="btn-secondary">
+            <button onClick={handlePreviewPdf} disabled={downloadingPdf} className="btn-secondary">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-              {downloadingPdf ? 'Generando...' : 'Descargar PDF'}
+              {downloadingPdf ? 'Generando...' : 'Ver PDF'}
             </button>
             {id && (
               <Link to={`/cotizaciones/${id}/editar`} className="btn-secondary">
@@ -389,6 +402,56 @@ export default function CotizacionDetailPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Modal vista previa PDF */}
+      {pdfPreviewOpen && pdfPreviewUrl && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col"
+          style={{ background: 'rgba(0,0,0,0.85)' }}
+        >
+          {/* Toolbar */}
+          <div
+            className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+            style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
+                Vista previa — Cotización {quote?.numero}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleDownloadPdf}
+                className="btn-primary py-2 px-4 text-sm"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Descargar
+              </button>
+              <button
+                onClick={closePdfPreview}
+                className="btn-ghost py-2 px-3"
+                style={{ border: '1px solid var(--border)' }}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Cerrar
+              </button>
+            </div>
+          </div>
+
+          {/* PDF iframe */}
+          <div className="flex-1 overflow-hidden">
+            <iframe
+              src={pdfPreviewUrl}
+              className="w-full h-full"
+              title="Vista previa PDF"
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
