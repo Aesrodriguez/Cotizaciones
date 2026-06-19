@@ -35,10 +35,10 @@ export default function LoginPage() {
         {/* Card */}
         <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-8 shadow-2xl">
           <div className="mb-7 text-center">
-            {/* Logo */}
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl mb-4 p-2"
-                 style={{ background: '#ffffff', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
-              <img src="/Logo.jpeg" alt="Triple A Construcciones" className="w-full h-full object-contain rounded-xl" />
+            {/* Ícono */}
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4"
+                 style={{ background: 'var(--lime-dim)', border: '2px solid var(--lime-border)' }}>
+              <img src="/favicon.png" alt="Triple A" className="w-10 h-10 object-contain" />
             </div>
             <h1 className="text-lg font-bold text-[#e8e4da] tracking-wide uppercase">
               Triple A Construcciones
