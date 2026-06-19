@@ -167,6 +167,8 @@ export const contratosAPI = {
   // Actas
   getActas: (id: string) => api.get<ContratoActa[]>(`/contratos/${id}/actas`),
   createActa: (id: string, data: object) => api.post<ContratoActa>(`/contratos/${id}/actas`, data),
+  updateActa: (id: string, actaId: string, data: object) => api.put<ContratoActa>(`/contratos/${id}/actas/${actaId}`, data),
+  deleteActa: (id: string, actaId: string) => api.delete(`/contratos/${id}/actas/${actaId}`),
 
   // Pagos recibidos
   getPagos: (id: string) => api.get<ContratoPago[]>(`/contratos/${id}/pagos`),

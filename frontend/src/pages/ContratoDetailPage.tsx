@@ -4,9 +4,9 @@ import { useForm } from 'react-hook-form'
 import { contratosAPI } from '../services/api'
 import { formatCurrency, formatDate } from '../utils/format'
 import toast from 'react-hot-toast'
-import type { Contrato, ContratoCapitulo, ContratoGasto, ContratoPago, ContratoDashboard } from '../types'
+import type { Contrato, ContratoActa, ContratoCapitulo, ContratoGasto, ContratoPago, ContratoDashboard } from '../types'
 
-type Tab = 'resumen' | 'presupuesto' | 'ejecucion' | 'gastos' | 'pagos'
+type Tab = 'resumen' | 'presupuesto' | 'ejecucion' | 'actas' | 'gastos' | 'pagos'
 
 const CATEGORIAS_GASTO = [
   'MATERIALES', 'MANO_OBRA', 'EQUIPOS', 'TRANSPORTE',
@@ -48,7 +48,14 @@ export default function ContratoDetailPage() {
   const [capitulos, setCapitulos] = useState<ContratoCapitulo[]>([])
   const [gastos, setGastos] = useState<ContratoGasto[]>([])
   const [pagos, setPagos] = useState<ContratoPago[]>([])
+  const [actas, setActas] = useState<ContratoActa[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Actas modal state
+  const [actaModalOpen, setActaModalOpen] = useState(false)
+  const [actaForm, setActaForm] = useState({ fecha: new Date().toISOString().slice(0, 10), observaciones: '' })
+  const [actaQtys, setActaQtys] = useState<Record<string, string>>({})
+  const [savingActa, setSavingActa] = useState(false)
 
   // Forms
   const capForm = useForm<{ nombre: string; codigo?: string; padre_id?: string }>()
@@ -77,18 +84,20 @@ export default function ContratoDetailPage() {
     if (!id) return
     setLoading(true)
     try {
-      const [cRes, dRes, capRes, gRes, pRes] = await Promise.all([
+      const [cRes, dRes, capRes, gRes, pRes, aRes] = await Promise.all([
         contratosAPI.getById(id),
         contratosAPI.getDashboard(id),
         contratosAPI.getCapitulos(id),
         contratosAPI.getGastos(id),
         contratosAPI.getPagos(id),
+        contratosAPI.getActas(id),
       ])
       setContrato(cRes.data)
       setDashboard(dRes.data)
       setCapitulos(capRes.data)
       setGastos(gRes.data)
       setPagos(pRes.data)
+      setActas(aRes.data)
     } finally { setLoading(false) }
   }, [id])
 
@@ -140,6 +149,75 @@ export default function ContratoDetailPage() {
     }
   })
 
+  // Flatten all items from capitulos (including subcapitulos)
+  const allItems = capitulos.flatMap((cap) => [
+    ...cap.items,
+    ...cap.subcapitulos.flatMap((sub) => sub.items),
+  ])
+
+  const nextActaNumero = `A${String(actas.length + 1).padStart(2, '0')}`
+
+  const handleCrearActa = async () => {
+    if (!id) return
+    setSavingActa(true)
+    try {
+      // Items with qty > 0
+      const lineas = allItems
+        .map((item) => ({ item, qty: parseFloat(actaQtys[item.id] || '0') }))
+        .filter((l) => l.qty > 0 && l.qty <= l.item.cantidad_pendiente)
+
+      if (lineas.length === 0) {
+        toast.error('Ingresa al menos una cantidad para incluir en el acta')
+        setSavingActa(false)
+        return
+      }
+
+      const valorTotal = lineas.reduce((s, l) => s + l.qty * Number(l.item.valor_unitario), 0)
+
+      // 1. Create the acta
+      const actaRes = await contratosAPI.createActa(id, {
+        numero: nextActaNumero,
+        fecha: actaForm.fecha,
+        observaciones: actaForm.observaciones || undefined,
+        valor_total: valorTotal,
+      })
+      const actaId = actaRes.data.id
+
+      // 2. Register ejecuciones linked to this acta
+      await Promise.all(
+        lineas.map((l) =>
+          contratosAPI.ejecutar(id, l.item.id, {
+            cantidad: l.qty,
+            fecha: actaForm.fecha,
+            acta_id: actaId,
+            valor_unitario: Number(l.item.valor_unitario),
+          })
+        )
+      )
+
+      toast.success(`Acta ${nextActaNumero} creada — ${formatCurrency(valorTotal, contrato?.moneda)}`)
+      setActaModalOpen(false)
+      setActaQtys({})
+      setActaForm({ fecha: new Date().toISOString().slice(0, 10), observaciones: '' })
+      loadAll()
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || 'Error al crear el acta')
+    } finally {
+      setSavingActa(false)
+    }
+  }
+
+  const handleActaEstado = async (acta: ContratoActa, nuevoEstado: string) => {
+    if (!id) return
+    try {
+      await contratosAPI.updateActa(id, acta.id, { estado: nuevoEstado })
+      toast.success(`Acta ${acta.numero} marcada como ${nuevoEstado.toLowerCase()}`)
+      loadAll()
+    } catch {
+      toast.error('Error al actualizar el acta')
+    }
+  }
+
   const handleGasto = gastoForm.handleSubmit(async (data) => {
     if (!id) return
     try {
@@ -175,6 +253,7 @@ export default function ContratoDetailPage() {
     { id: 'resumen', label: 'Resumen' },
     { id: 'presupuesto', label: 'Presupuesto' },
     { id: 'ejecucion', label: 'Ejecución' },
+    { id: 'actas', label: `Cortes / Actas${actas.length ? ` (${actas.length})` : ''}` },
     { id: 'gastos', label: 'Gastos' },
     { id: 'pagos', label: 'Pagos' },
   ]
@@ -476,6 +555,245 @@ export default function ContratoDetailPage() {
               <p>Agrega capítulos e ítems en la pestaña <strong>Presupuesto</strong> primero</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── TAB: CORTES / ACTAS ─────────────────────────────────────────── */}
+      {activeTab === 'actas' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2>Cortes de obra / Actas de cobro</h2>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                Cada corte agrupa las cantidades ejecutadas y el valor a cobrar
+              </p>
+            </div>
+            <button
+              onClick={() => { setActaQtys({}); setActaModalOpen(true) }}
+              className="btn-primary text-sm py-1.5"
+              disabled={allItems.length === 0}
+            >
+              + Nuevo corte
+            </button>
+          </div>
+
+          {actas.length === 0 ? (
+            <div className="card text-center py-12" style={{ color: 'var(--text-muted)' }}>
+              <p className="text-sm">No hay cortes registrados</p>
+              <p className="text-xs mt-1">Crea el primer corte para registrar cantidades ejecutadas y generar el cobro</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {actas.map((acta) => {
+                const estadoColor = acta.estado === 'PAGADA'
+                  ? 'badge-status-green'
+                  : acta.estado === 'APROBADA'
+                  ? 'badge-status-blue'
+                  : 'badge-status-gray'
+                return (
+                  <div key={acta.id} className="card !p-0 overflow-hidden">
+                    {/* Acta header */}
+                    <div className="flex items-center justify-between px-4 py-3"
+                         style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
+                      <div className="flex items-center gap-3">
+                        <span className="font-bold text-sm font-mono" style={{ color: 'var(--lime-text)' }}>
+                          {acta.numero}
+                        </span>
+                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(acta.fecha)}</span>
+                        <span className={estadoColor}>{acta.estado}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-bold text-sm" style={{ color: 'var(--text)' }}>
+                          {formatCurrency(acta.valor_total, contrato.moneda)}
+                        </span>
+                        {acta.estado === 'BORRADOR' && (
+                          <button
+                            onClick={() => handleActaEstado(acta, 'APROBADA')}
+                            className="btn-secondary text-xs py-1 px-2.5"
+                          >Aprobar</button>
+                        )}
+                        {acta.estado === 'APROBADA' && (
+                          <button
+                            onClick={() => handleActaEstado(acta, 'PAGADA')}
+                            className="btn-primary text-xs py-1 px-2.5"
+                          >Marcar pagada</button>
+                        )}
+                      </div>
+                    </div>
+                    {acta.observaciones && (
+                      <p className="px-4 py-2 text-xs" style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>
+                        {acta.observaciones}
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Totales */}
+          {actas.length > 0 && (
+            <div className="card flex justify-between items-center">
+              <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                {actas.length} corte{actas.length !== 1 ? 's' : ''} ·{' '}
+                {actas.filter((a) => a.estado === 'PAGADA').length} pagados
+              </div>
+              <div className="text-right">
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Total facturado</p>
+                <p className="font-bold text-base" style={{ color: 'var(--text)' }}>
+                  {formatCurrency(actas.reduce((s, a) => s + Number(a.valor_total), 0), contrato.moneda)}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── MODAL: Nueva Acta ────────────────────────────────────────────── */}
+      {actaModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+             style={{ background: 'rgba(0,0,0,0.7)' }}
+             onClick={(e) => e.target === e.currentTarget && setActaModalOpen(false)}>
+          <div className="w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl overflow-hidden"
+               style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 py-4 flex-shrink-0"
+                 style={{ borderBottom: '1px solid var(--border)' }}>
+              <div>
+                <h2>Nuevo corte — {nextActaNumero}</h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  Selecciona las cantidades ejecutadas en este corte
+                </p>
+              </div>
+              <button onClick={() => setActaModalOpen(false)} className="btn-ghost p-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {/* Fecha y observaciones */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Fecha del corte *</label>
+                  <input
+                    type="date"
+                    className="input text-sm"
+                    value={actaForm.fecha}
+                    onChange={(e) => setActaForm((f) => ({ ...f, fecha: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="label">Observaciones</label>
+                  <input
+                    className="input text-sm"
+                    placeholder="Ej: Primer corte quincenal..."
+                    value={actaForm.observaciones}
+                    onChange={(e) => setActaForm((f) => ({ ...f, observaciones: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              {/* Items table */}
+              <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)' }}>
+                      <th className="px-3 py-2.5 text-left font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Ítem</th>
+                      <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Unidad</th>
+                      <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>V. Unitario</th>
+                      <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Contratado</th>
+                      <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Ejecutado</th>
+                      <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Pendiente</th>
+                      <th className="px-3 py-2.5 text-center font-semibold uppercase tracking-wider" style={{ color: 'var(--lime-text)' }}>Este corte</th>
+                      <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allItems.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="text-center py-8" style={{ color: 'var(--text-muted)' }}>
+                          No hay ítems en el presupuesto
+                        </td>
+                      </tr>
+                    ) : allItems.map((item) => {
+                      const qty = parseFloat(actaQtys[item.id] || '0')
+                      const subtotal = qty * Number(item.valor_unitario)
+                      const agotado = item.cantidad_pendiente <= 0
+                      return (
+                        <tr key={item.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td className="px-3 py-2.5 font-medium" style={{ color: 'var(--text)' }}>
+                            {item.descripcion}
+                          </td>
+                          <td className="px-3 py-2.5 text-center" style={{ color: 'var(--text-muted)' }}>
+                            {item.unidad}
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-mono" style={{ color: 'var(--text-muted)' }}>
+                            {formatCurrency(item.valor_unitario, contrato.moneda)}
+                          </td>
+                          <td className="px-3 py-2.5 text-center" style={{ color: 'var(--text-muted)' }}>
+                            {Number(item.cantidad_contratada).toLocaleString()}
+                          </td>
+                          <td className="px-3 py-2.5 text-center" style={{ color: 'var(--text-muted)' }}>
+                            {Number(item.cantidad_ejecutada).toLocaleString()}
+                          </td>
+                          <td className="px-3 py-2.5 text-center font-semibold"
+                              style={{ color: agotado ? 'var(--text-faint)' : 'var(--amber)' }}>
+                            {agotado ? '—' : Number(item.cantidad_pendiente).toLocaleString()}
+                          </td>
+                          <td className="px-3 py-2.5 text-center">
+                            {agotado ? (
+                              <span className="text-xs" style={{ color: 'var(--text-faint)' }}>Completo</span>
+                            ) : (
+                              <input
+                                type="number"
+                                min={0}
+                                max={item.cantidad_pendiente}
+                                step="0.01"
+                                className="input text-xs py-1 text-center w-24"
+                                placeholder="0"
+                                value={actaQtys[item.id] ?? ''}
+                                onChange={(e) => setActaQtys((q) => ({ ...q, [item.id]: e.target.value }))}
+                              />
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-mono font-semibold"
+                              style={{ color: qty > 0 ? 'var(--lime-text)' : 'var(--text-faint)' }}>
+                            {qty > 0 ? formatCurrency(subtotal, contrato.moneda) : '—'}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Modal footer */}
+            <div className="flex items-center justify-between px-6 py-4 flex-shrink-0"
+                 style={{ borderTop: '1px solid var(--border)', background: 'var(--card)' }}>
+              <div>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Total del corte</p>
+                <p className="text-xl font-bold" style={{ color: 'var(--text)' }}>
+                  {formatCurrency(
+                    allItems.reduce((s, item) => {
+                      const qty = parseFloat(actaQtys[item.id] || '0')
+                      return s + qty * Number(item.valor_unitario)
+                    }, 0),
+                    contrato.moneda
+                  )}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setActaModalOpen(false)} className="btn-secondary">Cancelar</button>
+                <button onClick={handleCrearActa} disabled={savingActa} className="btn-primary">
+                  {savingActa ? 'Guardando...' : 'Crear corte'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
