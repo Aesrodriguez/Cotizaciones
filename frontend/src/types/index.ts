@@ -200,6 +200,16 @@ export interface ContratoActa {
   created_at: string
 }
 
+export interface SoportePago {
+  id: string
+  nombre: string
+  tipo: string
+  mime_type: string
+  tamano: number
+  pago_id?: string | null
+  created_at: string
+}
+
 export interface ContratoPago {
   id: string
   contrato_id: string

@@ -1,7 +1,7 @@
 import axios, { AxiosError, AxiosRequestConfig } from 'axios'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../stores/authStore'
-import type { Cliente, Contrato, ContratoActa, ContratoCapitulo, ContratoDashboard, ContratoGasto, ContratoListItem, ContratoPago, CorteQuincenal, Cotizacion, PaginatedResponse, Producto, Stats, Trabajador, TrabajadorAsignacion, TrabajadorDetalle, TrabajadorPago, Usuario } from '../types'
+import type { Cliente, Contrato, ContratoActa, ContratoCapitulo, ContratoDashboard, ContratoGasto, ContratoListItem, ContratoPago, CorteQuincenal, Cotizacion, PaginatedResponse, Producto, SoportePago, Stats, Trabajador, TrabajadorAsignacion, TrabajadorDetalle, TrabajadorPago, Usuario } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'https://cotizaciones-api-3uuy.onrender.com/api/v1'
 
@@ -207,6 +207,14 @@ export const trabajadoresAPI = {
   // Apoyo
   getContratosDisponibles: () => api.get<{ id: string; numero: string; titulo: string }[]>('/trabajadores/contratos-disponibles/list'),
   getItemsContrato: (contratoId: string) => api.get<{ id: string; descripcion: string; unidad: string; cantidad_contratada: number; valor_unitario: number }[]>(`/trabajadores/contratos-disponibles/${contratoId}/items`),
+
+  // Soportes de pago
+  getSoportes: (id: string) => api.get<SoportePago[]>(`/trabajadores/${id}/soportes`),
+  uploadSoporte: (id: string, form: FormData) => api.post<SoportePago>(`/trabajadores/${id}/soportes`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  deleteSoporte: (id: string, soporteId: string) => api.delete(`/trabajadores/${id}/soportes/${soporteId}`),
+  downloadSoporteUrl: (id: string, soporteId: string) => `${api.defaults.baseURL}/trabajadores/${id}/soportes/${soporteId}/download`,
 }
 
 export default api

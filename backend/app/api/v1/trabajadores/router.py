@@ -7,7 +7,8 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_authenticated_user, get_db_session
@@ -21,6 +22,7 @@ from app.models.contrato import (
     TrabajadorCorte,
     TrabajadorCorteDetalle,
     TrabajadorPago,
+    TrabajadorSoporte,
 )
 from app.schemas.common import MessageResponse, PaginatedResponse
 from app.schemas.trabajador import (
@@ -631,6 +633,118 @@ def list_cortes(
             ],
         ))
     return result
+
+
+# ---------------------------------------------------------------------------
+# Soportes de pago (archivos adjuntos)
+# ---------------------------------------------------------------------------
+
+MAX_SOPORTE_SIZE = 8 * 1024 * 1024  # 8 MB
+
+
+@router.get("/{trabajador_id}/soportes")
+def list_soportes(
+    trabajador_id: UUID,
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    soportes = (
+        db.query(TrabajadorSoporte)
+        .filter(TrabajadorSoporte.trabajador_id == trabajador_id)
+        .order_by(TrabajadorSoporte.created_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id": str(s.id),
+            "nombre": s.nombre,
+            "tipo": s.tipo,
+            "mime_type": s.mime_type,
+            "tamano": s.tamano,
+            "pago_id": str(s.pago_id) if s.pago_id else None,
+            "created_at": s.created_at.isoformat(),
+        }
+        for s in soportes
+    ]
+
+
+@router.post("/{trabajador_id}/soportes", status_code=201)
+async def upload_soporte(
+    trabajador_id: UUID,
+    archivo: UploadFile = File(...),
+    nombre: str = Form(...),
+    tipo: str = Form("COMPROBANTE"),
+    pago_id: str = Form(None),
+    db: Session = Depends(get_db_session),
+    user: Usuario = Depends(get_authenticated_user),
+):
+    trab = db.query(Trabajador).filter(Trabajador.id == trabajador_id, Trabajador.deleted_at.is_(None)).first()
+    if not trab:
+        raise HTTPException(404, "Trabajador no encontrado")
+
+    contenido = await archivo.read()
+    if len(contenido) > MAX_SOPORTE_SIZE:
+        raise HTTPException(413, f"El archivo supera el límite de {MAX_SOPORTE_SIZE // (1024*1024)} MB")
+
+    soporte = TrabajadorSoporte(
+        trabajador_id=trabajador_id,
+        pago_id=UUID(pago_id) if pago_id and pago_id != "null" else None,
+        nombre=nombre or archivo.filename or "soporte",
+        tipo=tipo,
+        mime_type=archivo.content_type or "application/octet-stream",
+        archivo=contenido,
+        tamano=len(contenido),
+        created_by_id=user.id,
+    )
+    db.add(soporte)
+    db.commit()
+    db.refresh(soporte)
+    return {
+        "id": str(soporte.id),
+        "nombre": soporte.nombre,
+        "tipo": soporte.tipo,
+        "mime_type": soporte.mime_type,
+        "tamano": soporte.tamano,
+        "pago_id": str(soporte.pago_id) if soporte.pago_id else None,
+        "created_at": soporte.created_at.isoformat(),
+    }
+
+
+@router.get("/{trabajador_id}/soportes/{soporte_id}/download")
+def download_soporte(
+    trabajador_id: UUID,
+    soporte_id: UUID,
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    soporte = db.query(TrabajadorSoporte).filter(
+        TrabajadorSoporte.id == soporte_id,
+        TrabajadorSoporte.trabajador_id == trabajador_id,
+    ).first()
+    if not soporte:
+        raise HTTPException(404, "Soporte no encontrado")
+    return Response(
+        content=soporte.archivo,
+        media_type=soporte.mime_type,
+        headers={"Content-Disposition": f'inline; filename="{soporte.nombre}"'},
+    )
+
+
+@router.delete("/{trabajador_id}/soportes/{soporte_id}", status_code=204)
+def delete_soporte(
+    trabajador_id: UUID,
+    soporte_id: UUID,
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    soporte = db.query(TrabajadorSoporte).filter(
+        TrabajadorSoporte.id == soporte_id,
+        TrabajadorSoporte.trabajador_id == trabajador_id,
+    ).first()
+    if not soporte:
+        raise HTTPException(404, "Soporte no encontrado")
+    db.delete(soporte)
+    db.commit()
 
 
 # ---------------------------------------------------------------------------

@@ -7,7 +7,7 @@ from enum import Enum
 from sqlalchemy import (
     text,
     Column, VARCHAR, String, Text, Numeric, Date, DateTime, Integer, Boolean, ForeignKey,
-    Index, CheckConstraint, UniqueConstraint, func
+    Index, CheckConstraint, UniqueConstraint, func, LargeBinary
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID, ENUM as PGENUM
@@ -337,7 +337,8 @@ class Trabajador(Base, UUIDPrimaryKey, TimestampedMixin, SoftDeleteMixin):
     # Relationships
     pagos = relationship("TrabajadorPago", back_populates="trabajador", cascade="all, delete-orphan")
     asignaciones = relationship("TrabajadorAsignacion", back_populates="trabajador", cascade="all, delete-orphan")
-    cortes = relationship("TrabajadorCorte", back_populates="trabajador", cascade="all, delete-orphan")
+    cortes    = relationship("TrabajadorCorte",    back_populates="trabajador", cascade="all, delete-orphan")
+    soportes  = relationship("TrabajadorSoporte",  back_populates="trabajador", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("idx_trabajadores_codigo", "codigo"),
@@ -468,6 +469,28 @@ class TrabajadorCorteDetalle(Base, UUIDPrimaryKey, TimestampedMixin):
     corte = relationship("TrabajadorCorte", back_populates="detalle")
 
     __table_args__ = (Index("idx_trab_corte_det_corte_id", "corte_id"),)
+
+
+class TrabajadorSoporte(Base, UUIDPrimaryKey):
+    """Payment receipt / support document for a worker."""
+    __tablename__ = "trabajador_soportes"
+
+    trabajador_id = Column(UUID(as_uuid=True), ForeignKey("trabajadores.id", ondelete="CASCADE"), nullable=False)
+    pago_id       = Column(UUID(as_uuid=True), ForeignKey("trabajador_pagos.id", ondelete="SET NULL"), nullable=True)
+    nombre        = Column(VARCHAR(255), nullable=False)
+    tipo          = Column(VARCHAR(80), nullable=False, default="COMPROBANTE")
+    mime_type     = Column(VARCHAR(120), nullable=False, default="application/octet-stream")
+    archivo       = Column(LargeBinary(), nullable=False)
+    tamano        = Column(Integer, nullable=False, default=0)
+    created_at    = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_by_id = Column(UUID(as_uuid=True), ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
+
+    trabajador = relationship("Trabajador", back_populates="soportes")
+
+    __table_args__ = (
+        Index("idx_soportes_trabajador_id", "trabajador_id"),
+        Index("idx_soportes_pago_id", "pago_id"),
+    )
 
 
 # ---------------------------------------------------------------------------

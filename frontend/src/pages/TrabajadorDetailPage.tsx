@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { trabajadoresAPI } from '../services/api'
-import type { TrabajadorAsignacion, TrabajadorDetalle, TrabajadorPago } from '../types'
+import type { SoportePago, TrabajadorAsignacion, TrabajadorDetalle, TrabajadorPago } from '../types'
 
 const COP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })
 const fmt = (v?: number | null) => v != null ? COP.format(v) : '—'
 const fmtDate = (s?: string | null) => s ? new Date(s + 'T00:00:00').toLocaleDateString('es-CO') : '—'
 
-type Tab = 'info' | 'asignaciones' | 'pagos' | 'corte'
+type Tab = 'info' | 'asignaciones' | 'pagos' | 'corte' | 'soportes'
 
 interface ContratoItem { id: string; descripcion: string; unidad: string; cantidad_contratada: number; valor_unitario: number }
 interface ContratoOpt { id: string; numero: string; titulo: string }
@@ -43,6 +43,11 @@ export default function TrabajadorDetailPage() {
   const [generatingCorte, setGeneratingCorte] = useState(false)
   const [corteHtml, setCorteHtml] = useState<string | null>(null)
 
+  // Soportes
+  const [soportes, setSoportes] = useState<SoportePago[]>([])
+  const [uploadingFile, setUploadingFile] = useState(false)
+  const [soporteTipo, setSoporteTipo] = useState('COMPROBANTE')
+
   const load = async () => {
     if (!id) return
     setLoading(true)
@@ -57,10 +62,47 @@ export default function TrabajadorDetailPage() {
     }
   }
 
+  const loadSoportes = () => {
+    if (!id) return
+    trabajadoresAPI.getSoportes(id).then(r => setSoportes(r.data)).catch(() => {})
+  }
+
   useEffect(() => {
     load()
+    loadSoportes()
     trabajadoresAPI.getContratosDisponibles().then(r => setContratos(r.data)).catch(() => {})
   }, [id])
+
+  const handleUploadSoporte = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !id) return
+    setUploadingFile(true)
+    try {
+      const form = new FormData()
+      form.append('archivo', file)
+      form.append('nombre', file.name)
+      form.append('tipo', soporteTipo)
+      await trabajadoresAPI.uploadSoporte(id, form)
+      toast.success('Soporte subido correctamente')
+      loadSoportes()
+    } catch {
+      toast.error('Error al subir el archivo')
+    } finally {
+      setUploadingFile(false)
+      e.target.value = ''
+    }
+  }
+
+  const handleDeleteSoporte = async (soporteId: string, nombre: string) => {
+    if (!id || !confirm(`¿Eliminar "${nombre}"?`)) return
+    try {
+      await trabajadoresAPI.deleteSoporte(id, soporteId)
+      toast.success('Soporte eliminado')
+      loadSoportes()
+    } catch {
+      toast.error('Error al eliminar')
+    }
+  }
 
   const t = data?.trabajador
 
@@ -251,6 +293,7 @@ export default function TrabajadorDetailPage() {
     { key: 'asignaciones', label: `Asignaciones (${data?.asignaciones.length ?? 0})` },
     { key: 'pagos', label: `Pagos (${data?.pagos.length ?? 0})` },
     { key: 'corte', label: 'Corte quincenal' },
+    { key: 'soportes', label: `Soportes${soportes.length ? ` (${soportes.length})` : ''}` },
   ]
 
   return (
@@ -540,6 +583,115 @@ export default function TrabajadorDetailPage() {
                 <p className="text-4xl mb-3">📋</p>
                 <p>El soporte aparecerá aquí una vez generado</p>
               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Tab: Soportes de pago ─────────────────────────────────────────── */}
+      {tab === 'soportes' && (
+        <div className="space-y-4">
+          {/* Upload bar */}
+          <div className="card flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="flex-1">
+              <h2>Soportes de pago</h2>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                Comprobantes de transferencia, recibos de caja, vouchers bancarios, etc.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <select
+                className="input text-sm py-1.5 w-44"
+                value={soporteTipo}
+                onChange={(e) => setSoporteTipo(e.target.value)}
+              >
+                <option value="COMPROBANTE">Comprobante</option>
+                <option value="TRANSFERENCIA">Transferencia</option>
+                <option value="RECIBO_CAJA">Recibo de caja</option>
+                <option value="VOUCHER">Voucher bancario</option>
+                <option value="OTRO">Otro</option>
+              </select>
+              <label className={`btn-primary text-sm py-1.5 cursor-pointer ${uploadingFile ? 'opacity-50 pointer-events-none' : ''}`}>
+                {uploadingFile ? 'Subiendo…' : '+ Subir archivo'}
+                <input
+                  type="file"
+                  className="hidden"
+                  accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.docx,.xlsx"
+                  onChange={handleUploadSoporte}
+                  disabled={uploadingFile}
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* List */}
+          {soportes.length === 0 ? (
+            <div className="card text-center py-12" style={{ color: 'var(--text-muted)' }}>
+              <p className="text-sm">No hay soportes subidos</p>
+              <p className="text-xs mt-1">Sube comprobantes PDF o imágenes de los pagos</p>
+            </div>
+          ) : (
+            <div className="card !p-0 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Archivo</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Tipo</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Tamaño</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Subido</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {soportes.map((s) => {
+                    const isImg = s.mime_type.startsWith('image/')
+                    const isPdf = s.mime_type === 'application/pdf'
+                    const url = trabajadoresAPI.downloadSoporteUrl(id!, s.id)
+                    const kb = (s.tamano / 1024).toFixed(0)
+                    return (
+                      <tr key={s.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xl">
+                              {isPdf ? '📄' : isImg ? '🖼️' : '📎'}
+                            </span>
+                            <span className="font-medium text-sm" style={{ color: 'var(--text)' }}>
+                              {s.nombre}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="badge-muted text-xs">{s.tipo.replace(/_/g, ' ')}</span>
+                        </td>
+                        <td className="px-4 py-3 text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                          {kb} KB
+                        </td>
+                        <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-muted)' }}>
+                          {new Date(s.created_at).toLocaleDateString('es-CO')}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-2">
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn-secondary text-xs py-1 px-2.5"
+                            >
+                              Ver
+                            </a>
+                            <button
+                              onClick={() => handleDeleteSoporte(s.id, s.nombre)}
+                              className="btn-danger text-xs py-1 px-2.5"
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
