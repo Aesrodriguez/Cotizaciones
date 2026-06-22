@@ -179,6 +179,10 @@ export const contratosAPI = {
   getGastos: (id: string) => api.get<ContratoGasto[]>(`/contratos/${id}/gastos`),
   createGasto: (id: string, data: object) => api.post<ContratoGasto>(`/contratos/${id}/gastos`, data),
   deleteGasto: (id: string, gastoId: string) => api.delete(`/contratos/${id}/gastos/${gastoId}`),
+
+  // Documentos institucionales
+  generarDocumento: (id: string, tipo: string, data: object) =>
+    api.post(`/contratos/${id}/documentos/${tipo}`, data, { responseType: 'blob' }),
 }
 
 export const trabajadoresAPI = {

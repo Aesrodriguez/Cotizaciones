@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import math
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_authenticated_user, get_db_session
@@ -16,6 +17,8 @@ from app.models.contrato import (
     ContratoActa,
     ContratoCapitulo,
     ContratoItem,
+    TrabajadorAsignacion,
+    Trabajador,
 )
 from app.repositories.contrato import ContratoRepository
 from app.schemas.common import MessageResponse, PaginatedResponse
@@ -507,6 +510,157 @@ def get_dashboard(
         return repo.get_dashboard(id)
     except ValueError as exc:
         raise HTTPException(404, str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Documentos institucionales (PDF)
+# ---------------------------------------------------------------------------
+
+from pydantic import BaseModel as _BaseModel
+from typing import Optional as _Opt, List as _List
+
+class _ResiduoItem(_BaseModel):
+    clasificacion: str = ""
+    tipo: str = ""
+    cantidad: str = ""
+    unidad: str = ""
+    almacenamiento: str = ""
+    destino: str = ""
+
+class _AdicionalItem(_BaseModel):
+    descripcion: str = ""
+    valor: str = ""
+
+class _DocRequest(_BaseModel):
+    fecha: _Opt[str] = None          # ISO date YYYY-MM-DD (default: today)
+    ciudad: str = "Cota, Cundinamarca"
+    descripcion_servicio: _Opt[str] = None
+    observaciones: str = ""
+    responsables: _Opt[_List[str]] = None
+    numero_acta: _Opt[str] = None
+    residuos: _Opt[_List[_ResiduoItem]] = None
+    adicionales: _Opt[_List[_AdicionalItem]] = None
+
+
+@router.post("/{id}/documentos/{tipo}")
+def generar_documento(
+    id: UUID,
+    tipo: str,
+    body: _DocRequest,
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+) -> Response:
+    from app.utils.docs import (
+        generar_certificado_fic,
+        generar_paz_y_salvo_obra,
+        generar_memorando_adicionales,
+        generar_acta_rcd,
+    )
+
+    repo = ContratoRepository(db)
+    c = _assert_contrato(repo, id)
+
+    cliente   = c.cliente.nombre if c.cliente else "Cliente"
+    obra      = c.titulo or c.nombre or "Obra"
+    contrato_num = c.numero or ""
+    objeto    = c.objeto or c.titulo or ""
+    fecha_doc = date.fromisoformat(body.fecha) if body.fecha else date.today()
+    ciudad    = body.ciudad
+
+    if tipo == "certificado-fic":
+        # Fetch workers assigned to this contract
+        asignaciones = (
+            db.query(TrabajadorAsignacion)
+            .filter(
+                TrabajadorAsignacion.contrato_id == id,
+                TrabajadorAsignacion.deleted_at.is_(None),
+            )
+            .all()
+        )
+        trabajadores_vistos: set = set()
+        trabajadores = []
+        for a in asignaciones:
+            t = db.query(Trabajador).filter(Trabajador.id == a.trabajador_id).first()
+            if t and t.id not in trabajadores_vistos:
+                trabajadores_vistos.add(t.id)
+                trabajadores.append({
+                    "nombre": f"{t.nombres} {t.apellidos}",
+                    "cedula": t.cedula or t.rut or "",
+                })
+
+        pdf = generar_certificado_fic(
+            cliente=cliente,
+            obra=obra,
+            descripcion_servicio=body.descripcion_servicio or objeto,
+            fecha=fecha_doc,
+            ciudad=ciudad,
+            trabajadores=trabajadores,
+        )
+        filename = f"Certificado-FIC-{contrato_num}.pdf"
+
+    elif tipo == "paz-y-salvo-obra":
+        pdf = generar_paz_y_salvo_obra(
+            cliente=cliente,
+            obra=obra,
+            numero_contrato=contrato_num,
+            objeto=body.descripcion_servicio or objeto,
+            fecha=fecha_doc,
+            ciudad=ciudad,
+            responsables=body.responsables,
+            observaciones=body.observaciones,
+        )
+        filename = f"PazYSalvo-{contrato_num}.pdf"
+
+    elif tipo == "memorando-adicionales":
+        adicionales = (
+            [{"descripcion": a.descripcion, "valor": a.valor} for a in body.adicionales]
+            if body.adicionales else None
+        )
+        pdf = generar_memorando_adicionales(
+            cliente=cliente,
+            obra=obra,
+            fecha=fecha_doc,
+            ciudad=ciudad,
+            adicionales=adicionales,
+            observaciones=body.observaciones,
+        )
+        filename = f"Memorando-Adicionales-{contrato_num}.pdf"
+
+    elif tipo == "acta-rcd":
+        acta_num = body.numero_acta or "01"
+        residuos = (
+            [
+                {
+                    "clasificacion": r.clasificacion,
+                    "tipo": r.tipo,
+                    "cantidad": r.cantidad,
+                    "unidad": r.unidad,
+                    "almacenamiento": r.almacenamiento,
+                    "destino": r.destino,
+                }
+                for r in body.residuos
+            ]
+            if body.residuos else None
+        )
+        pdf = generar_acta_rcd(
+            cliente=cliente,
+            obra=obra,
+            numero_acta=acta_num,
+            fecha=fecha_doc,
+            ciudad=ciudad,
+            residuos=residuos,
+            observaciones=body.observaciones,
+        )
+        filename = f"Acta-RCD-{acta_num}-{contrato_num}.pdf"
+
+    else:
+        raise HTTPException(400, f"Tipo de documento '{tipo}' no reconocido")
+
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ---------------------------------------------------------------------------

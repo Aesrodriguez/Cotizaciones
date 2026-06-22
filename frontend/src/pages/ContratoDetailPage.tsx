@@ -6,7 +6,7 @@ import { formatCurrency, formatDate } from '../utils/format'
 import toast from 'react-hot-toast'
 import type { Contrato, ContratoActa, ContratoCapitulo, ContratoGasto, ContratoPago, ContratoDashboard } from '../types'
 
-type Tab = 'resumen' | 'presupuesto' | 'ejecucion' | 'actas' | 'gastos' | 'pagos'
+type Tab = 'resumen' | 'presupuesto' | 'ejecucion' | 'actas' | 'gastos' | 'pagos' | 'documentos'
 
 const CATEGORIAS_GASTO = [
   'MATERIALES', 'MANO_OBRA', 'EQUIPOS', 'TRANSPORTE',
@@ -79,6 +79,69 @@ export default function ContratoDetailPage() {
     defaultValues: { fecha: new Date().toISOString().slice(0, 10) },
   })
   const [showPagoForm, setShowPagoForm] = useState(false)
+
+  // Documentos state
+  const [docTipo, setDocTipo] = useState<string>('certificado-fic')
+  const [docFecha, setDocFecha] = useState(new Date().toISOString().slice(0, 10))
+  const [docCiudad, setDocCiudad] = useState('Cota, Cundinamarca')
+  const [docServicio, setDocServicio] = useState('')
+  const [docObs, setDocObs] = useState('')
+  const [docNumActa, setDocNumActa] = useState('01')
+  const [docGenerating, setDocGenerating] = useState(false)
+  const [docResponsables, setDocResponsables] = useState(
+    'Director de Obra\nResidente\nAlmacén\nSST\nMaestro'
+  )
+  // residuos para acta RCD
+  const [docResiduos, setDocResiduos] = useState([
+    { clasificacion: 'Peligroso/contaminado', tipo: '', cantidad: '', unidad: 'kg', almacenamiento: 'Bodega principal', destino: 'Disposicion final' },
+    { clasificacion: 'Aprovechable', tipo: '', cantidad: '', unidad: 'm3', almacenamiento: 'Puntos limpios', destino: 'Reciclaje externo' },
+  ])
+  // adicionales para memorando
+  const [docAdicionales, setDocAdicionales] = useState([
+    { descripcion: '', valor: '' },
+  ])
+
+  const handleGenerarDoc = async () => {
+    if (!id) return
+    setDocGenerating(true)
+    try {
+      const payload: Record<string, unknown> = {
+        fecha: docFecha,
+        ciudad: docCiudad,
+        observaciones: docObs,
+      }
+      if (docTipo === 'certificado-fic') {
+        payload.descripcion_servicio = docServicio
+      } else if (docTipo === 'paz-y-salvo-obra') {
+        payload.descripcion_servicio = docServicio
+        payload.responsables = docResponsables.split('\n').map(s => s.trim()).filter(Boolean)
+      } else if (docTipo === 'memorando-adicionales') {
+        payload.adicionales = docAdicionales.filter(a => a.descripcion.trim())
+      } else if (docTipo === 'acta-rcd') {
+        payload.numero_acta = docNumActa
+        payload.residuos = docResiduos.filter(r => r.clasificacion.trim())
+      }
+      const res = await contratosAPI.generarDocumento(id, docTipo, payload)
+      const blob = new Blob([res.data], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const nameMap: Record<string, string> = {
+        'certificado-fic': 'Certificado-FIC',
+        'paz-y-salvo-obra': 'Paz-y-Salvo',
+        'memorando-adicionales': 'Memorando-Adicionales',
+        'acta-rcd': 'Acta-RCD',
+      }
+      a.download = `${nameMap[docTipo] ?? docTipo}-${contrato?.numero ?? ''}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success('Documento generado')
+    } catch {
+      toast.error('No se pudo generar el documento')
+    } finally {
+      setDocGenerating(false)
+    }
+  }
 
   const loadAll = useCallback(async () => {
     if (!id) return
@@ -256,6 +319,7 @@ export default function ContratoDetailPage() {
     { id: 'actas', label: `Cortes / Actas${actas.length ? ` (${actas.length})` : ''}` },
     { id: 'gastos', label: 'Gastos' },
     { id: 'pagos', label: 'Pagos' },
+    { id: 'documentos', label: 'Documentos' },
   ]
 
   return (
@@ -970,6 +1034,182 @@ export default function ContratoDetailPage() {
                 </tbody>
               </table>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Tab: Documentos institucionales ────────────────────────────────── */}
+      {activeTab === 'documentos' && (
+        <div className="space-y-5">
+          <div className="card">
+            <h2 className="mb-1">Documentos institucionales</h2>
+            <p className="text-xs mb-5" style={{ color: 'var(--text-muted)' }}>
+              Genera documentos PDF oficiales de la obra con los datos del contrato pre-cargados.
+            </p>
+
+            {/* Selector tipo */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+              {[
+                { id: 'certificado-fic', label: 'Certificado FIC', icon: '🏅', desc: 'Paz y salvo laboral' },
+                { id: 'paz-y-salvo-obra', label: 'Paz y Salvo Obra', icon: '✅', desc: 'Corte de contratista' },
+                { id: 'memorando-adicionales', label: 'Memorando Adicionales', icon: '📝', desc: 'Obras adicionales' },
+                { id: 'acta-rcd', label: 'Acta Salida RCD', icon: '♻️', desc: 'Retiro de residuos' },
+              ].map(({ id: tid, label, icon, desc }) => (
+                <button
+                  key={tid}
+                  onClick={() => setDocTipo(tid)}
+                  className="p-3 rounded-xl text-left transition-all"
+                  style={{
+                    border: `2px solid ${docTipo === tid ? 'var(--lime)' : 'var(--border)'}`,
+                    background: docTipo === tid ? 'var(--lime-dim)' : 'var(--card)',
+                  }}
+                >
+                  <div className="text-2xl mb-1">{icon}</div>
+                  <div className="text-xs font-semibold" style={{ color: docTipo === tid ? 'var(--lime-text)' : 'var(--text)' }}>{label}</div>
+                  <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{desc}</div>
+                </button>
+              ))}
+            </div>
+
+            {/* Campos comunes */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+              <div>
+                <label className="label">Fecha del documento</label>
+                <input type="date" className="input text-sm" value={docFecha} onChange={e => setDocFecha(e.target.value)} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="label">Ciudad</label>
+                <input className="input text-sm" value={docCiudad} onChange={e => setDocCiudad(e.target.value)} placeholder="Cota, Cundinamarca" />
+              </div>
+            </div>
+
+            {/* Campos específicos por tipo */}
+            {(docTipo === 'certificado-fic' || docTipo === 'paz-y-salvo-obra') && (
+              <div className="mb-4">
+                <label className="label">Descripción del servicio / objeto</label>
+                <input
+                  className="input text-sm"
+                  value={docServicio}
+                  onChange={e => setDocServicio(e.target.value)}
+                  placeholder={contrato?.objeto || contrato?.titulo || 'Ej: Suministro de chimeneas...'}
+                />
+                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                  Si se deja vacío, se usará el objeto del contrato.
+                </p>
+              </div>
+            )}
+
+            {docTipo === 'paz-y-salvo-obra' && (
+              <div className="mb-4">
+                <label className="label">Responsables (uno por línea)</label>
+                <textarea
+                  className="input text-sm font-mono"
+                  rows={5}
+                  value={docResponsables}
+                  onChange={e => setDocResponsables(e.target.value)}
+                />
+              </div>
+            )}
+
+            {docTipo === 'memorando-adicionales' && (
+              <div className="mb-4">
+                <label className="label">Obras adicionales (opcionales)</label>
+                <div className="space-y-2">
+                  {docAdicionales.map((a, i) => (
+                    <div key={i} className="flex gap-2">
+                      <input
+                        className="input text-sm flex-1"
+                        placeholder="Descripción del adicional"
+                        value={a.descripcion}
+                        onChange={e => {
+                          const n = [...docAdicionales]; n[i] = { ...n[i], descripcion: e.target.value }; setDocAdicionales(n)
+                        }}
+                      />
+                      <input
+                        className="input text-sm w-32"
+                        placeholder="Valor"
+                        value={a.valor}
+                        onChange={e => {
+                          const n = [...docAdicionales]; n[i] = { ...n[i], valor: e.target.value }; setDocAdicionales(n)
+                        }}
+                      />
+                      <button
+                        onClick={() => setDocAdicionales(docAdicionales.filter((_, j) => j !== i))}
+                        className="px-2 rounded text-xs"
+                        style={{ color: 'var(--danger)', background: 'var(--card)', border: '1px solid var(--border)' }}
+                      >✕</button>
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => setDocAdicionales([...docAdicionales, { descripcion: '', valor: '' }])}
+                    className="btn-secondary text-xs py-1"
+                  >+ Agregar fila</button>
+                </div>
+              </div>
+            )}
+
+            {docTipo === 'acta-rcd' && (
+              <div className="mb-4 space-y-3">
+                <div className="w-32">
+                  <label className="label">N° Acta</label>
+                  <input className="input text-sm" value={docNumActa} onChange={e => setDocNumActa(e.target.value)} placeholder="01" />
+                </div>
+                <label className="label">Tabla de residuos</label>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
+                        {['Clasificación', 'Tipo / descripción', 'Cantidad', 'Unidad', 'Almacenamiento', 'Destino', ''].map(h => (
+                          <th key={h} className="px-2 py-2 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {docResiduos.map((r, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                          {(['clasificacion', 'tipo', 'cantidad', 'unidad', 'almacenamiento', 'destino'] as const).map(k => (
+                            <td key={k} className="px-1 py-1">
+                              <input
+                                className="input text-xs py-1 px-2 w-full"
+                                value={r[k]}
+                                onChange={e => {
+                                  const n = [...docResiduos]; n[i] = { ...n[i], [k]: e.target.value }; setDocResiduos(n)
+                                }}
+                              />
+                            </td>
+                          ))}
+                          <td className="px-1 py-1">
+                            <button
+                              onClick={() => setDocResiduos(docResiduos.filter((_, j) => j !== i))}
+                              className="px-2 py-1 rounded text-xs"
+                              style={{ color: 'var(--danger)' }}
+                            >✕</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <button
+                    onClick={() => setDocResiduos([...docResiduos, { clasificacion: '', tipo: '', cantidad: '', unidad: 'kg', almacenamiento: '', destino: '' }])}
+                    className="btn-secondary text-xs py-1 mt-2"
+                  >+ Agregar residuo</button>
+                </div>
+              </div>
+            )}
+
+            {/* Observaciones comunes */}
+            <div className="mb-5">
+              <label className="label">Observaciones (opcional)</label>
+              <textarea className="input text-sm" rows={3} value={docObs} onChange={e => setDocObs(e.target.value)} placeholder="Observaciones adicionales para el documento..." />
+            </div>
+
+            <button
+              onClick={handleGenerarDoc}
+              disabled={docGenerating}
+              className="btn-primary"
+            >
+              {docGenerating ? 'Generando PDF…' : '⬇ Descargar PDF'}
+            </button>
           </div>
         </div>
       )}
