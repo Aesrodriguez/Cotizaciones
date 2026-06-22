@@ -40,9 +40,12 @@ export default function App() {
   const theme = useThemeStore((s) => s.theme)
   const isDark = theme === 'dark'
 
-  // Ping al servidor tan pronto como carga la app para despertar Render (cold start)
+  // Ping al arrancar + keepalive cada 14 min → evita cold start de Render
   useEffect(() => {
-    api.get('/health').catch(() => {})
+    const ping = () => api.get('/health').catch(() => {})
+    ping()
+    const interval = setInterval(ping, 14 * 60 * 1000)
+    return () => clearInterval(interval)
   }, [])
 
   return (

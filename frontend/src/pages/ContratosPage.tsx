@@ -4,8 +4,10 @@ import { contratosAPI } from '../services/api'
 import { formatCurrency, formatDate } from '../utils/format'
 import Pagination from '../components/common/Pagination'
 import ConfirmDialog from '../components/common/ConfirmDialog'
+import SkeletonTable from '../components/common/SkeletonTable'
 import toast from 'react-hot-toast'
 import type { ContratoListItem, PaginatedResponse } from '../types'
+import { useDebounce } from '../hooks/useDebounce'
 
 const ESTADOS = ['VIGENTE', 'COMPLETADO', 'CANCELADO', 'SUSPENDIDO']
 
@@ -23,6 +25,7 @@ export default function ContratosPage() {
   const navigate = useNavigate()
   const [data, setData] = useState<PaginatedResponse<ContratoListItem>>({ data: [], total: 0, page: 1, limit: 10, pages: 1 })
   const [filters, setFilters] = useState({ status: '', search: '', page: 1 })
+  const debouncedSearch = useDebounce(filters.search, 350)
   const [loading, setLoading] = useState(true)
   const [deleteTarget, setDeleteTarget] = useState<ContratoListItem | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -32,11 +35,11 @@ export default function ContratosPage() {
     try {
       const params: Record<string, string | number> = { page: filters.page, limit: 10 }
       if (filters.status) params.estado = filters.status
-      if (filters.search) params.search = filters.search
+      if (debouncedSearch) params.search = debouncedSearch
       const res = await contratosAPI.getAll(params)
       setData(res.data)
     } finally { setLoading(false) }
-  }, [filters])
+  }, [filters.page, filters.status, debouncedSearch])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -81,10 +84,7 @@ export default function ContratosPage() {
         </div>
 
         {loading ? (
-          <div className="text-center py-16 text-gray-400">
-            <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue-600 mx-auto mb-3" />
-            Cargando...
-          </div>
+          <SkeletonTable rows={8} cols={6} />
         ) : data.data.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-gray-400 mb-4">No hay contratos</p>

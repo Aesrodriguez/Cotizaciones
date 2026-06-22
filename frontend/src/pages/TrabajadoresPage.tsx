@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { trabajadoresAPI } from '../services/api'
 import type { Trabajador } from '../types'
+import SkeletonTable from '../components/common/SkeletonTable'
 
 const COP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })
 const fmt = (v?: number) => v != null ? COP.format(v) : '—'
@@ -213,9 +214,7 @@ export default function TrabajadoresPage() {
       {/* Table */}
       <div className="card p-0 overflow-hidden">
         {loading ? (
-          <div className="flex justify-center py-16">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700" />
-          </div>
+          <SkeletonTable rows={8} cols={6} />
         ) : items.length === 0 ? (
           <div className="text-center py-16 text-gray-400">
             <p className="text-lg font-medium">No hay trabajadores</p>

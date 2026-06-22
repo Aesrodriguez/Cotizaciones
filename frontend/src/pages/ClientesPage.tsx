@@ -6,6 +6,7 @@ import ConfirmDialog from '../components/common/ConfirmDialog'
 import toast from 'react-hot-toast'
 import type { Cliente } from '../types'
 import { useDebounce } from '../hooks/useDebounce'
+import SkeletonTable from '../components/common/SkeletonTable'
 
 export default function ClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>([])
@@ -89,10 +90,7 @@ export default function ClientesPage() {
         </div>
 
         {loading ? (
-          <div className="py-16 text-center" style={{ color: 'var(--text-muted)' }}>
-            <div className="animate-spin rounded-full h-7 w-7 border-b-2 mx-auto mb-3" style={{ borderColor: 'var(--lime)' }} />
-            Cargando...
-          </div>
+          <SkeletonTable rows={7} cols={6} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

@@ -5,6 +5,7 @@ import { formatCurrency, formatDate, STATUS_CONFIG } from '../utils/format'
 import { useAuthStore } from '../stores/authStore'
 import Pagination from '../components/common/Pagination'
 import ConfirmDialog from '../components/common/ConfirmDialog'
+import SkeletonTable from '../components/common/SkeletonTable'
 import toast from 'react-hot-toast'
 import type { Cotizacion, PaginatedResponse } from '../types'
 import { useDebounce } from '../hooks/useDebounce'
@@ -73,10 +74,7 @@ export default function CotizacionesPage() {
         </div>
 
         {loading ? (
-          <div className="text-center py-16 text-gray-400">
-            <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue-600 mx-auto mb-3" />
-            Cargando...
-          </div>
+          <SkeletonTable rows={8} cols={6} />
         ) : data.data.length === 0 ? (
           <div className="text-center py-16 text-gray-400">No hay cotizaciones</div>
         ) : (

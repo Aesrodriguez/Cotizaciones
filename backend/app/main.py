@@ -105,13 +105,9 @@ def create_app() -> FastAPI:
     app.include_router(trabajadores_router, prefix=prefix)
 
     @app.get("/health", tags=["Sistema"])
+    @app.get(f"{prefix}/health", tags=["Sistema"])
     async def health():
-        return {
-            "status": "ok",
-            "app": settings.API_TITLE,
-            "version": settings.API_VERSION,
-            "environment": settings.ENVIRONMENT,
-        }
+        return {"status": "ok"}
 
     @app.get("/", tags=["Sistema"])
     async def root():
