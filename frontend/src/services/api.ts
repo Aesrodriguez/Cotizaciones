@@ -125,6 +125,8 @@ export const cotizacionesAPI = {
     api.post<{ message: string }>(`/cotizaciones/${id}/enviar-email`, data),
   downloadPdf: (id: string) =>
     api.get(`/cotizaciones/${id}/pdf`, { responseType: 'blob' }),
+  nextNumero: () =>
+    api.get<{ prefijo: string; proximo_numero: number }>('/cotizaciones/next-numero'),
 }
 
 export const clientesAPI = {

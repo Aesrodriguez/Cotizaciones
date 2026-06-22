@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db_session, get_authenticated_user, require_admin
 from app.models.auth import Usuario
 from app.repositories.cotizacion import CotizacionRepository
-from app.services.cotizacion_service import CotizacionService
+from app.services.cotizacion_service import CotizacionService, peek_next_numero
 from app.schemas.cotizacion import CotizacionCreate, CotizacionUpdate, CotizacionOut, CotizacionList, StatsOut, EstadoUpdate, EnviarEmailRequest
 from app.schemas.common import MessageResponse
 from app.utils.email import send_cotizacion_email
@@ -18,6 +18,11 @@ router = APIRouter(prefix="/cotizaciones", tags=["Cotizaciones"])
 @router.get("/stats", response_model=StatsOut)
 def get_stats(db: Session = Depends(get_db_session), _: Usuario = Depends(get_authenticated_user)):
     return CotizacionRepository(db).get_stats()
+
+
+@router.get("/next-numero")
+def get_next_numero(db: Session = Depends(get_db_session), _: Usuario = Depends(get_authenticated_user)):
+    return peek_next_numero(db)
 
 
 @router.get("/", response_model=PaginatedResponse[CotizacionList])

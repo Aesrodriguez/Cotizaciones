@@ -7,7 +7,7 @@ from app.repositories.cotizacion import CotizacionRepository
 from app.schemas.cotizacion import CotizacionCreate, CotizacionUpdate
 
 
-def _next_numero(db: Session) -> str:
+def _get_or_create_seq(db: Session):
     from datetime import date
     year = date.today().year
     seq = db.query(Secuencia).filter(Secuencia.tipo_documento == "cotizacion").first()
@@ -15,8 +15,23 @@ def _next_numero(db: Session) -> str:
         seq = Secuencia(tipo_documento="cotizacion", prefijo=f"COT-{year}-", proximo_numero=1)
         db.add(seq)
         db.flush()
-    num = f"{seq.prefijo or ''}{str(seq.proximo_numero).zfill(4)}"
-    seq.proximo_numero += 1
+    return seq
+
+
+def peek_next_numero(db: Session) -> dict:
+    seq = _get_or_create_seq(db)
+    db.commit()
+    return {"prefijo": seq.prefijo or "", "proximo_numero": seq.proximo_numero}
+
+
+def _next_numero(db: Session, sufijo: int | None = None) -> str:
+    seq = _get_or_create_seq(db)
+    num_part = sufijo if sufijo is not None else seq.proximo_numero
+    if sufijo is not None and sufijo >= seq.proximo_numero:
+        seq.proximo_numero = sufijo + 1
+    elif sufijo is None:
+        seq.proximo_numero += 1
+    num = f"{seq.prefijo or ''}{str(num_part).zfill(4)}"
     db.commit()
     return num
 
@@ -87,7 +102,7 @@ class CotizacionService:
             total = costos_directos + impuesto
 
         cot = Cotizacion(
-            numero=_next_numero(self.db),
+            numero=_next_numero(self.db, data.numero_sufijo),
             cliente_id=data.cliente_id,
             usuario_id=usuario_id,
             titulo=data.titulo,

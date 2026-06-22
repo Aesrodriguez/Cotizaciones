@@ -72,6 +72,8 @@ export default function CotizacionFormPage() {
   const [productoModal, setProductoModal] = useState(false)
   const [savingCliente, setSavingCliente] = useState(false)
   const [savingProducto, setSavingProducto] = useState(false)
+  const [numeroPrefijo, setNumeroPrefijo] = useState('COT-')
+  const [numeroSufijo, setNumeroSufijo] = useState<string>('')
   const [totals, setTotals] = useState({
     subtotal: 0, descuento: 0, impuesto: 0,
     aiuAdm: 0, aiuImp: 0, aiuUtil: 0, aiu: 0, aiuIva: 0, total: 0,
@@ -99,6 +101,15 @@ export default function CotizacionFormPage() {
 
   const clienteForm = useForm<ClienteForm>()
   const productoForm = useForm<ProductoForm>({ defaultValues: { impuesto_porcentaje: 19, unidad_medida: 'UN' } })
+
+  useEffect(() => {
+    if (!isEdit) {
+      cotizacionesAPI.nextNumero().then((r) => {
+        setNumeroPrefijo(r.data.prefijo)
+        setNumeroSufijo(String(r.data.proximo_numero).padStart(4, '0'))
+      }).catch(() => {})
+    }
+  }, [isEdit])
 
   useEffect(() => {
     if (isEdit && id) {
@@ -201,7 +212,9 @@ export default function CotizacionFormPage() {
         await cotizacionesAPI.update(id, data)
         toast.success('Cotización actualizada')
       } else {
-        const res = await cotizacionesAPI.create(data)
+        const sufijo = parseInt(numeroSufijo, 10)
+        const payload = { ...data, numero_sufijo: isNaN(sufijo) ? undefined : sufijo }
+        const res = await cotizacionesAPI.create(payload)
         toast.success(`Cotización ${res.data.numero} creada`)
       }
       navigate('/cotizaciones')
@@ -282,6 +295,33 @@ export default function CotizacionFormPage() {
                     placeholder="Ej: Propuesta de servicios de construcción"
                   />
                 </div>
+
+                {!isEdit && (
+                  <div>
+                    <label className="label">Consecutivo</label>
+                    <div className="flex items-center gap-0 input !p-0 overflow-hidden">
+                      <span
+                        className="px-3 py-2 text-sm font-mono select-none"
+                        style={{ background: 'var(--surface)', color: 'var(--text-muted)', borderRight: '1px solid var(--border)' }}
+                      >
+                        {numeroPrefijo}
+                      </span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={numeroSufijo}
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/\D/g, '')
+                          setNumeroSufijo(v)
+                        }}
+                        className="flex-1 px-3 py-2 text-sm font-mono bg-transparent outline-none"
+                        style={{ color: 'var(--text)' }}
+                        placeholder="0001"
+                        maxLength={6}
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <label className="label">Moneda</label>

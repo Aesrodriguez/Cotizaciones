@@ -49,6 +49,7 @@ class CotizacionCreate(BaseModel):
     aiu_administracion: Optional[Decimal] = Decimal("0")
     aiu_imprevistos: Optional[Decimal] = Decimal("0")
     aiu_utilidad: Optional[Decimal] = Decimal("0")
+    numero_sufijo: Optional[int] = None
     items: List[CotizacionItemCreate]
 
     @field_validator("items")
