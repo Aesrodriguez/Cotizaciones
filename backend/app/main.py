@@ -104,10 +104,11 @@ def create_app() -> FastAPI:
     app.include_router(contratos_router, prefix=prefix)
     app.include_router(trabajadores_router, prefix=prefix)
 
-    @app.get("/health", tags=["Sistema"])
-    @app.get(f"{prefix}/health", tags=["Sistema"])
     async def health():
         return {"status": "ok"}
+
+    app.add_api_route("/health", health, tags=["Sistema"])
+    app.add_api_route(f"{prefix}/health", health, tags=["Sistema"])
 
     @app.get("/", tags=["Sistema"])
     async def root():
