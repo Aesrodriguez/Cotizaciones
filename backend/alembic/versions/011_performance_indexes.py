@@ -59,7 +59,7 @@ def upgrade():
     # Índice en corte_detalles(corte_id) para bulk-load
     op.create_index(
         'idx_trab_corte_det_corte_lookup',
-        'trabajador_corte_detalles',
+        'trabajador_cortes_detalle',
         ['corte_id', 'fecha_pago'],
     )
 
@@ -71,4 +71,4 @@ def downgrade():
     op.drop_index('idx_contratos_cliente_estado',     table_name='contratos')
     op.drop_index('idx_trabajadores_cedula',          table_name='trabajadores')
     op.drop_index('idx_cotizaciones_usuario_estado',  table_name='cotizaciones')
-    op.drop_index('idx_trab_corte_det_corte_lookup',  table_name='trabajador_corte_detalles')
+    op.drop_index('idx_trab_corte_det_corte_lookup',  table_name='trabajador_cortes_detalle')
