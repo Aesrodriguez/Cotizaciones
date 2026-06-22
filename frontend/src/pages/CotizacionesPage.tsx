@@ -7,6 +7,7 @@ import Pagination from '../components/common/Pagination'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import toast from 'react-hot-toast'
 import type { Cotizacion, PaginatedResponse } from '../types'
+import { useDebounce } from '../hooks/useDebounce'
 
 const ESTADOS = ['BORRADOR', 'PENDIENTE', 'ACEPTADA', 'RECHAZADA', 'CANCELADA']
 
@@ -16,6 +17,7 @@ export default function CotizacionesPage() {
   const isAdmin = user?.roles?.some((r) => ['ADMIN', 'ADMINISTRADOR'].includes(r.nombre))
   const [data, setData] = useState<PaginatedResponse<Cotizacion>>({ data: [], total: 0, page: 1, limit: 10, pages: 1 })
   const [filters, setFilters] = useState({ status: '', search: '', page: 1 })
+  const debouncedSearch = useDebounce(filters.search, 350)
   const [loading, setLoading] = useState(true)
   const [deleteTarget, setDeleteTarget] = useState<Cotizacion | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -25,11 +27,11 @@ export default function CotizacionesPage() {
     try {
       const params: Record<string, string | number> = { page: filters.page, limit: 10 }
       if (filters.status) params.estado = filters.status
-      if (filters.search) params.search = filters.search
+      if (debouncedSearch) params.search = debouncedSearch
       const res = await cotizacionesAPI.getAll(params)
       setData(res.data)
     } finally { setLoading(false) }
-  }, [filters])
+  }, [filters.page, filters.status, debouncedSearch])
 
   useEffect(() => { fetchData() }, [fetchData])
 

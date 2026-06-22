@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/authStore'
 import Modal from '../components/common/Modal'
 import toast from 'react-hot-toast'
 import type { Producto } from '../types'
+import { useDebounce } from '../hooks/useDebounce'
 
 export default function ProductosPage() {
   const user = useAuthStore((s) => s.user)
@@ -13,15 +14,16 @@ export default function ProductosPage() {
   const [productos, setProductos] = useState<Producto[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const debouncedSearch = useDebounce(search, 350)
   const [modalOpen, setModalOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<Producto | null>(null)
   const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm<Partial<Producto>>()
 
   const fetchData = useCallback(async () => {
     setLoading(true)
-    try { const res = await productosAPI.getAll({ search }); setProductos(res.data) }
+    try { const res = await productosAPI.getAll({ search: debouncedSearch }); setProductos(res.data) }
     finally { setLoading(false) }
-  }, [search])
+  }, [debouncedSearch])
 
   useEffect(() => { fetchData() }, [fetchData])
 

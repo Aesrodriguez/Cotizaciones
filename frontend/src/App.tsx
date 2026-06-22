@@ -1,9 +1,10 @@
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, useEffect } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { useAuthStore } from './stores/authStore'
 import { useThemeStore } from './stores/themeStore'
 import Layout from './components/layout/Layout'
+import api from './services/api'
 
 // Lazy loading — cada página se carga solo cuando se necesita
 const LoginPage = lazy(() => import('./pages/LoginPage'))
@@ -38,6 +39,11 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 export default function App() {
   const theme = useThemeStore((s) => s.theme)
   const isDark = theme === 'dark'
+
+  // Ping al servidor tan pronto como carga la app para despertar Render (cold start)
+  useEffect(() => {
+    api.get('/health').catch(() => {})
+  }, [])
 
   return (
     <>
