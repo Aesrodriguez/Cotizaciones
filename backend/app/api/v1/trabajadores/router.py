@@ -11,6 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, 
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from collections import defaultdict
+
 from app.api.deps import get_authenticated_user, get_db_session
 from app.models.auth import Usuario
 from app.models.contrato import (
@@ -63,40 +65,22 @@ def _next_codigo(db: Session) -> str:
     return f"TRB-{num:04d}"
 
 
-def _build_resumen(trabajador_id: UUID, db: Session) -> dict:
-    asigs = db.query(TrabajadorAsignacion).filter(
-        TrabajadorAsignacion.trabajador_id == trabajador_id,
-        TrabajadorAsignacion.deleted_at.is_(None),
-        TrabajadorAsignacion.estado == EstadoAsignacion.ACTIVA,
-    ).all()
-
-    pagos = db.query(TrabajadorPago).filter(
-        TrabajadorPago.trabajador_id == trabajador_id,
-    ).all()
-
+def _resumen_from_data(asigs: list, pagos: list) -> dict:
+    """Calcula resumen desde listas ya cargadas — cero queries adicionales."""
     total_acordado = sum(Decimal(str(a.valor_acordado or 0)) for a in asigs)
     total_pagado = sum(Decimal(str(p.valor or 0)) for p in pagos)
     saldo = total_acordado - total_pagado
-
-    if saldo > 0:
-        estado_saldo = "Debe"
-    elif saldo < 0:
-        estado_saldo = "Saldo a favor"
-    else:
-        estado_saldo = "Al día"
-
     return {
         "total_acordado": float(total_acordado),
         "total_pagado": float(total_pagado),
         "saldo": float(saldo),
-        "estado_saldo": estado_saldo,
+        "estado_saldo": "Debe" if saldo > 0 else ("Saldo a favor" if saldo < 0 else "Al día"),
         "asignaciones_count": len(asigs),
         "pagos_count": len(pagos),
     }
 
 
-def _enrich_trab(t: Trabajador, db: Session) -> TrabajadorOut:
-    resumen = _build_resumen(t.id, db)
+def _trab_out(t: Trabajador, resumen: dict) -> TrabajadorOut:
     return TrabajadorOut(
         id=t.id,
         codigo=t.codigo,
@@ -130,12 +114,8 @@ def _enrich_trab(t: Trabajador, db: Session) -> TrabajadorOut:
     )
 
 
-def _enrich_asig(a: TrabajadorAsignacion, db: Session) -> AsignacionOut:
-    contrato = db.query(Contrato).filter(Contrato.id == a.contrato_id).first()
-    total_pagado = sum(
-        Decimal(str(p.valor or 0))
-        for p in db.query(TrabajadorPago).filter(TrabajadorPago.asignacion_id == a.id).all()
-    )
+def _asig_out(a: TrabajadorAsignacion, contratos_map: dict, pagos_by_asig: dict) -> AsignacionOut:
+    contrato = contratos_map.get(a.contrato_id)
     return AsignacionOut(
         id=a.id,
         trabajador_id=a.trabajador_id,
@@ -151,21 +131,13 @@ def _enrich_asig(a: TrabajadorAsignacion, db: Session) -> AsignacionOut:
         observaciones=a.observaciones,
         contrato_numero=contrato.numero if contrato else None,
         contrato_titulo=contrato.titulo if contrato else None,
-        total_pagado=total_pagado,
+        total_pagado=pagos_by_asig.get(a.id, Decimal("0")),
     )
 
 
-def _enrich_pago(p: TrabajadorPago, db: Session) -> PagoTrabajadorOut:
-    contrato_numero = None
-    descripcion_item = None
-    if p.contrato_id:
-        c = db.query(Contrato).filter(Contrato.id == p.contrato_id).first()
-        if c:
-            contrato_numero = c.numero
-    if p.asignacion_id:
-        a = db.query(TrabajadorAsignacion).filter(TrabajadorAsignacion.id == p.asignacion_id).first()
-        if a:
-            descripcion_item = a.descripcion_item
+def _pago_out(p: TrabajadorPago, contratos_map: dict, asigs_map: dict) -> PagoTrabajadorOut:
+    contrato = contratos_map.get(p.contrato_id) if p.contrato_id else None
+    asig = asigs_map.get(p.asignacion_id) if p.asignacion_id else None
     return PagoTrabajadorOut(
         id=p.id,
         trabajador_id=p.trabajador_id,
@@ -177,9 +149,49 @@ def _enrich_pago(p: TrabajadorPago, db: Session) -> PagoTrabajadorOut:
         referencia=p.referencia,
         observaciones=p.observaciones,
         registrado_por=p.registrado_por,
-        contrato_numero=contrato_numero,
-        descripcion_item=descripcion_item,
+        contrato_numero=contrato.numero if contrato else None,
+        descripcion_item=asig.descripcion_item if asig else None,
     )
+
+
+def _bulk_load_contratos(db: Session, ids: set) -> dict:
+    """Una sola query para cargar múltiples contratos por id."""
+    if not ids:
+        return {}
+    rows = db.query(Contrato).filter(Contrato.id.in_(ids)).all()
+    return {c.id: c for c in rows}
+
+
+# Mantener _enrich_trab/_enrich_asig/_enrich_pago para los endpoints POST/PUT
+# que sólo afectan a un registro a la vez (no son N+1)
+def _enrich_trab(t: Trabajador, db: Session) -> TrabajadorOut:
+    asigs = db.query(TrabajadorAsignacion).filter(
+        TrabajadorAsignacion.trabajador_id == t.id,
+        TrabajadorAsignacion.deleted_at.is_(None),
+        TrabajadorAsignacion.estado == EstadoAsignacion.ACTIVA,
+    ).all()
+    pagos = db.query(TrabajadorPago).filter(TrabajadorPago.trabajador_id == t.id).all()
+    return _trab_out(t, _resumen_from_data(asigs, pagos))
+
+
+def _enrich_asig(a: TrabajadorAsignacion, db: Session) -> AsignacionOut:
+    contratos_map = _bulk_load_contratos(db, {a.contrato_id} if a.contrato_id else set())
+    pagos = db.query(TrabajadorPago).filter(TrabajadorPago.asignacion_id == a.id).all()
+    pagos_by_asig = {a.id: sum(Decimal(str(p.valor or 0)) for p in pagos)}
+    return _asig_out(a, contratos_map, pagos_by_asig)
+
+
+def _enrich_pago(p: TrabajadorPago, db: Session) -> PagoTrabajadorOut:
+    ids = set()
+    if p.contrato_id:
+        ids.add(p.contrato_id)
+    contratos_map = _bulk_load_contratos(db, ids)
+    asigs_map: dict = {}
+    if p.asignacion_id:
+        a = db.query(TrabajadorAsignacion).filter(TrabajadorAsignacion.id == p.asignacion_id).first()
+        if a:
+            asigs_map[p.asignacion_id] = a
+    return _pago_out(p, contratos_map, asigs_map)
 
 
 # ---------------------------------------------------------------------------
@@ -195,6 +207,7 @@ def list_trabajadores(
     db: Session = Depends(get_db_session),
     _: Usuario = Depends(get_authenticated_user),
 ):
+    import math
     q = db.query(Trabajador).filter(Trabajador.deleted_at.is_(None))
     if estado:
         q = q.filter(Trabajador.estado == estado)
@@ -208,14 +221,33 @@ def list_trabajadores(
         )
     total = q.count()
     items = q.order_by(Trabajador.nombres).offset((page - 1) * limit).limit(limit).all()
-    import math
-    return PaginatedResponse(
-        data=[_enrich_trab(t, db) for t in items],
-        total=total,
-        page=page,
-        limit=limit,
-        pages=max(1, math.ceil(total / limit)),
-    )
+
+    if not items:
+        return PaginatedResponse(data=[], total=total, page=page, limit=limit, pages=max(1, math.ceil(total / limit)))
+
+    # Bulk-load asignaciones y pagos en 2 queries (en vez de 2*N)
+    worker_ids = [t.id for t in items]
+    all_asigs = db.query(TrabajadorAsignacion).filter(
+        TrabajadorAsignacion.trabajador_id.in_(worker_ids),
+        TrabajadorAsignacion.deleted_at.is_(None),
+        TrabajadorAsignacion.estado == EstadoAsignacion.ACTIVA,
+    ).all()
+    all_pagos = db.query(TrabajadorPago).filter(
+        TrabajadorPago.trabajador_id.in_(worker_ids),
+    ).all()
+
+    asigs_by_trab: dict = defaultdict(list)
+    pagos_by_trab: dict = defaultdict(list)
+    for a in all_asigs:
+        asigs_by_trab[a.trabajador_id].append(a)
+    for p in all_pagos:
+        pagos_by_trab[p.trabajador_id].append(p)
+
+    data = [
+        _trab_out(t, _resumen_from_data(asigs_by_trab[t.id], pagos_by_trab[t.id]))
+        for t in items
+    ]
+    return PaginatedResponse(data=data, total=total, page=page, limit=limit, pages=max(1, math.ceil(total / limit)))
 
 
 @router.post("/", response_model=TrabajadorOut, status_code=status.HTTP_201_CREATED)
@@ -271,12 +303,28 @@ def get_trabajador(
         TrabajadorPago.trabajador_id == trabajador_id,
     ).order_by(TrabajadorPago.fecha_pago.desc()).all()
 
-    resumen = _build_resumen(trabajador_id, db)
+    # Bulk-load todos los contratos referenciados en 1 query
+    contrato_ids = {a.contrato_id for a in asigs if a.contrato_id} | \
+                   {p.contrato_id for p in pagos if p.contrato_id}
+    contratos_map = _bulk_load_contratos(db, contrato_ids)
+
+    # Total pagado por asignacion — derivado de pagos ya cargados (0 queries extra)
+    pagos_by_asig: dict = defaultdict(lambda: Decimal("0"))
+    for p in pagos:
+        if p.asignacion_id:
+            pagos_by_asig[p.asignacion_id] += Decimal(str(p.valor or 0))
+
+    # Mapa de asignaciones para enriquecer pagos
+    asigs_map = {a.id: a for a in asigs}
+
+    # Resumen de activas (filtrado en memoria, no extra query)
+    asigs_activas = [a for a in asigs if (a.estado.value if hasattr(a.estado, "value") else str(a.estado)) == "ACTIVA"]
+    resumen = _resumen_from_data(asigs_activas, pagos)
 
     return TrabajadorDetalle(
-        trabajador=_enrich_trab(t, db),
-        asignaciones=[_enrich_asig(a, db) for a in asigs],
-        pagos=[_enrich_pago(p, db) for p in pagos],
+        trabajador=_trab_out(t, resumen),
+        asignaciones=[_asig_out(a, contratos_map, pagos_by_asig) for a in asigs],
+        pagos=[_pago_out(p, contratos_map, asigs_map) for p in pagos],
         resumen=resumen,
     )
 
@@ -535,7 +583,7 @@ def generar_corte_quincenal(
     total_deudas = sum(Decimal(str(d.valor)) for d in body.deudas)
     total_neto = total_pagos - total_descuentos - total_deudas
 
-    # Build HTML report
+    # Build HTML report (reusar los mapas ya cargados más arriba)
     html = _build_corte_html(
         trabajador=t,
         pagos=pagos,
@@ -548,6 +596,8 @@ def generar_corte_quincenal(
         total_descuentos=total_descuentos,
         total_deudas=total_deudas,
         total_neto=total_neto,
+        contratos_map=_contratos_corte,
+        asigs_map=_asigs_corte,
     )
 
     # Save corte record
@@ -567,9 +617,18 @@ def generar_corte_quincenal(
     db.add(corte)
     db.flush()
 
+    # Bulk-load contratos y asignaciones para los pagos del corte
+    _pago_contrato_ids = {p.contrato_id for p in pagos if p.contrato_id}
+    _pago_asig_ids = {p.asignacion_id for p in pagos if p.asignacion_id}
+    _contratos_corte = _bulk_load_contratos(db, _pago_contrato_ids)
+    _asigs_corte: dict = {}
+    if _pago_asig_ids:
+        for a in db.query(TrabajadorAsignacion).filter(TrabajadorAsignacion.id.in_(_pago_asig_ids)).all():
+            _asigs_corte[a.id] = a
+
     for p in pagos:
-        asig = db.query(TrabajadorAsignacion).filter(TrabajadorAsignacion.id == p.asignacion_id).first() if p.asignacion_id else None
-        contrato = db.query(Contrato).filter(Contrato.id == p.contrato_id).first() if p.contrato_id else None
+        asig = _asigs_corte.get(p.asignacion_id) if p.asignacion_id else None
+        contrato = _contratos_corte.get(p.contrato_id) if p.contrato_id else None
         det = TrabajadorCorteDetalle(
             corte_id=corte.id,
             pago_id=p.id,
@@ -607,10 +666,21 @@ def list_cortes(
     cortes = db.query(TrabajadorCorte).filter(
         TrabajadorCorte.trabajador_id == trabajador_id,
     ).order_by(TrabajadorCorte.fecha_inicio.desc()).all()
-    result = []
-    for c in cortes:
-        detalle = db.query(TrabajadorCorteDetalle).filter(TrabajadorCorteDetalle.corte_id == c.id).all()
-        result.append(CorteQuincenalOut(
+
+    if not cortes:
+        return []
+
+    # Bulk-load todos los detalles en 1 query (en vez de 1 por corte)
+    corte_ids = [c.id for c in cortes]
+    all_detalles = db.query(TrabajadorCorteDetalle).filter(
+        TrabajadorCorteDetalle.corte_id.in_(corte_ids)
+    ).all()
+    detalles_by_corte: dict = defaultdict(list)
+    for d in all_detalles:
+        detalles_by_corte[d.corte_id].append(d)
+
+    return [
+        CorteQuincenalOut(
             id=c.id,
             trabajador_id=c.trabajador_id,
             fecha_inicio=c.fecha_inicio,
@@ -629,10 +699,11 @@ def list_cortes(
                     valor=d.valor,
                     referencia=d.referencia,
                     observaciones=d.observaciones,
-                ) for d in detalle
+                ) for d in detalles_by_corte[c.id]
             ],
-        ))
-    return result
+        )
+        for c in cortes
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -836,13 +907,24 @@ def _build_corte_html(
     total_descuentos: Decimal,
     total_deudas: Decimal,
     total_neto: Decimal,
+    contratos_map: dict | None = None,
+    asigs_map: dict | None = None,
 ) -> str:
+    # Pre-load lookups si no se pasaron (compatible con llamadas legacy)
+    if contratos_map is None:
+        ids = {p.contrato_id for p in pagos if p.contrato_id}
+        contratos_map = _bulk_load_contratos(db, ids)
+    if asigs_map is None:
+        ids = {p.asignacion_id for p in pagos if p.asignacion_id}
+        rows = db.query(TrabajadorAsignacion).filter(TrabajadorAsignacion.id.in_(ids)).all() if ids else []
+        asigs_map = {a.id: a for a in rows}
+
     # Build pago rows
     pago_rows = ""
     if pagos:
         for p in pagos:
-            asig = db.query(TrabajadorAsignacion).filter(TrabajadorAsignacion.id == p.asignacion_id).first() if p.asignacion_id else None
-            contrato = db.query(Contrato).filter(Contrato.id == p.contrato_id).first() if p.contrato_id else None
+            asig = asigs_map.get(p.asignacion_id) if p.asignacion_id else None
+            contrato = contratos_map.get(p.contrato_id) if p.contrato_id else None
             pago_rows += (
                 f"<tr>"
                 f"<td>{_fmt_date(p.fecha_pago)}</td>"

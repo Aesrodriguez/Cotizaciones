@@ -57,25 +57,27 @@ class CotizacionRepository(BaseRepository[Cotizacion]):
         )
 
     def get_stats(self) -> dict:
-        base = self.db.query(Cotizacion).filter(Cotizacion.deleted_at.is_(None))
-        total = base.count()
-        aprobadas = base.filter(Cotizacion.estado == "ACEPTADA").count()
-        pendientes = base.filter(Cotizacion.estado.in_(["BORRADOR", "PENDIENTE"])).count()
-        rechazadas = base.filter(Cotizacion.estado == "RECHAZADA").count()
-
-        ingresos = self.db.query(func.coalesce(func.sum(Cotizacion.total), 0)).filter(
-            Cotizacion.deleted_at.is_(None)
-        ).scalar()
-        ingresos_aprobados = self.db.query(func.coalesce(func.sum(Cotizacion.total), 0)).filter(
-            Cotizacion.deleted_at.is_(None), Cotizacion.estado == "ACEPTADA"
-        ).scalar()
-
-        por_estado = (
-            self.db.query(Cotizacion.estado, func.count(Cotizacion.id).label("count"))
+        # Query 1: count + sum por estado (reemplaza 6 queries separadas)
+        por_estado_raw = (
+            self.db.query(
+                Cotizacion.estado,
+                func.count(Cotizacion.id).label("count"),
+                func.coalesce(func.sum(Cotizacion.total), 0).label("total_sum"),
+            )
             .filter(Cotizacion.deleted_at.is_(None))
             .group_by(Cotizacion.estado)
             .all()
         )
+
+        # Derivar métricas desde el resultado en Python (sin queries extra)
+        total = sum(r.count for r in por_estado_raw)
+        aprobadas = next((r.count for r in por_estado_raw if r.estado == "ACEPTADA"), 0)
+        pendientes = sum(r.count for r in por_estado_raw if r.estado in ("BORRADOR", "PENDIENTE"))
+        rechazadas = next((r.count for r in por_estado_raw if r.estado == "RECHAZADA"), 0)
+        ingresos = float(sum(r.total_sum for r in por_estado_raw))
+        ingresos_aprobados = float(next((r.total_sum for r in por_estado_raw if r.estado == "ACEPTADA"), 0))
+
+        # Query 2: estadísticas mensuales
         por_mes = (
             self.db.query(
                 func.to_char(Cotizacion.created_at, "YYYY-MM").label("mes"),
@@ -95,6 +97,6 @@ class CotizacionRepository(BaseRepository[Cotizacion]):
             "rechazadas": rechazadas,
             "ingresos_totales": ingresos,
             "ingresos_aprobados": ingresos_aprobados,
-            "por_estado": [{"estado": r.estado, "count": r.count} for r in por_estado],
+            "por_estado": [{"estado": r.estado, "count": r.count} for r in por_estado_raw],
             "por_mes": [{"mes": r.mes, "count": r.count, "total": float(r.total)} for r in reversed(por_mes)],
         }

@@ -52,8 +52,13 @@ export default function TrabajadorDetailPage() {
     if (!id) return
     setLoading(true)
     try {
-      const res = await trabajadoresAPI.getById(id)
+      // Paralelo: trabajador + soportes en simultáneo
+      const [res, sRes] = await Promise.all([
+        trabajadoresAPI.getById(id),
+        trabajadoresAPI.getSoportes(id),
+      ])
       setData(res.data)
+      setSoportes(sRes.data)
     } catch {
       toast.error('Error al cargar trabajador')
       navigate('/trabajadores')
@@ -67,10 +72,17 @@ export default function TrabajadorDetailPage() {
     trabajadoresAPI.getSoportes(id).then(r => setSoportes(r.data)).catch(() => {})
   }
 
+  // Carga lazy de contratos — solo cuando se abre el modal de asignación
+  const ensureContratos = async () => {
+    if (contratos.length > 0) return
+    try {
+      const r = await trabajadoresAPI.getContratosDisponibles()
+      setContratos(r.data)
+    } catch { /* silencioso */ }
+  }
+
   useEffect(() => {
     load()
-    loadSoportes()
-    trabajadoresAPI.getContratosDisponibles().then(r => setContratos(r.data)).catch(() => {})
   }, [id])
 
   const handleUploadSoporte = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -108,7 +120,7 @@ export default function TrabajadorDetailPage() {
 
   // ── Asignaciones ──────────────────────────────────────────────────────────
 
-  const openAsig = (a?: TrabajadorAsignacion) => {
+  const openAsig = async (a?: TrabajadorAsignacion) => {
     setEditAsig(a ?? null)
     setAsigForm(a ? {
       contrato_id: a.contrato_id,
@@ -120,6 +132,7 @@ export default function TrabajadorDetailPage() {
       fecha_inicio: a.fecha_inicio ?? '',
       observaciones: a.observaciones ?? '',
     } : { contrato_id: '', item_id: '', descripcion_item: '', unidad_item: '', cantidad_item: '', valor_acordado: '', fecha_inicio: '', observaciones: '' })
+    await ensureContratos()
     if (a?.contrato_id) loadItems(a.contrato_id)
     setShowAsig(true)
   }
