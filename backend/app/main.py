@@ -94,6 +94,7 @@ def create_app() -> FastAPI:
     from app.api.v1.usuarios.router import router as usuarios_router
     from app.api.v1.contratos.router import router as contratos_router
     from app.api.v1.trabajadores.router import router as trabajadores_router
+    from app.api.v1.apu.router import router as apu_router
 
     prefix = settings.API_PREFIX
     app.include_router(auth_router, prefix=prefix)
@@ -103,6 +104,7 @@ def create_app() -> FastAPI:
     app.include_router(usuarios_router, prefix=prefix)
     app.include_router(contratos_router, prefix=prefix)
     app.include_router(trabajadores_router, prefix=prefix)
+    app.include_router(apu_router, prefix=prefix)
 
     async def health():
         return {"status": "ok"}

@@ -1,7 +1,7 @@
 import axios, { AxiosError, AxiosRequestConfig } from 'axios'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../stores/authStore'
-import type { Cliente, Contrato, ContratoActa, ContratoCapitulo, ContratoDashboard, ContratoGasto, ContratoListItem, ContratoPago, CorteQuincenal, Cotizacion, PaginatedResponse, Producto, SoportePago, Stats, Trabajador, TrabajadorAsignacion, TrabajadorDetalle, TrabajadorPago, Usuario } from '../types'
+import type { APUItem, Cliente, Contrato, ContratoActa, ContratoCapitulo, ContratoDashboard, ContratoGasto, ContratoListItem, ContratoPago, CorteQuincenal, Cotizacion, PaginatedResponse, Producto, SoportePago, Stats, Trabajador, TrabajadorAsignacion, TrabajadorDetalle, TrabajadorPago, Usuario } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'https://cotizaciones-api-3uuy.onrender.com/api/v1'
 
@@ -221,6 +221,20 @@ export const trabajadoresAPI = {
   }),
   deleteSoporte: (id: string, soporteId: string) => api.delete(`/trabajadores/${id}/soportes/${soporteId}`),
   downloadSoporteUrl: (id: string, soporteId: string) => `${api.defaults.baseURL}/trabajadores/${id}/soportes/${soporteId}/download`,
+}
+
+export const apuAPI = {
+  getCapitulos: () => api.get<{ codigo: string; nombre: string }[]>('/apu/capitulos'),
+  getAll: (params?: object) => api.get<PaginatedResponse<APUItem>>('/apu/', { params }),
+  getById: (id: string) => api.get<APUItem>(`/apu/${id}`),
+  updatePrecio: (id: string, precio_unitario: number) =>
+    api.patch(`/apu/${id}/precio`, { precio_unitario }),
+  updateMaterial: (apuId: string, detId: string, data: { precio_unitario: number; cantidad?: number }) =>
+    api.patch(`/apu/${apuId}/materiales/${detId}`, data),
+  updateManoObra: (apuId: string, detId: string, data: { precio_unitario: number; cantidad?: number }) =>
+    api.patch(`/apu/${apuId}/mano_obra/${detId}`, data),
+  updateEquipo: (apuId: string, detId: string, data: { precio_unitario: number; cantidad?: number }) =>
+    api.patch(`/apu/${apuId}/equipos/${detId}`, data),
 }
 
 export default api

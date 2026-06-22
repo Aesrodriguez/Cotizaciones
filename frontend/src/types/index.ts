@@ -357,3 +357,27 @@ export interface TrabajadorDetalle {
     pagos_count: number
   }
 }
+
+export interface APUDetalle {
+  id: string
+  descripcion?: string
+  nombre?: string
+  unidad?: string
+  cantidad?: number
+  precio_unitario?: number
+  subtotal?: number
+  orden?: number
+}
+
+export interface APUItem {
+  id: string
+  codigo: string
+  nombre: string
+  unidad_medida: string
+  precio_unitario?: number
+  capitulo_codigo?: string
+  capitulo?: string
+  materiales?: APUDetalle[]
+  mano_obra?: APUDetalle[]
+  equipos?: APUDetalle[]
+}

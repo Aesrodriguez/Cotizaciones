@@ -53,6 +53,8 @@ class APU(Base, UUIDPrimaryKey, TimestampedMixin, SoftDeleteMixin):
         nullable=True,
         comment="Productivity/performance rate"
     )
+    capitulo_codigo = Column(VARCHAR(10), nullable=True, comment="Chapter code")
+    capitulo = Column(VARCHAR(200), nullable=True, comment="Chapter name")
     estado = Column(
         PGENUM(EstadoAPU),
         default=EstadoAPU.ACTIVO,
