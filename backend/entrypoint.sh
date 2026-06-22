@@ -11,8 +11,10 @@ echo "DB     : $(echo "${DATABASE_URL:-NO_CONFIG}" | cut -c1-25)..."
 echo ""
 
 echo ">>> Ejecutando migraciones Alembic..."
-alembic upgrade head
-echo ">>> Migraciones completadas"
+alembic upgrade head && echo ">>> Migraciones completadas" || {
+    echo ">>> ADVERTENCIA: Migración con errores — continuando con el servidor..."
+}
+echo ""
 echo ""
 
 echo ">>> Iniciando servidor en puerto ${PORT:-8000}..."
