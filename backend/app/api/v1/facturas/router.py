@@ -87,6 +87,21 @@ def _save_one_xml(db: Session, xml_content: str, filename: str, observaciones: s
     parsed = parse_dian_xml(xml_content)
     items_data = parsed.pop('items', [])
 
+    cufe  = parsed.get('cufe')
+    numero = parsed['numero']
+    nit    = parsed.get('proveedor_nit')
+
+    # Verificar duplicados antes de insertar
+    dup = db.execute(text("""
+        SELECT numero FROM facturas_electronicas
+        WHERE (:cufe IS NOT NULL AND cufe = :cufe)
+           OR (proveedor_nit = :nit AND numero = :num)
+        LIMIT 1
+    """), {"cufe": cufe, "nit": nit, "num": numero}).fetchone()
+
+    if dup:
+        raise ValueError(f"La factura '{numero}' ya fue registrada (duplicado)")
+
     factura = FacturaElectronica(
         **parsed,
         xml_filename=filename,
