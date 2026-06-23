@@ -1,11 +1,10 @@
 import { Suspense, lazy, useEffect } from 'react'
-import { useConnectionStore } from './stores/connectionStore'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { useAuthStore } from './stores/authStore'
 import { useThemeStore } from './stores/themeStore'
 import Layout from './components/layout/Layout'
-import api, { rawAxios } from './services/api'
+import api from './services/api'
 
 // Lazy loading — cada página se carga solo cuando se necesita
 const LoginPage = lazy(() => import('./pages/LoginPage'))
@@ -42,13 +41,9 @@ export default function App() {
   const theme = useThemeStore((s) => s.theme)
   const isDark = theme === 'dark'
 
-  // Keepalive: ping con rawAxios (sin interceptor) cada 9 min + al recuperar foco
+  // Keepalive: evita cold start de Render — ping cada 9 min y al recuperar foco
   useEffect(() => {
-    const { setOnline, setReconnecting } = useConnectionStore.getState()
-    const ping = () =>
-      rawAxios.get('/health', { timeout: 65000 })
-        .then(() => setOnline())
-        .catch(() => setReconnecting())
+    const ping = () => api.get('/health').catch(() => {})
     ping()
     const interval = setInterval(ping, 9 * 60 * 1000)
     const onVisible = () => { if (document.visibilityState === 'visible') ping() }

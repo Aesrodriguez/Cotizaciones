@@ -1,18 +1,11 @@
 import axios, { AxiosError, AxiosRequestConfig } from 'axios'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../stores/authStore'
-import { useConnectionStore } from '../stores/connectionStore'
 import type { APUItem, Cliente, Contrato, ContratoActa, ContratoCapitulo, ContratoDashboard, ContratoGasto, ContratoListItem, ContratoPago, CorteQuincenal, Cotizacion, PaginatedResponse, Producto, SoportePago, Stats, Trabajador, TrabajadorAsignacion, TrabajadorDetalle, TrabajadorPago, Usuario } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'https://cotizaciones-api-3uuy.onrender.com/api/v1'
 
-// Axios directo para pings (sin pasar por el interceptor de reintentos)
-export const rawAxios = axios.create({ baseURL: API_URL, timeout: 65000 })
-
-const api = axios.create({
-  baseURL: API_URL,
-  timeout: 30000,
-})
+const api = axios.create({ baseURL: API_URL, timeout: 30000 })
 
 // ─── Request interceptor ───────────────────────────────────────────────────
 api.interceptors.request.use((config) => {
@@ -21,7 +14,7 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// ─── Response interceptor with silent token refresh + auto-retry ──────────
+// ─── Response interceptor: token refresh + error toast ────────────────────
 let isRefreshing = false
 let pendingQueue: Array<{ resolve: (v: string) => void; reject: (e: unknown) => void }> = []
 
@@ -30,52 +23,14 @@ function processQueue(error: unknown, token: string | null) {
   pendingQueue = []
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-
-type ExtendedConfig = AxiosRequestConfig & {
-  _retry?: boolean
-  _retryCount?: number
-  _skipToast?: boolean
-}
+type ExtendedConfig = AxiosRequestConfig & { _retry?: boolean; _skipToast?: boolean }
 
 api.interceptors.response.use(
-  (res) => {
-    // Successful response → mark server as online
-    useConnectionStore.getState().setOnline()
-    return res
-  },
+  (res) => res,
   async (error: AxiosError) => {
     const original = error.config as ExtendedConfig
     const status = error.response?.status
-    const isNetworkError = !error.response
-    const isGet = (original.method ?? 'get').toLowerCase() === 'get'
-    const retryCount = original._retryCount ?? 0
     const { refreshToken, setAuth, logout } = useAuthStore.getState()
-    const conn = useConnectionStore.getState()
-
-    // ── Network / timeout → mostrar "reconectando" y esperar en fondo ───────
-    if (isNetworkError) {
-      if (retryCount === 0) {
-        conn.setReconnecting()
-        const pingUntilOnline = async () => {
-          let attempts = 0
-          while (useConnectionStore.getState().status !== 'online') {
-            await sleep(5000)
-            attempts++
-            try {
-              await rawAxios.get('/health')
-              conn.setOnline()
-              // Emitir evento para que las páginas recarguen sus datos
-              window.dispatchEvent(new CustomEvent('server-reconnected'))
-            } catch {
-              if (attempts >= 10) conn.setOffline()
-            }
-          }
-        }
-        pingUntilOnline()
-      }
-      return Promise.reject(error)
-    }
 
     // ── Token refresh (401) ───────────────────────────────────────────────
     if (status === 401 && refreshToken && !original._retry && !original.url?.includes('/auth/')) {
