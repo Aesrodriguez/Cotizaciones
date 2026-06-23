@@ -223,6 +223,18 @@ export const trabajadoresAPI = {
 
 const _noToast = { _skipToast: true } as any
 
+export interface FacturaElectronicaItem {
+  linea_num: number
+  descripcion: string | null
+  referencia: string | null
+  cantidad: number
+  unidad: string | null
+  precio_unitario: number
+  subtotal: number
+  iva_pct: number
+  iva_monto: number
+}
+
 export interface FacturaElectronica {
   id: string
   numero: string
@@ -243,6 +255,28 @@ export interface FacturaElectronica {
   xml_filename: string | null
   observaciones: string | null
   created_at: string
+  // Campos extendidos
+  cufe: string | null
+  tipo_documento: string | null
+  nota: string | null
+  moneda: string
+  forma_pago: string | null
+  dian_validado: boolean
+  dian_respuesta: string | null
+  proveedor_telefono: string | null
+  proveedor_email: string | null
+  proveedor_direccion: string | null
+  proveedor_ciudad: string | null
+  adquiriente_telefono: string | null
+  adquiriente_email: string | null
+  adquiriente_direccion: string | null
+  adquiriente_ciudad: string | null
+  autorizacion_dian: string | null
+  autorizacion_desde: string | null
+  autorizacion_hasta: string | null
+  prefijo: string | null
+  qr_url: string | null
+  items: FacturaElectronicaItem[]
 }
 
 export interface FacturasResumen {

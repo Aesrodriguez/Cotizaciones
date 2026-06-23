@@ -49,7 +49,6 @@ function UploadZone({ onUploaded }: { onUploaded: () => void }) {
       try {
         const res = await facturasAPI.upload(file)
         const data = res.data as any
-        // ZIP returns { procesados, errores, facturas }; XML returns single factura
         if (data?.procesados != null) {
           ok += data.procesados
           ;(data.errores ?? []).forEach((e: any) => errors.push(`${e.archivo}: ${e.error}`))
@@ -90,9 +89,7 @@ function UploadZone({ onUploaded }: { onUploaded: () => void }) {
         </div>
       ) : (
         <div className="text-center">
-          <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
-            Arrastra facturas XML aquí o haz click
-          </p>
+          <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Arrastra facturas XML aquí o haz click</p>
           <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
             Formato DIAN UBL 2.1 · Archivos .xml o .zip con XMLs adentro · Varios a la vez
           </p>
@@ -113,96 +110,315 @@ function KPI({ label, value, sub }: { label: string; value: string; sub?: string
   )
 }
 
-// ── Modal detalle ─────────────────────────────────────────────────────────────
-function DetalleModal({ factura, onClose, onUpdated }: { factura: FacturaElectronica; onClose: () => void; onUpdated: () => void }) {
-  const [obs, setObs] = useState(factura.observaciones ?? '')
+// ── Modal detalle completo ────────────────────────────────────────────────────
+function DetalleModal({ facturaId, onClose, onUpdated }: {
+  facturaId: string
+  onClose: () => void
+  onUpdated: () => void
+}) {
+  const [factura, setFactura] = useState<FacturaElectronica | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [obs, setObs] = useState('')
   const [savingObs, setSavingObs] = useState(false)
   const [changingEstado, setChangingEstado] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    facturasAPI.getById(facturaId).then((r) => {
+      setFactura(r.data)
+      setObs(r.data.observaciones ?? '')
+    }).catch(() => toast.error('Error cargando detalle')).finally(() => setLoading(false))
+  }, [facturaId])
 
   const saveObs = async () => {
+    if (!factura) return
     setSavingObs(true)
-    try { await facturasAPI.update(factura.id, { observaciones: obs }); toast.success('Observaciones guardadas'); onUpdated() }
-    finally { setSavingObs(false) }
+    try {
+      const r = await facturasAPI.update(factura.id, { observaciones: obs })
+      setFactura(r.data)
+      toast.success('Observaciones guardadas')
+      onUpdated()
+    } finally { setSavingObs(false) }
   }
 
   const changeEstado = async (e: Estado) => {
+    if (!factura) return
     setChangingEstado(true)
-    try { await facturasAPI.updateEstado(factura.id, e); toast.success(`Estado: ${e}`); onUpdated() }
-    finally { setChangingEstado(false) }
+    try {
+      await facturasAPI.updateEstado(factura.id, e)
+      setFactura((f) => f ? { ...f, estado: e } : f)
+      toast.success(`Estado: ${e}`)
+      onUpdated()
+    } finally { setChangingEstado(false) }
   }
 
-  const Row = ({ label, value, highlight }: { label: string; value: string | null | undefined; highlight?: boolean }) => (
-    <div className="flex justify-between items-baseline py-2" style={{ borderBottom: '1px solid var(--border)' }}>
-      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{label}</span>
-      <span className={`text-sm font-mono font-semibold`} style={{ color: highlight ? 'var(--lime)' : 'var(--text)' }}>{value || '—'}</span>
-    </div>
+  const copyCUFE = () => {
+    if (!factura?.cufe) return
+    navigator.clipboard.writeText(factura.cufe)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const SectionTitle = ({ label }: { label: string }) => (
+    <p className="text-xs font-bold uppercase tracking-widest pt-4 pb-1" style={{ color: 'var(--text-muted)' }}>{label}</p>
   )
 
-  const totalRet = (factura.retefuente ?? 0) + (factura.reteiva ?? 0) + (factura.reteica ?? 0)
+  const Row = ({ label, value, highlight, mono }: {
+    label: string; value?: string | null; highlight?: boolean; mono?: boolean
+  }) => (
+    value ? (
+      <div className="flex justify-between items-baseline py-1.5" style={{ borderBottom: '1px solid var(--border)' }}>
+        <span className="text-xs flex-shrink-0 mr-4" style={{ color: 'var(--text-muted)' }}>{label}</span>
+        <span className={`text-xs font-semibold text-right ${mono ? 'font-mono' : ''}`} style={{ color: highlight ? 'var(--lime)' : 'var(--text)', wordBreak: 'break-all' }}>
+          {value}
+        </span>
+      </div>
+    ) : null
+  )
+
+  const f = factura
+  const totalRet = f ? (f.retefuente ?? 0) + (f.reteiva ?? 0) + (f.reteica ?? 0) : 0
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl overflow-hidden flex flex-col" style={{ background: 'var(--card)', border: '1px solid var(--border)', maxHeight: '90vh' }} onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-2xl rounded-2xl overflow-hidden flex flex-col"
+        style={{ background: 'var(--card)', border: '1px solid var(--border)', maxHeight: '92vh' }}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="px-6 py-4 flex items-start justify-between gap-4" style={{ borderBottom: '1px solid var(--border)' }}>
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-mono font-bold px-2 py-0.5 rounded" style={{ background: 'var(--lime)', color: '#111' }}>{factura.numero}</span>
-              {factura.tiene_retencion && (
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: 'color-mix(in srgb, #f59e0b 20%, transparent)', color: '#f59e0b' }}>RET</span>
-              )}
+        <div className="px-6 py-4 flex items-start justify-between gap-4 flex-shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
+          {loading ? (
+            <div className="h-5 w-40 rounded animate-pulse" style={{ background: 'var(--surface)' }} />
+          ) : f ? (
+            <div>
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <span className="text-sm font-mono font-bold px-2 py-0.5 rounded" style={{ background: 'var(--lime)', color: '#111' }}>
+                  {f.prefijo ? `${f.prefijo} · ` : ''}{f.numero}
+                </span>
+                {f.tipo_documento && (
+                  <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                    {f.tipo_documento}
+                  </span>
+                )}
+                {f.dian_validado && (
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: 'color-mix(in srgb, var(--lime) 15%, transparent)', color: 'var(--lime)' }}>
+                    ✓ DIAN Validado
+                  </span>
+                )}
+                {f.tiene_retencion && (
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: 'color-mix(in srgb, #f59e0b 20%, transparent)', color: '#f59e0b' }}>
+                    RETENCIÓN
+                  </span>
+                )}
+              </div>
+              <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>{f.proveedor_nombre ?? 'Sin nombre'}</p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{f.fecha_emision} · {f.moneda}</p>
             </div>
-            <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>{factura.proveedor_nombre ?? 'Sin nombre'}</p>
-            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>NIT {factura.proveedor_nit} · {factura.fecha_emision}</p>
-          </div>
-          <button onClick={onClose} className="opacity-50 hover:opacity-100 text-xl" style={{ color: 'var(--text)' }}>✕</button>
+          ) : null}
+          <button onClick={onClose} className="opacity-50 hover:opacity-100 text-xl flex-shrink-0" style={{ color: 'var(--text)' }}>✕</button>
         </div>
 
-        <div className="px-6 py-4 overflow-y-auto flex-1 space-y-1">
-          <Row label="Subtotal (sin IVA)" value={fmt(factura.subtotal)} />
-          <Row label="IVA" value={fmt(factura.iva)} />
-          <Row label="Total bruto" value={fmt(factura.total_bruto)} />
-          {factura.retefuente > 0 && <Row label="Retención en la fuente" value={`(${fmt(factura.retefuente)})`} highlight />}
-          {factura.reteiva > 0 && <Row label="ReteIVA" value={`(${fmt(factura.reteiva)})`} highlight />}
-          {factura.reteica > 0 && <Row label="ReteICA" value={`(${fmt(factura.reteica)})`} highlight />}
-          {totalRet > 0 && <Row label="Total retenciones" value={`(${fmt(totalRet)})`} highlight />}
-          <Row label="Total a pagar" value={fmt(factura.total_pagar)} highlight />
-
-          <div className="pt-4">
-            <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>ESTADO</p>
-            <div className="flex flex-wrap gap-2">
-              {ESTADOS.map((e) => (
-                <button
-                  key={e}
-                  disabled={changingEstado}
-                  onClick={() => changeEstado(e)}
-                  className="text-xs px-3 py-1 rounded-lg font-medium transition-all"
-                  style={{
-                    background: factura.estado === e ? ESTADO_COLOR[e].bg : 'var(--surface)',
-                    color: factura.estado === e ? ESTADO_COLOR[e].color : 'var(--text-muted)',
-                    border: `1px solid ${factura.estado === e ? ESTADO_COLOR[e].color : 'var(--border)'}`,
-                  }}
-                >{e}</button>
+        {/* Body scrollable */}
+        <div className="px-6 py-2 overflow-y-auto flex-1">
+          {loading ? (
+            <div className="space-y-3 py-6">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="h-3 rounded animate-pulse" style={{ background: 'var(--surface)', width: i % 3 === 0 ? '80%' : '60%' }} />
               ))}
             </div>
-          </div>
+          ) : f ? (
+            <>
+              {/* CUFE */}
+              {f.cufe && (
+                <div className="mt-3 mb-1">
+                  <p className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: 'var(--text-muted)' }}>CUFE</p>
+                  <div className="flex items-center gap-2 p-2 rounded-lg" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                    <span className="text-xs font-mono flex-1 break-all" style={{ color: 'var(--text)', fontSize: '10px' }}>{f.cufe}</span>
+                    <button
+                      onClick={copyCUFE}
+                      className="text-xs px-2 py-1 rounded flex-shrink-0"
+                      style={{ background: copied ? 'var(--lime)' : 'var(--card)', color: copied ? '#111' : 'var(--text-muted)', border: '1px solid var(--border)' }}
+                    >
+                      {copied ? '✓' : 'Copiar'}
+                    </button>
+                  </div>
+                </div>
+              )}
 
-          <div className="pt-4">
-            <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>OBSERVACIONES</p>
-            <textarea
-              className="input w-full text-xs resize-none"
-              rows={3}
-              value={obs}
-              onChange={(e) => setObs(e.target.value)}
-              placeholder="Anotar observaciones contables, de pago, etc."
-            />
-            <button onClick={saveObs} disabled={savingObs} className="btn-primary text-xs mt-2 py-1 px-4">
-              {savingObs ? 'Guardando…' : 'Guardar'}
-            </button>
-          </div>
+              {/* QR DIAN */}
+              {f.qr_url && (
+                <div className="mt-2 mb-1">
+                  <a
+                    href={f.qr_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg"
+                    style={{ background: 'color-mix(in srgb, #3b82f6 12%, transparent)', color: '#3b82f6', border: '1px solid color-mix(in srgb, #3b82f6 30%, transparent)' }}
+                  >
+                    <span>🔗</span>
+                    <span className="font-medium">Ver en portal DIAN</span>
+                  </a>
+                </div>
+              )}
 
-          {factura.xml_filename && (
-            <p className="text-xs pt-2" style={{ color: 'var(--text-muted)' }}>Archivo: {factura.xml_filename}</p>
+              {/* Validación DIAN */}
+              {f.dian_respuesta && (
+                <div className="mt-2 mb-2 flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: f.dian_validado ? 'color-mix(in srgb, var(--lime) 10%, transparent)' : 'var(--surface)', border: `1px solid ${f.dian_validado ? 'color-mix(in srgb, var(--lime) 30%, transparent)' : 'var(--border)'}` }}>
+                  <span>{f.dian_validado ? '✅' : 'ℹ️'}</span>
+                  <span style={{ color: f.dian_validado ? 'var(--lime)' : 'var(--text-muted)' }}>{f.dian_respuesta}</span>
+                </div>
+              )}
+
+              {/* Nota / referencia */}
+              {f.nota && (
+                <div className="mt-2 px-3 py-2 rounded-lg text-xs italic" style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                  {f.nota}
+                </div>
+              )}
+
+              {/* Proveedor */}
+              <SectionTitle label="Proveedor" />
+              <Row label="Nombre" value={f.proveedor_nombre} />
+              <Row label="NIT" value={f.proveedor_nit} mono />
+              <Row label="Ciudad" value={f.proveedor_ciudad} />
+              <Row label="Dirección" value={f.proveedor_direccion} />
+              <Row label="Teléfono" value={f.proveedor_telefono} mono />
+              <Row label="Email" value={f.proveedor_email} />
+
+              {/* Adquiriente */}
+              <SectionTitle label="Adquiriente" />
+              <Row label="Nombre" value={f.adquiriente_nombre} />
+              <Row label="NIT" value={f.adquiriente_nit} mono />
+              <Row label="Ciudad" value={f.adquiriente_ciudad} />
+              <Row label="Dirección" value={f.adquiriente_direccion} />
+              <Row label="Teléfono" value={f.adquiriente_telefono} mono />
+              <Row label="Email" value={f.adquiriente_email} />
+
+              {/* Datos de la factura */}
+              <SectionTitle label="Datos de la factura" />
+              <Row label="Fecha emisión" value={f.fecha_emision} mono />
+              <Row label="Forma de pago" value={f.forma_pago} />
+              <Row label="Moneda" value={f.moneda} />
+              {f.autorizacion_dian && <>
+                <Row label="N° Autorización DIAN" value={f.autorizacion_dian} mono />
+                {f.autorizacion_desde && f.autorizacion_hasta && (
+                  <Row label="Vigencia autorización" value={`${f.autorizacion_desde} → ${f.autorizacion_hasta}`} mono />
+                )}
+              </>}
+
+              {/* Totales financieros */}
+              <SectionTitle label="Totales" />
+              <Row label="Subtotal (sin IVA)" value={fmt(f.subtotal)} mono />
+              <Row label="IVA" value={fmt(f.iva)} mono />
+              <Row label="Total bruto" value={fmt(f.total_bruto)} mono />
+              {f.retefuente > 0 && <Row label="Retención en la fuente" value={`(${fmt(f.retefuente)})`} mono highlight />}
+              {f.reteiva > 0 && <Row label="ReteIVA" value={`(${fmt(f.reteiva)})`} mono highlight />}
+              {f.reteica > 0 && <Row label="ReteICA" value={`(${fmt(f.reteica)})`} mono highlight />}
+              {totalRet > 0 && (
+                <Row label="Total retenciones" value={`(${fmt(totalRet)})`} mono highlight />
+              )}
+              <div className="flex justify-between items-baseline py-2" style={{ borderBottom: '1px solid var(--border)' }}>
+                <span className="text-xs font-bold" style={{ color: 'var(--text)' }}>Total a pagar</span>
+                <span className="text-base font-mono font-bold" style={{ color: 'var(--lime)' }}>{fmt(f.total_pagar)}</span>
+              </div>
+
+              {/* Líneas de la factura */}
+              {f.items && f.items.length > 0 && (
+                <>
+                  <SectionTitle label={`Líneas de la factura (${f.items.length})`} />
+                  <div className="rounded-xl overflow-hidden mb-2" style={{ border: '1px solid var(--border)' }}>
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr style={{ background: 'var(--surface)' }}>
+                          <th className="px-3 py-2 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>#</th>
+                          <th className="px-3 py-2 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>Descripción</th>
+                          <th className="px-3 py-2 text-right font-semibold" style={{ color: 'var(--text-muted)' }}>Cant.</th>
+                          <th className="px-3 py-2 text-right font-semibold" style={{ color: 'var(--text-muted)' }}>P. Unit.</th>
+                          <th className="px-3 py-2 text-right font-semibold" style={{ color: 'var(--text-muted)' }}>Subtotal</th>
+                          <th className="px-3 py-2 text-right font-semibold" style={{ color: 'var(--text-muted)' }}>IVA</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {f.items.map((item, idx) => (
+                          <tr key={idx} style={{ borderTop: '1px solid var(--border)' }}>
+                            <td className="px-3 py-2 font-mono" style={{ color: 'var(--text-muted)' }}>{item.linea_num}</td>
+                            <td className="px-3 py-2" style={{ color: 'var(--text)' }}>
+                              <p className="font-medium">{item.descripcion ?? '—'}</p>
+                              {item.referencia && (
+                                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Ref: {item.referencia}</p>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--text)' }}>
+                              {item.cantidad} {item.unidad && <span style={{ color: 'var(--text-muted)' }}>{item.unidad}</span>}
+                            </td>
+                            <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--text)' }}>{fmt(item.precio_unitario)}</td>
+                            <td className="px-3 py-2 text-right font-mono font-semibold" style={{ color: 'var(--text)' }}>{fmt(item.subtotal)}</td>
+                            <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--text-muted)' }}>
+                              {item.iva_pct > 0 ? (
+                                <span title={`${item.iva_pct}%`}>{fmt(item.iva_monto)}</span>
+                              ) : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{ background: 'var(--surface)', borderTop: '2px solid var(--border)' }}>
+                          <td colSpan={4} className="px-3 py-2 text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>TOTAL</td>
+                          <td className="px-3 py-2 text-right font-mono font-bold" style={{ color: 'var(--lime)' }}>
+                            {fmt(f.items.reduce((s, it) => s + it.subtotal, 0))}
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--text-muted)' }}>
+                            {fmt(f.items.reduce((s, it) => s + it.iva_monto, 0))}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              {/* Estado */}
+              <SectionTitle label="Estado" />
+              <div className="flex flex-wrap gap-2 pb-2">
+                {ESTADOS.map((e) => (
+                  <button
+                    key={e}
+                    disabled={changingEstado}
+                    onClick={() => changeEstado(e)}
+                    className="text-xs px-3 py-1 rounded-lg font-medium transition-all"
+                    style={{
+                      background: f.estado === e ? ESTADO_COLOR[e].bg : 'var(--surface)',
+                      color: f.estado === e ? ESTADO_COLOR[e].color : 'var(--text-muted)',
+                      border: `1px solid ${f.estado === e ? ESTADO_COLOR[e].color : 'var(--border)'}`,
+                    }}
+                  >{e}</button>
+                ))}
+              </div>
+
+              {/* Observaciones */}
+              <SectionTitle label="Observaciones" />
+              <textarea
+                className="input w-full text-xs resize-none mb-2"
+                rows={3}
+                value={obs}
+                onChange={(e) => setObs(e.target.value)}
+                placeholder="Anotar observaciones contables, de pago, etc."
+              />
+              <button onClick={saveObs} disabled={savingObs} className="btn-primary text-xs py-1 px-4 mb-4">
+                {savingObs ? 'Guardando…' : 'Guardar observaciones'}
+              </button>
+
+              {f.xml_filename && (
+                <p className="text-xs pb-4" style={{ color: 'var(--text-muted)' }}>Archivo: {f.xml_filename}</p>
+              )}
+            </>
+          ) : (
+            <p className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No se pudo cargar la factura</p>
           )}
         </div>
       </div>
@@ -220,7 +436,7 @@ export default function FacturasElectronicasPage() {
   const [search, setSearch] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('')
   const [filtroRet, setFiltroRet] = useState('')
-  const [selected, setSelected] = useState<FacturaElectronica | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const debouncedSearch = useDebounce(search, 350)
   const limit = 50
@@ -258,10 +474,8 @@ export default function FacturasElectronicasPage() {
         </div>
       </div>
 
-      {/* Upload */}
       <UploadZone onUploaded={load} />
 
-      {/* KPIs */}
       {resumen && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <KPI label="Total facturas" value={String(total)} sub={`${resumen.con_retencion} con retención`} />
@@ -273,7 +487,6 @@ export default function FacturasElectronicasPage() {
         </div>
       )}
 
-      {/* Filtros */}
       <div className="flex flex-wrap gap-2 items-center">
         <input
           type="search"
@@ -292,20 +505,27 @@ export default function FacturasElectronicasPage() {
           <option value="false">Sin retención</option>
         </select>
         {(search || filtroEstado || filtroRet) && (
-          <button onClick={() => { setSearch(''); setFiltroEstado(''); setFiltroRet('') }} className="text-xs px-3 py-1.5 rounded-lg" style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+          <button
+            onClick={() => { setSearch(''); setFiltroEstado(''); setFiltroRet('') }}
+            className="text-xs px-3 py-1.5 rounded-lg"
+            style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+          >
             Limpiar filtros
           </button>
         )}
       </div>
 
-      {/* Tabla */}
       <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
                 {['Número', 'Fecha', 'Proveedor', 'NIT', 'Subtotal', 'IVA', 'Retenciones', 'Total a pagar', 'Estado', ''].map((h, i) => (
-                  <th key={h + i} className={`px-4 py-3 text-xs font-semibold ${i < 4 ? 'text-left' : 'text-right'} ${i === 9 ? 'text-center' : ''}`} style={{ color: 'var(--text-muted)' }}>{h}</th>
+                  <th
+                    key={h + i}
+                    className={`px-4 py-3 text-xs font-semibold ${i < 4 ? 'text-left' : 'text-right'} ${i === 9 ? 'text-center' : ''}`}
+                    style={{ color: 'var(--text-muted)' }}
+                  >{h}</th>
                 ))}
               </tr>
             </thead>
@@ -314,12 +534,18 @@ export default function FacturasElectronicasPage() {
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
                     {Array.from({ length: 9 }).map((__, j) => (
-                      <td key={j} className="px-4 py-3"><div className="h-3 rounded animate-pulse" style={{ background: 'var(--surface)', width: j === 2 ? '140px' : '60px' }} /></td>
+                      <td key={j} className="px-4 py-3">
+                        <div className="h-3 rounded animate-pulse" style={{ background: 'var(--surface)', width: j === 2 ? '140px' : '60px' }} />
+                      </td>
                     ))}
                   </tr>
                 ))
               ) : facturas.length === 0 ? (
-                <tr><td colSpan={10} className="text-center py-12 text-sm" style={{ color: 'var(--text-muted)' }}>No hay facturas. Sube archivos XML arriba.</td></tr>
+                <tr>
+                  <td colSpan={10} className="text-center py-12 text-sm" style={{ color: 'var(--text-muted)' }}>
+                    No hay facturas. Sube archivos XML arriba.
+                  </td>
+                </tr>
               ) : facturas.map((f) => {
                 const ret = (f.retefuente ?? 0) + (f.reteiva ?? 0) + (f.reteica ?? 0)
                 return (
@@ -329,14 +555,20 @@ export default function FacturasElectronicasPage() {
                     style={{ borderBottom: '1px solid var(--border)' }}
                     onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface)')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = '')}
-                    onClick={() => setSelected(f)}
+                    onClick={() => setSelectedId(f.id)}
                   >
                     <td className="px-4 py-3">
                       <span className="font-mono text-xs font-bold" style={{ color: 'var(--lime)' }}>{f.numero}</span>
+                      {f.dian_validado && (
+                        <span className="ml-1 text-xs" style={{ color: 'var(--lime)', opacity: 0.7 }} title="Validado DIAN">✓</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 font-mono text-xs" style={{ color: 'var(--text-muted)' }}>{f.fecha_emision}</td>
                     <td className="px-4 py-3 max-w-[180px]">
                       <p className="truncate text-xs font-medium" style={{ color: 'var(--text)' }}>{f.proveedor_nombre ?? '—'}</p>
+                      {f.proveedor_ciudad && (
+                        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{f.proveedor_ciudad}</p>
+                      )}
                     </td>
                     <td className="px-4 py-3 font-mono text-xs" style={{ color: 'var(--text-muted)' }}>{f.proveedor_nit ?? '—'}</td>
                     <td className="px-4 py-3 text-right font-mono text-xs" style={{ color: 'var(--text)' }}>{fmt(f.subtotal)}</td>
@@ -369,13 +601,21 @@ export default function FacturasElectronicasPage() {
             {facturas.length > 0 && (
               <tfoot>
                 <tr style={{ background: 'var(--surface)', borderTop: '2px solid var(--border)' }}>
-                  <td colSpan={4} className="px-4 py-3 text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>TOTAL VISIBLE ({facturas.length})</td>
-                  <td className="px-4 py-3 text-right font-mono text-xs font-bold" style={{ color: 'var(--text)' }}>{fmt(facturas.reduce((s, f) => s + f.subtotal, 0))}</td>
-                  <td className="px-4 py-3 text-right font-mono text-xs font-bold" style={{ color: 'var(--text)' }}>{fmt(facturas.reduce((s, f) => s + f.iva, 0))}</td>
+                  <td colSpan={4} className="px-4 py-3 text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+                    TOTAL VISIBLE ({facturas.length})
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono text-xs font-bold" style={{ color: 'var(--text)' }}>
+                    {fmt(facturas.reduce((s, f) => s + f.subtotal, 0))}
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono text-xs font-bold" style={{ color: 'var(--text)' }}>
+                    {fmt(facturas.reduce((s, f) => s + f.iva, 0))}
+                  </td>
                   <td className="px-4 py-3 text-right font-mono text-xs font-bold" style={{ color: '#f59e0b' }}>
                     {fmt(facturas.reduce((s, f) => s + (f.retefuente + f.reteiva + f.reteica), 0))}
                   </td>
-                  <td className="px-4 py-3 text-right font-mono text-xs font-bold" style={{ color: 'var(--lime)' }}>{fmt(facturas.reduce((s, f) => s + f.total_pagar, 0))}</td>
+                  <td className="px-4 py-3 text-right font-mono text-xs font-bold" style={{ color: 'var(--lime)' }}>
+                    {fmt(facturas.reduce((s, f) => s + f.total_pagar, 0))}
+                  </td>
                   <td colSpan={2} />
                 </tr>
               </tfoot>
@@ -384,7 +624,6 @@ export default function FacturasElectronicasPage() {
         </div>
       </div>
 
-      {/* Paginación */}
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-3">
           <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="btn-secondary text-xs py-1 px-4 disabled:opacity-40">← Anterior</button>
@@ -393,12 +632,11 @@ export default function FacturasElectronicasPage() {
         </div>
       )}
 
-      {/* Modal detalle */}
-      {selected && (
+      {selectedId && (
         <DetalleModal
-          factura={selected}
-          onClose={() => setSelected(null)}
-          onUpdated={() => { load(); setSelected(null) }}
+          facturaId={selectedId}
+          onClose={() => setSelectedId(null)}
+          onUpdated={() => { load() }}
         />
       )}
     </div>
