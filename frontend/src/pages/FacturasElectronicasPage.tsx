@@ -39,16 +39,23 @@ function UploadZone({ onUploaded }: { onUploaded: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null)
 
   const processFiles = async (list: FileList | File[]) => {
-    const xmlFiles = Array.from(list).filter((f) => f.name.toLowerCase().endsWith('.xml'))
-    if (!xmlFiles.length) { toast.error('Solo se aceptan archivos .xml'); return }
-    setFiles(xmlFiles)
+    const accepted = Array.from(list).filter((f) => /\.(xml|zip)$/i.test(f.name))
+    if (!accepted.length) { toast.error('Solo se aceptan archivos .xml o .zip'); return }
+    setFiles(accepted)
     setUploading(true)
     let ok = 0
-    let errors: string[] = []
-    for (const file of xmlFiles) {
+    const errors: string[] = []
+    for (const file of accepted) {
       try {
-        await facturasAPI.upload(file)
-        ok++
+        const res = await facturasAPI.upload(file)
+        const data = res.data as any
+        // ZIP returns { procesados, errores, facturas }; XML returns single factura
+        if (data?.procesados != null) {
+          ok += data.procesados
+          ;(data.errores ?? []).forEach((e: any) => errors.push(`${e.archivo}: ${e.error}`))
+        } else {
+          ok++
+        }
       } catch (e: any) {
         errors.push(`${file.name}: ${e?.response?.data?.detail ?? 'Error'}`)
       }
@@ -72,7 +79,7 @@ function UploadZone({ onUploaded }: { onUploaded: () => void }) {
       onDrop={(e) => { e.preventDefault(); setDragging(false); processFiles(e.dataTransfer.files) }}
       onClick={() => inputRef.current?.click()}
     >
-      <input ref={inputRef} type="file" accept=".xml" multiple className="hidden" onChange={(e) => e.target.files && processFiles(e.target.files)} />
+      <input ref={inputRef} type="file" accept=".xml,.zip" multiple className="hidden" onChange={(e) => e.target.files && processFiles(e.target.files)} />
       <div className="text-3xl">{uploading ? '⏳' : '📄'}</div>
       {uploading ? (
         <div className="text-center">
@@ -87,7 +94,7 @@ function UploadZone({ onUploaded }: { onUploaded: () => void }) {
             Arrastra facturas XML aquí o haz click
           </p>
           <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-            Formato DIAN UBL 2.1 · Puedes subir varios archivos a la vez
+            Formato DIAN UBL 2.1 · Archivos .xml o .zip con XMLs adentro · Varios a la vez
           </p>
         </div>
       )}

@@ -1,7 +1,9 @@
 """Facturas electrónicas — upload XML DIAN, listado y control de retenciones."""
 from __future__ import annotations
 
+import io
 import math
+import zipfile
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
@@ -44,7 +46,31 @@ def _to_dict(f: FacturaElectronica) -> dict:
     }
 
 
-# ── Upload XML ────────────────────────────────────────────────────────────────
+# ── Helpers internos ──────────────────────────────────────────────────────────
+
+def _decode_xml(raw: bytes) -> str:
+    for enc in ('utf-8', 'latin-1', 'utf-8-sig'):
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    raise ValueError("Codificación del XML no soportada")
+
+
+def _save_one_xml(db, xml_content: str, filename: str, observaciones: str) -> dict:
+    parsed = parse_dian_xml(xml_content)
+    factura = FacturaElectronica(
+        **parsed,
+        xml_filename=filename,
+        xml_content=xml_content,
+        observaciones=observaciones or None,
+    )
+    db.add(factura)
+    db.flush()
+    return _to_dict(factura)
+
+
+# ── Upload XML / ZIP ──────────────────────────────────────────────────────────
 
 @router.post("/upload", status_code=201)
 async def upload_factura(
@@ -53,35 +79,51 @@ async def upload_factura(
     db: Session = Depends(get_db_session),
     _: Usuario = Depends(get_authenticated_user),
 ):
-    if not file.filename or not file.filename.lower().endswith('.xml'):
-        raise HTTPException(400, "Solo se aceptan archivos XML")
+    fname = (file.filename or '').lower()
+    if not fname.endswith('.xml') and not fname.endswith('.zip'):
+        raise HTTPException(400, "Solo se aceptan archivos .xml o .zip")
 
     raw = await file.read()
-    try:
-        xml_content = raw.decode('utf-8')
-    except UnicodeDecodeError:
+    obs = observaciones.strip()
+
+    # ── ZIP: extraer todos los .xml internos ──────────────────────────────────
+    if fname.endswith('.zip'):
         try:
-            xml_content = raw.decode('latin-1')
-        except Exception:
-            raise HTTPException(400, "No se pudo leer el archivo XML (codificación no soportada)")
+            zf = zipfile.ZipFile(io.BytesIO(raw))
+        except zipfile.BadZipFile:
+            raise HTTPException(400, "El archivo ZIP está corrupto o no es válido")
+
+        xml_names = [n for n in zf.namelist() if n.lower().endswith('.xml') and not n.startswith('__MACOSX')]
+        if not xml_names:
+            raise HTTPException(422, "El ZIP no contiene archivos XML")
+
+        saved = []
+        errors = []
+        for name in xml_names:
+            try:
+                content = _decode_xml(zf.read(name))
+                saved.append(_save_one_xml(db, content, name.split('/')[-1], obs))
+            except (ValueError, Exception) as e:
+                errors.append({"archivo": name.split('/')[-1], "error": str(e)})
+
+        db.commit()
+        return {"procesados": len(saved), "errores": errors, "facturas": saved}
+
+    # ── XML directo ───────────────────────────────────────────────────────────
+    try:
+        xml_content = _decode_xml(raw)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
     try:
-        parsed = parse_dian_xml(xml_content)
+        result = _save_one_xml(db, xml_content, file.filename or 'factura.xml', obs)
+        db.commit()
     except ValueError as e:
         raise HTTPException(422, str(e))
     except Exception as e:
         raise HTTPException(422, f"Error al procesar XML: {e}")
 
-    factura = FacturaElectronica(
-        **parsed,
-        xml_filename=file.filename,
-        xml_content=xml_content,
-        observaciones=observaciones.strip() or None,
-    )
-    db.add(factura)
-    db.commit()
-    db.refresh(factura)
-    return _to_dict(factura)
+    return result
 
 
 # ── Listado ───────────────────────────────────────────────────────────────────
