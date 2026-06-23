@@ -29,9 +29,12 @@ def _esc(s) -> str:
 
 
 def _col_exists(db: Session, table: str, col: str) -> bool:
+    """Use pg_attribute (always accessible) instead of information_schema."""
     r = db.execute(text(
-        "SELECT COUNT(*) FROM information_schema.columns "
-        f"WHERE table_name='{table}' AND column_name='{col}'"
+        "SELECT COUNT(*) FROM pg_attribute a "
+        "JOIN pg_class c ON a.attrelid = c.oid "
+        f"WHERE c.relname = '{table}' AND a.attname = '{col}' "
+        "AND a.attnum > 0 AND NOT a.attisdropped"
     )).scalar()
     return bool(r)
 
@@ -175,6 +178,32 @@ def seed_status(
     return {"running": _seed_running, "count": _seeded_count(db)}
 
 
+@router.get("/debug")
+def debug_apu(
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    """Diagnostic endpoint — returns raw counts and sample data."""
+    total = db.execute(text("SELECT COUNT(*) FROM apu")).scalar()
+    col_exists = _col_exists(db, 'apu', 'capitulo_codigo')
+    with_cap = 0
+    sample = []
+    caps = []
+    if col_exists:
+        with_cap = db.execute(text("SELECT COUNT(*) FROM apu WHERE capitulo_codigo IS NOT NULL")).scalar()
+        rows = db.execute(text("SELECT codigo, capitulo_codigo, capitulo FROM apu WHERE capitulo_codigo IS NOT NULL LIMIT 5")).fetchall()
+        sample = [{"codigo": r[0], "cap_code": r[1], "cap_name": r[2]} for r in rows]
+        cap_rows = db.execute(text("SELECT DISTINCT capitulo_codigo, capitulo FROM apu WHERE capitulo_codigo IS NOT NULL ORDER BY capitulo_codigo")).fetchall()
+        caps = [{"codigo": r[0], "nombre": r[1]} for r in cap_rows]
+    return {
+        "total_apu": int(total or 0),
+        "col_capitulo_codigo_exists": col_exists,
+        "with_capitulo": int(with_cap or 0),
+        "sample": sample,
+        "capitulos": caps,
+    }
+
+
 # ── Capítulos ────────────────────────────────────────────────────────────────
 
 @router.get("/capitulos")
@@ -182,16 +211,16 @@ def list_capitulos(
     db: Session = Depends(get_db_session),
     _: Usuario = Depends(get_authenticated_user),
 ):
-    if not _col_exists(db, 'apu', 'capitulo_codigo'):
+    try:
+        rows = (
+            db.query(APU.capitulo_codigo, APU.capitulo)
+            .filter(APU.deleted_at.is_(None), APU.capitulo_codigo.isnot(None))
+            .distinct()
+            .order_by(APU.capitulo_codigo)
+            .all()
+        )
+    except Exception:
         return []
-
-    rows = (
-        db.query(APU.capitulo_codigo, APU.capitulo)
-        .filter(APU.deleted_at.is_(None), APU.capitulo_codigo.isnot(None))
-        .distinct()
-        .order_by(APU.capitulo_codigo)
-        .all()
-    )
 
     def sort_key(r):
         try: return int(r[0])
@@ -211,8 +240,6 @@ def list_apu(
     db: Session = Depends(get_db_session),
     _: Usuario = Depends(get_authenticated_user),
 ):
-    if not _col_exists(db, 'apu', 'capitulo_codigo'):
-        return {"total": 0, "page": page, "pages": 1, "data": []}
     q = db.query(APU).filter(APU.deleted_at.is_(None))
 
     if capitulo:
