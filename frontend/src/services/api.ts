@@ -223,6 +223,56 @@ export const trabajadoresAPI = {
 
 const _noToast = { _skipToast: true } as any
 
+export interface FacturaElectronica {
+  id: string
+  numero: string
+  fecha_emision: string
+  proveedor_nit: string | null
+  proveedor_nombre: string | null
+  adquiriente_nit: string | null
+  adquiriente_nombre: string | null
+  subtotal: number
+  iva: number
+  retefuente: number
+  reteiva: number
+  reteica: number
+  total_bruto: number
+  total_pagar: number
+  tiene_retencion: boolean
+  estado: string
+  xml_filename: string | null
+  observaciones: string | null
+  created_at: string
+}
+
+export interface FacturasResumen {
+  subtotal_total: number
+  iva_total: number
+  retefuente_total: number
+  reteiva_total: number
+  reteica_total: number
+  pagar_total: number
+  con_retencion: number
+}
+
+export const facturasAPI = {
+  upload: (file: File, observaciones?: string) => {
+    const form = new FormData()
+    form.append('file', file)
+    if (observaciones) form.append('observaciones', observaciones)
+    return api.post<FacturaElectronica>('/facturas-electronicas/upload', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+  getAll: (params?: object) =>
+    api.get<{ data: FacturaElectronica[]; total: number; page: number; limit: number; pages: number; resumen: FacturasResumen }>('/facturas-electronicas/', { params }),
+  getById: (id: string) => api.get<FacturaElectronica>(`/facturas-electronicas/${id}`),
+  updateEstado: (id: string, estado: string) =>
+    api.patch<{ ok: boolean; estado: string }>(`/facturas-electronicas/${id}/estado`, { estado }),
+  update: (id: string, data: object) => api.patch<FacturaElectronica>(`/facturas-electronicas/${id}`, data),
+  remove: (id: string) => api.delete(`/facturas-electronicas/${id}`),
+}
+
 export const apuAPI = {
   getCapitulos: () => api.get<{ codigo: string; nombre: string }[]>('/apu/capitulos', _noToast),
   getAll: (params?: object) => api.get<PaginatedResponse<APUItem>>('/apu/', { params, ..._noToast }),

@@ -23,6 +23,7 @@ const ContratoDetailPage = lazy(() => import('./pages/ContratoDetailPage'))
 const TrabajadoresPage = lazy(() => import('./pages/TrabajadoresPage'))
 const TrabajadorDetailPage = lazy(() => import('./pages/TrabajadorDetailPage'))
 const APUPage = lazy(() => import('./pages/APUPage'))
+const FacturasElectronicasPage = lazy(() => import('./pages/FacturasElectronicasPage'))
 
 function PageLoader() {
   return (
@@ -85,6 +86,7 @@ export default function App() {
             <Route path="trabajadores" element={<TrabajadoresPage />} />
             <Route path="trabajadores/:id" element={<TrabajadorDetailPage />} />
             <Route path="apu" element={<APUPage />} />
+            <Route path="facturas" element={<FacturasElectronicasPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
