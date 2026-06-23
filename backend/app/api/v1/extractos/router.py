@@ -591,3 +591,65 @@ def conciliacion_stats(
         "rechazados":       int(row[2] or 0),
         "monto_conciliado": float(row[3] or 0),
     }
+
+
+# ── Matching monto+fecha: movimientos ↔ facturas ──────────────────────────────
+
+@router.get("/conciliacion/factura/{factura_id}/movimientos")
+def movimientos_similares_a_factura(
+    factura_id: UUID,
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    from app.services.conciliacion import movimientos_para_factura
+    return movimientos_para_factura(db, str(factura_id))
+
+
+@router.get("/conciliacion/movimiento/{movimiento_id}/facturas")
+def facturas_similares_a_movimiento(
+    movimiento_id: UUID,
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    from app.services.conciliacion import facturas_para_movimiento
+    return facturas_para_movimiento(db, str(movimiento_id))
+
+
+@router.get("/conciliacion/extracto/{extracto_id}/matches")
+def matches_en_extracto_endpoint(
+    extracto_id: UUID,
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    from app.services.conciliacion import matches_en_extracto
+    return matches_en_extracto(db, str(extracto_id))
+
+
+@router.post("/conciliacion/vincular-movimiento")
+def vincular_movimiento(
+    body: dict,
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    mid = body.get("movimiento_id")
+    fid = body.get("factura_id")
+    if not mid or not fid:
+        raise HTTPException(400, "Se requieren movimiento_id y factura_id")
+    from app.services.conciliacion import vincular_movimiento_factura
+    result = vincular_movimiento_factura(db, mid, fid)
+    return {"ok": True, "mensaje": "Factura marcada como PAGADA", **result}
+
+
+@router.post("/conciliacion/descartar-movimiento")
+def descartar_movimiento(
+    body: dict,
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    mid = body.get("movimiento_id")
+    fid = body.get("factura_id")
+    if not mid or not fid:
+        raise HTTPException(400, "Se requieren movimiento_id y factura_id")
+    from app.services.conciliacion import rechazar_movimiento_factura
+    rechazar_movimiento_factura(db, mid, fid)
+    return {"ok": True}

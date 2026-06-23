@@ -396,3 +396,264 @@ def listar_sugerencias(
         'limit': limit,
         'pages': max(1, -(-int(count) // limit)),
     }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MATCHING POR MONTO + FECHA  (extracto ↔ facturas)
+# Criterio: valor DEBITO del extracto coincide con total_pagar de la factura
+# dentro de ±2% y con hasta 8 días de diferencia de fecha.
+# ══════════════════════════════════════════════════════════════════════════════
+
+_DIAS_VENTANA = 8
+_TOLERANCIA   = 0.02   # 2%
+
+
+def movimientos_para_factura(db: Session, factura_id: str) -> list[dict]:
+    """
+    Dado un factura_id, devuelve movimientos de extracto (tipo DEBITO)
+    que coinciden en monto ±2% y fecha ±8 días.
+    Excluye movimientos ya vinculados y aprobados.
+    """
+    rows = db.execute(text("""
+        SELECT
+            m.id,
+            m.extracto_id,
+            m.fecha,
+            m.hora,
+            m.descripcion_servicio,
+            m.codigo_servicio,
+            m.valor,
+            m.cuenta_ref1,
+            m.cuenta_ref2,
+            m.saldo,
+            e.cuenta,
+            e.periodo,
+            fe.total_pagar,
+            fe.fecha_emision,
+            ABS(m.valor - fe.total_pagar)                       AS diff_monto,
+            ABS(m.valor - fe.total_pagar) / GREATEST(m.valor, fe.total_pagar) * 100 AS diff_pct,
+            ABS(m.fecha - fe.fecha_emision)                     AS diff_dias,
+            -- Si ya está vinculado
+            (SELECT estado FROM pagos_facturas_links pfl
+             WHERE pfl.movimiento_id = m.id AND pfl.factura_id = :fid
+             LIMIT 1) AS estado_link
+        FROM extractos_bancarios_movimientos m
+        JOIN extractos_bancarios e ON e.id = m.extracto_id
+        JOIN facturas_electronicas fe ON fe.id = :fid
+        WHERE m.tipo = 'DEBITO'
+          AND fe.total_pagar > 0
+          AND ABS(m.valor - fe.total_pagar) / GREATEST(m.valor, fe.total_pagar) <= :tol
+          AND ABS(m.fecha - fe.fecha_emision) <= :dias
+          -- Excluir ya rechazados
+          AND m.id NOT IN (
+              SELECT movimiento_id FROM pagos_facturas_links
+              WHERE factura_id = :fid
+                AND movimiento_id IS NOT NULL
+                AND estado = 'RECHAZADO'
+          )
+        ORDER BY diff_dias ASC, diff_monto ASC
+        LIMIT 20
+    """), {"fid": factura_id, "tol": _TOLERANCIA, "dias": _DIAS_VENTANA}).fetchall()
+
+    result = []
+    for r in rows:
+        result.append({
+            "movimiento_id":     str(r[0]),
+            "extracto_id":       str(r[1]),
+            "fecha":             str(r[2]),
+            "hora":              str(r[3]) if r[3] else None,
+            "descripcion":       r[4] or r[5] or "—",
+            "valor":             float(r[6] or 0),
+            "cuenta_ref1":       r[7],
+            "cuenta_ref2":       r[8],
+            "saldo":             float(r[9] or 0),
+            "cuenta":            r[10],
+            "periodo":           r[11],
+            "factura_total":     float(r[12] or 0),
+            "factura_fecha":     str(r[13]) if r[13] else None,
+            "diff_monto":        float(r[14] or 0),
+            "diff_pct":          round(float(r[15] or 0), 2),
+            "diff_dias":         int(r[16] or 0),
+            "estado_link":       r[17],   # None | PENDIENTE | APROBADO | RECHAZADO
+        })
+    return result
+
+
+def facturas_para_movimiento(db: Session, movimiento_id: str) -> list[dict]:
+    """
+    Dado un movimiento_id (DEBITO), devuelve facturas que coinciden
+    en monto ±2% y fecha ±8 días y que no estén ya pagadas.
+    """
+    rows = db.execute(text("""
+        SELECT
+            fe.id,
+            fe.numero,
+            fe.proveedor_nombre,
+            fe.proveedor_nit,
+            fe.total_pagar,
+            fe.fecha_emision,
+            fe.estado,
+            m.valor,
+            m.fecha,
+            ABS(m.valor - fe.total_pagar)                       AS diff_monto,
+            ABS(m.valor - fe.total_pagar) / GREATEST(m.valor, fe.total_pagar) * 100 AS diff_pct,
+            ABS(m.fecha - fe.fecha_emision)                     AS diff_dias,
+            (SELECT estado FROM pagos_facturas_links pfl
+             WHERE pfl.movimiento_id = :mid AND pfl.factura_id = fe.id
+             LIMIT 1) AS estado_link
+        FROM extractos_bancarios_movimientos m
+        JOIN facturas_electronicas fe
+          ON fe.total_pagar > 0
+         AND ABS(m.valor - fe.total_pagar) / GREATEST(m.valor, fe.total_pagar) <= :tol
+         AND ABS(m.fecha - fe.fecha_emision) <= :dias
+         AND fe.estado NOT IN ('PAGADA', 'PAGADO')
+        WHERE m.id = :mid
+          AND m.tipo = 'DEBITO'
+          AND fe.id NOT IN (
+              SELECT factura_id FROM pagos_facturas_links
+              WHERE movimiento_id = :mid
+                AND estado = 'RECHAZADO'
+          )
+        ORDER BY diff_dias ASC, diff_monto ASC
+        LIMIT 10
+    """), {"mid": movimiento_id, "tol": _TOLERANCIA, "dias": _DIAS_VENTANA}).fetchall()
+
+    result = []
+    for r in rows:
+        result.append({
+            "factura_id":    str(r[0]),
+            "numero":        r[1],
+            "proveedor":     r[2],
+            "nit":           r[3],
+            "total_pagar":   float(r[4] or 0),
+            "fecha_emision": str(r[5]) if r[5] else None,
+            "estado":        r[6],
+            "valor_mov":     float(r[7] or 0),
+            "fecha_mov":     str(r[8]) if r[8] else None,
+            "diff_monto":    float(r[9] or 0),
+            "diff_pct":      round(float(r[10] or 0), 2),
+            "diff_dias":     int(r[11] or 0),
+            "estado_link":   r[12],
+        })
+    return result
+
+
+def matches_en_extracto(db: Session, extracto_id: str) -> dict:
+    """
+    Para todos los movimientos DEBITO de un extracto,
+    devuelve un dict {movimiento_id: [factura_match, ...]}
+    solo para los que tienen al menos una factura coincidente.
+    """
+    rows = db.execute(text("""
+        SELECT
+            m.id                AS movimiento_id,
+            fe.id               AS factura_id,
+            fe.numero,
+            fe.proveedor_nombre,
+            fe.total_pagar,
+            fe.fecha_emision,
+            fe.estado,
+            ABS(m.valor - fe.total_pagar)                       AS diff_monto,
+            ABS(m.valor - fe.total_pagar) / GREATEST(m.valor, fe.total_pagar) * 100 AS diff_pct,
+            ABS(m.fecha - fe.fecha_emision)                     AS diff_dias,
+            (SELECT estado FROM pagos_facturas_links pfl
+             WHERE pfl.movimiento_id = m.id AND pfl.factura_id = fe.id
+             LIMIT 1) AS estado_link
+        FROM extractos_bancarios_movimientos m
+        JOIN facturas_electronicas fe
+          ON fe.total_pagar > 0
+         AND ABS(m.valor - fe.total_pagar) / GREATEST(m.valor, fe.total_pagar) <= :tol
+         AND ABS(m.fecha - fe.fecha_emision) <= :dias
+         AND fe.estado NOT IN ('PAGADA', 'PAGADO')
+        WHERE m.extracto_id = :eid
+          AND m.tipo = 'DEBITO'
+          AND fe.id NOT IN (
+              SELECT factura_id FROM pagos_facturas_links
+              WHERE movimiento_id = m.id AND estado = 'RECHAZADO'
+          )
+        ORDER BY diff_dias ASC
+    """), {"eid": extracto_id, "tol": _TOLERANCIA, "dias": _DIAS_VENTANA}).fetchall()
+
+    result: dict[str, list] = {}
+    for r in rows:
+        mid = str(r[0])
+        if mid not in result:
+            result[mid] = []
+        result[mid].append({
+            "factura_id":    str(r[1]),
+            "numero":        r[2],
+            "proveedor":     r[3],
+            "total_pagar":   float(r[4] or 0),
+            "fecha_emision": str(r[5]) if r[5] else None,
+            "estado":        r[6],
+            "diff_monto":    float(r[7] or 0),
+            "diff_pct":      round(float(r[8] or 0), 2),
+            "diff_dias":     int(r[9] or 0),
+            "estado_link":   r[10],
+        })
+    return result
+
+
+def vincular_movimiento_factura(db: Session, movimiento_id: str, factura_id: str) -> dict:
+    """
+    Crea o aprueba el enlace movimiento ↔ factura.
+    Marca la factura como PAGADA.
+    """
+    existing = db.execute(text("""
+        SELECT id, estado FROM pagos_facturas_links
+        WHERE movimiento_id = :mid AND factura_id = :fid
+        LIMIT 1
+    """), {"mid": movimiento_id, "fid": factura_id}).fetchone()
+
+    if existing and existing[1] == 'APROBADO':
+        return {"ok": True, "ya_existia": True}
+
+    if existing:
+        db.execute(text("""
+            UPDATE pagos_facturas_links
+            SET estado='APROBADO', aprobado_en=NOW()
+            WHERE id=:id
+        """), {"id": str(existing[0])})
+    else:
+        db.execute(text("""
+            INSERT INTO pagos_facturas_links
+                (tipo_origen, movimiento_id, factura_id, score, razones, estado, aprobado_en)
+            VALUES ('MOVIMIENTO', :mid, :fid, 85,
+                    '["Monto coincide (±2%)", "Fecha dentro de 8 días"]'::jsonb,
+                    'APROBADO', NOW())
+        """), {"mid": movimiento_id, "fid": factura_id})
+
+    # Marcar factura como PAGADA
+    db.execute(text("""
+        UPDATE facturas_electronicas
+        SET estado = 'PAGADA'
+        WHERE id = :fid AND estado NOT IN ('PAGADA', 'PAGADO')
+    """), {"fid": factura_id})
+
+    db.commit()
+    return {"ok": True, "ya_existia": False}
+
+
+def rechazar_movimiento_factura(db: Session, movimiento_id: str, factura_id: str) -> None:
+    """Descarta el par movimiento ↔ factura para que no vuelva a sugerirse."""
+    existing = db.execute(text("""
+        SELECT id FROM pagos_facturas_links
+        WHERE movimiento_id = :mid AND factura_id = :fid
+        LIMIT 1
+    """), {"mid": movimiento_id, "fid": factura_id}).fetchone()
+
+    if existing:
+        db.execute(text("""
+            UPDATE pagos_facturas_links
+            SET estado='RECHAZADO', rechazado_en=NOW()
+            WHERE id=:id
+        """), {"id": str(existing[0])})
+    else:
+        db.execute(text("""
+            INSERT INTO pagos_facturas_links
+                (tipo_origen, movimiento_id, factura_id, score, razones, estado, rechazado_en)
+            VALUES ('MOVIMIENTO', :mid, :fid, 85,
+                    '["Monto coincide (±2%)", "Fecha dentro de 8 días"]'::jsonb,
+                    'RECHAZADO', NOW())
+        """), {"mid": movimiento_id, "fid": factura_id})
+    db.commit()

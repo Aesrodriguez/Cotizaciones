@@ -5,6 +5,7 @@ import {
   type ExtractoBancario,
   type ExtractoMovimiento,
   type ExtractoResumen,
+  type FacturaMatch,
 } from '../services/api'
 import { formatCurrency } from '../utils/format'
 import toast from 'react-hot-toast'
@@ -319,15 +320,110 @@ function DetalleExpandido({ m }: { m: ExtractoMovimiento }) {
   )
 }
 
+// ── Mini-panel de facturas coincidentes en extracto ───────────────────────────
+function FacturasMatchPanel({
+  matches, movimientoId, onVinculado,
+}: {
+  matches: FacturaMatch[]
+  movimientoId: string
+  onVinculado: () => void
+}) {
+  const [actionId, setActionId] = useState<string | null>(null)
+
+  const fmtDate = (s: string | null) => {
+    if (!s) return '—'
+    try { return new Date(s + 'T00:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) }
+    catch { return s }
+  }
+
+  const handleVincular = async (facturaId: string) => {
+    setActionId(facturaId)
+    try {
+      await extractosAPI.vincularMovimiento(movimientoId, facturaId)
+      toast.success('✓ Pago vinculado · Factura marcada como PAGADA')
+      onVinculado()
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail ?? 'Error al vincular')
+    } finally { setActionId(null) }
+  }
+
+  const handleDescartar = async (facturaId: string) => {
+    setActionId(facturaId)
+    try { await extractosAPI.descartarMovimiento(movimientoId, facturaId) }
+    catch { } finally { setActionId(null) }
+  }
+
+  return (
+    <tr style={{ background: 'rgba(59,130,246,0.04)', borderBottom: '1px solid var(--border)' }}>
+      <td colSpan={7} className="px-4 pb-3 pt-1">
+        <p className="text-xs font-bold mb-2" style={{ color: '#60a5fa' }}>
+          📄 {matches.length === 1 ? 'Factura coincidente' : `${matches.length} facturas coincidentes`} — validar manualmente
+        </p>
+        <div className="space-y-1.5">
+          {matches.map(f => {
+            const isLinked  = f.estado_link === 'APROBADO'
+            const isLoading = actionId === f.factura_id
+            return (
+              <div key={f.factura_id} className="flex items-center justify-between gap-3 rounded-xl px-3 py-2"
+                style={{
+                  background: isLinked ? 'rgba(22,163,74,0.08)' : 'var(--surface)',
+                  border: `1px solid ${isLinked ? 'rgba(22,163,74,0.30)' : 'var(--border)'}`,
+                }}>
+                <div className="min-w-0 text-xs space-y-0.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold" style={{ color: 'var(--text)' }}>
+                      {f.proveedor ?? 'Proveedor desconocido'}
+                    </span>
+                    {f.numero && <span className="font-mono" style={{ color: 'var(--text-muted)' }}>#{f.numero}</span>}
+                    {f.diff_dias === 0
+                      ? <span className="badge-lime">Mismo día</span>
+                      : <span className="badge-muted">{f.diff_dias}d dif.</span>
+                    }
+                    {f.diff_pct === 0
+                      ? <span className="badge-lime">Monto exacto</span>
+                      : <span className="badge-muted">±{f.diff_pct.toFixed(1)}%</span>
+                    }
+                  </div>
+                  <span style={{ color: 'var(--text-muted)' }}>
+                    {fmt(f.total_pagar)} · Fac. {fmtDate(f.fecha_emision)}
+                    {f.nit && ` · NIT ${f.nit}`}
+                  </span>
+                </div>
+                {isLinked ? (
+                  <span className="badge-status-green text-xs whitespace-nowrap flex-shrink-0">✓ Vinculada</span>
+                ) : (
+                  <div className="flex gap-1.5 flex-shrink-0">
+                    <button disabled={isLoading} onClick={() => handleDescartar(f.factura_id)}
+                      className="text-xs px-2 py-1 rounded-lg disabled:opacity-40"
+                      style={{ background: 'var(--card)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                      {isLoading ? '…' : 'No'}
+                    </button>
+                    <button disabled={isLoading} onClick={() => handleVincular(f.factura_id)}
+                      className="btn-primary text-xs py-1 px-3 disabled:opacity-40">
+                      {isLoading ? '…' : '✓ Marcar pagada'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </td>
+    </tr>
+  )
+}
+
 // ── Tabla de movimientos ──────────────────────────────────────────────────────
 function MovimientosTable({
   movimientos, total, page, pages, onPage,
-  resumen, porClasificacion,
+  resumen, porClasificacion, facturaMatches, onMatchVinculado,
 }: {
   movimientos: ExtractoMovimiento[]
   total: number; page: number; pages: number; onPage: (p: number) => void
   resumen: ExtractoResumen | null
   porClasificacion: { clasificacion: string; tipo: string; n: number; total: number }[]
+  facturaMatches: Record<string, FacturaMatch[]>
+  onMatchVinculado: () => void
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
@@ -371,19 +467,22 @@ function MovimientosTable({
                   {movimientos.length === 0 ? (
                     <tr><td colSpan={7} className="text-center py-10 text-sm" style={{ color: 'var(--text-muted)' }}>Sin movimientos</td></tr>
                   ) : movimientos.map((m) => {
-                    const hasDetail = !!(m.detalle_pago || m.detalle_transferencia)
-                    const isOpen    = expanded.has(m.id)
-                    const det = m.detalle_pago ?? m.detalle_transferencia
+                    const hasDetail  = !!(m.detalle_pago || m.detalle_transferencia)
+                    const facMatches = facturaMatches[m.id] ?? []
+                    const hasFacMatch = facMatches.length > 0
+                    const isOpen     = expanded.has(m.id)
+                    const isClickable = hasDetail || hasFacMatch
+                    const det  = m.detalle_pago ?? m.detalle_transferencia
                     const benef = det?.nombre ?? (m.detalle_transferencia?.nombre ?? null)
 
                     return (
                       <>
                         <tr key={m.id}
-                          className={hasDetail ? 'cursor-pointer' : ''}
+                          className={isClickable ? 'cursor-pointer' : ''}
                           style={{ borderBottom: isOpen ? 'none' : '1px solid var(--border)' }}
                           onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface)')}
                           onMouseLeave={e => (e.currentTarget.style.background = '')}
-                          onClick={() => hasDetail && toggle(m.id)}>
+                          onClick={() => isClickable && toggle(m.id)}>
 
                           <td className="px-3 py-2 font-mono whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>
                             {fmtDate(m.fecha)}
@@ -403,13 +502,18 @@ function MovimientosTable({
                                 {det?.nit && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> · {det.nit}</span>}
                               </p>
                             )}
-                            <p className="text-xs mt-0.5 flex items-center gap-2" style={{ color: 'var(--text-muted)' }}>
+                            <p className="text-xs mt-0.5 flex items-center gap-2 flex-wrap" style={{ color: 'var(--text-muted)' }}>
                               {m.clasificacion}
                               {m.banco_codigo && m.banco_codigo !== '4844' && <span>· {m.banco_codigo}</span>}
-                              {/* Estado badge inline */}
                               {det?.estado && <EstadoBadge estado={det.estado} />}
-                              {/* Expand hint */}
-                              {hasDetail && (
+                              {/* Factura match badge */}
+                              {hasFacMatch && (
+                                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md"
+                                  style={{ background: 'rgba(59,130,246,0.12)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.25)' }}>
+                                  📄 {facMatches.length} factura{facMatches.length > 1 ? 's' : ''}
+                                </span>
+                              )}
+                              {isClickable && (
                                 <span style={{ color: 'var(--lime)', fontSize: '10px' }}>
                                   {isOpen ? '▲ ocultar' : '▼ ver detalle'}
                                 </span>
@@ -436,8 +540,17 @@ function MovimientosTable({
                             {fmt(m.saldo)}
                           </td>
                         </tr>
-                        {/* Fila expandida */}
+                        {/* Detalle Excel (pago/transferencia) */}
                         {hasDetail && isOpen && <DetalleExpandido key={m.id + '_det'} m={m} />}
+                        {/* Facturas coincidentes (monto+fecha) */}
+                        {hasFacMatch && isOpen && (
+                          <FacturasMatchPanel
+                            key={m.id + '_fac'}
+                            matches={facMatches}
+                            movimientoId={m.id}
+                            onVinculado={onMatchVinculado}
+                          />
+                        )}
                       </>
                     )
                   })}
@@ -474,6 +587,7 @@ function ExtractoDetalle({ extracto, onBack, onDeleted, detalleResumen, onDetall
   const [movimientos, setMovimientos] = useState<ExtractoMovimiento[]>([])
   const [resumen, setResumen] = useState<ExtractoResumen | null>(null)
   const [porClas, setPorClas] = useState<{ clasificacion: string; tipo: string; n: number; total: number }[]>([])
+  const [facturaMatches, setFacturaMatches] = useState<Record<string, FacturaMatch[]>>({})
   const [loading, setLoading] = useState(false)
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -482,6 +596,13 @@ function ExtractoDetalle({ extracto, onBack, onDeleted, detalleResumen, onDetall
   const [search, setSearch] = useState('')
   const [deleting, setDeleting] = useState(false)
   const dSearch = useDebounce(search, 350)
+
+  const loadMatches = useCallback(async () => {
+    try {
+      const r = await extractosAPI.getMatchesEnExtracto(extracto.id)
+      setFacturaMatches(r.data)
+    } catch { setFacturaMatches({}) }
+  }, [extracto.id])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -497,7 +618,7 @@ function ExtractoDetalle({ extracto, onBack, onDeleted, detalleResumen, onDetall
     finally { setLoading(false) }
   }, [extracto.id, page, tipo, dSearch])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load(); loadMatches() }, [load, loadMatches])
   useEffect(() => { setPage(1) }, [tipo, dSearch])
 
   // Reload movements when a new detalle is uploaded
@@ -573,6 +694,8 @@ function ExtractoDetalle({ extracto, onBack, onDeleted, detalleResumen, onDetall
           movimientos={movimientos} total={total}
           page={page} pages={pages} onPage={setPage}
           resumen={resumen} porClasificacion={porClas}
+          facturaMatches={facturaMatches}
+          onMatchVinculado={loadMatches}
         />
       )}
     </div>

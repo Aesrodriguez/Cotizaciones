@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { facturasAPI, type FacturaElectronica, type FacturasResumen } from '../services/api'
+import { extractosAPI, facturasAPI, type FacturaElectronica, type FacturasResumen, type MovimientoMatch } from '../services/api'
 import { formatCurrency } from '../utils/format'
 import { printFacturaPDF } from '../utils/facturasPDF'
 import toast from 'react-hot-toast'
@@ -112,6 +112,121 @@ function KPI({ label, value, sub }: { label: string; value: string; sub?: string
 }
 
 // ── Modal detalle completo ────────────────────────────────────────────────────
+// ── Panel de movimientos bancarios coincidentes ───────────────────────────────
+function MovimientosCoincidentes({ facturaId, onVinculado }: {
+  facturaId: string
+  onVinculado: () => void
+}) {
+  const [matches, setMatches]     = useState<MovimientoMatch[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [actionId, setActionId]   = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try { const r = await extractosAPI.getMovimientosSimilares(facturaId); setMatches(r.data) }
+    catch { setMatches([]) }
+    finally { setLoading(false) }
+  }, [facturaId])
+
+  useEffect(() => { load() }, [load])
+
+  const handleVincular = async (movimientoId: string) => {
+    setActionId(movimientoId)
+    try {
+      await extractosAPI.vincularMovimiento(movimientoId, facturaId)
+      toast.success('✓ Pago vinculado · Factura marcada como PAGADA')
+      onVinculado()
+      load()
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail ?? 'Error al vincular')
+    } finally { setActionId(null) }
+  }
+
+  const handleDescartar = async (movimientoId: string) => {
+    setActionId(movimientoId)
+    try {
+      await extractosAPI.descartarMovimiento(movimientoId, facturaId)
+      setMatches(prev => prev.filter(m => m.movimiento_id !== movimientoId))
+    } catch { } finally { setActionId(null) }
+  }
+
+  if (loading) return (
+    <div className="space-y-2">
+      {[0,1].map(i => <div key={i} className="h-14 rounded-xl animate-pulse" style={{ background: 'var(--surface)' }} />)}
+    </div>
+  )
+
+  if (matches.length === 0) return (
+    <p className="text-xs py-2" style={{ color: 'var(--text-muted)' }}>
+      No se encontraron movimientos bancarios con monto similar en los últimos 8 días de diferencia.
+    </p>
+  )
+
+  return (
+    <div className="space-y-2">
+      {matches.map(m => {
+        const isLinked   = m.estado_link === 'APROBADO'
+        const isLoading  = actionId === m.movimiento_id
+        const fmtDate = (s: string) => {
+          try { return new Date(s + 'T00:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) }
+          catch { return s }
+        }
+        return (
+          <div key={m.movimiento_id} className="rounded-xl p-3"
+            style={{
+              background: isLinked ? 'rgba(22,163,74,0.07)' : 'var(--surface)',
+              border: `1px solid ${isLinked ? 'rgba(22,163,74,0.35)' : 'var(--border)'}`,
+            }}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold font-mono" style={{ color: isLinked ? '#16a34a' : '#60a5fa' }}>
+                    -{formatCurrency(m.valor)}
+                  </span>
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    {fmtDate(m.fecha)} · Extracto {m.periodo ?? ''}
+                  </span>
+                  {m.diff_dias === 0
+                    ? <span className="badge-lime text-xs">Mismo día</span>
+                    : <span className="badge-muted text-xs">{m.diff_dias}d diferencia</span>
+                  }
+                  {m.diff_pct === 0
+                    ? <span className="badge-lime text-xs">Monto exacto</span>
+                    : <span className="badge-muted text-xs">±{m.diff_pct.toFixed(1)}%</span>
+                  }
+                </div>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  {m.descripcion}
+                  {m.cuenta_ref1 && <span> · Ref: {m.cuenta_ref1}</span>}
+                </p>
+              </div>
+              {isLinked ? (
+                <span className="badge-status-green text-xs whitespace-nowrap flex-shrink-0">✓ Vinculado</span>
+              ) : (
+                <div className="flex gap-1.5 flex-shrink-0">
+                  <button
+                    disabled={isLoading}
+                    onClick={() => handleDescartar(m.movimiento_id)}
+                    className="text-xs px-2 py-1 rounded-lg disabled:opacity-40"
+                    style={{ background: 'var(--card)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                    {isLoading ? '…' : 'No'}
+                  </button>
+                  <button
+                    disabled={isLoading}
+                    onClick={() => handleVincular(m.movimiento_id)}
+                    className="btn-primary text-xs py-1 px-3 disabled:opacity-40">
+                    {isLoading ? '…' : '✓ Es este pago'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function DetalleModal({ facturaId, onClose, onUpdated }: {
   facturaId: string
   onClose: () => void
@@ -123,6 +238,14 @@ function DetalleModal({ facturaId, onClose, onUpdated }: {
   const [savingObs, setSavingObs] = useState(false)
   const [changingEstado, setChangingEstado] = useState(false)
   const [copied, setCopied] = useState(false)
+
+  const reloadFactura = useCallback(() => {
+    facturasAPI.getById(facturaId).then((r) => {
+      setFactura(r.data)
+      setObs(r.data.observaciones ?? '')
+      onUpdated()
+    }).catch(() => {})
+  }, [facturaId, onUpdated])
 
   useEffect(() => {
     facturasAPI.getById(facturaId).then((r) => {
@@ -424,6 +547,28 @@ function DetalleModal({ facturaId, onClose, onUpdated }: {
                     </table>
                   </div>
                 </>
+              )}
+
+              {/* Movimientos bancarios coincidentes */}
+              {f.estado !== 'PAGADA' && f.estado !== 'ANULADA' && (
+                <>
+                  <div className="flex items-center gap-2 pt-4 pb-1">
+                    <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+                      🏦 Movimientos bancarios similares
+                    </p>
+                    <span className="text-xs px-2 py-0.5 rounded-md font-medium"
+                      style={{ background: 'rgba(96,165,250,0.12)', color: '#60a5fa' }}>
+                      monto ±2% · fecha ±8 días
+                    </span>
+                  </div>
+                  <MovimientosCoincidentes facturaId={f.id} onVinculado={reloadFactura} />
+                </>
+              )}
+              {f.estado === 'PAGADA' && (
+                <div className="mt-3 mb-2 flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
+                  style={{ background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.25)', color: '#16a34a' }}>
+                  ✓ Esta factura ya está marcada como PAGADA
+                </div>
               )}
 
               {/* Estado */}

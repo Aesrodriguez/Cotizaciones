@@ -431,6 +431,56 @@ export const extractosAPI = {
   getConciliacionStats: () => api.get<{
     pendientes: number; aprobados: number; rechazados: number; monto_conciliado: number
   }>('/extractos-bancarios/conciliacion/stats'),
+  getMovimientosSimilares: (facturaId: string) =>
+    api.get<MovimientoMatch[]>(`/extractos-bancarios/conciliacion/factura/${facturaId}/movimientos`),
+  getFacturasSimilares: (movimientoId: string) =>
+    api.get<FacturaMatch[]>(`/extractos-bancarios/conciliacion/movimiento/${movimientoId}/facturas`),
+  getMatchesEnExtracto: (extractoId: string) =>
+    api.get<Record<string, FacturaMatch[]>>(`/extractos-bancarios/conciliacion/extracto/${extractoId}/matches`),
+  vincularMovimiento: (movimientoId: string, facturaId: string) =>
+    api.post('/extractos-bancarios/conciliacion/vincular-movimiento', {
+      movimiento_id: movimientoId, factura_id: facturaId,
+    }),
+  descartarMovimiento: (movimientoId: string, facturaId: string) =>
+    api.post('/extractos-bancarios/conciliacion/descartar-movimiento', {
+      movimiento_id: movimientoId, factura_id: facturaId,
+    }),
+}
+
+export interface MovimientoMatch {
+  movimiento_id: string
+  extracto_id: string
+  fecha: string
+  hora: string | null
+  descripcion: string
+  valor: number
+  cuenta_ref1: string | null
+  cuenta_ref2: string | null
+  saldo: number
+  cuenta: string | null
+  periodo: string | null
+  factura_total: number
+  factura_fecha: string | null
+  diff_monto: number
+  diff_pct: number
+  diff_dias: number
+  estado_link: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO' | null
+}
+
+export interface FacturaMatch {
+  factura_id: string
+  numero: string | null
+  proveedor: string | null
+  nit: string | null
+  total_pagar: number
+  fecha_emision: string | null
+  estado: string
+  valor_mov: number
+  fecha_mov: string | null
+  diff_monto: number
+  diff_pct: number
+  diff_dias: number
+  estado_link: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO' | null
 }
 
 export interface ConciliacionSugerencia {
