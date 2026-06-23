@@ -147,8 +147,8 @@ export default function ProductoBuscador({ onSelect, onCreateNew, placeholder }:
         {/* Dropdown */}
         {open && results.length > 0 && (
           <div
-            className="absolute z-50 top-full mt-1 left-0 bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden"
-            style={{ right: mode === 'producto' ? '2.75rem' : 0 }}
+            className="absolute z-50 top-full mt-1 left-0 bg-white rounded-xl border border-gray-200 shadow-lg overflow-y-auto"
+            style={{ right: mode === 'producto' ? '2.75rem' : 0, maxHeight: '320px' }}
           >
             {mode === 'producto'
               ? (results as Producto[]).map((p, i) => (
