@@ -269,6 +269,7 @@ def list_apu(
     return {
         "total": int(total),
         "page": page,
+        "limit": limit,
         "pages": math.ceil(int(total) / limit) if total else 1,
         "data": data,
     }
