@@ -212,13 +212,12 @@ def list_capitulos(
     _: Usuario = Depends(get_authenticated_user),
 ):
     try:
-        rows = (
-            db.query(APU.capitulo_codigo, APU.capitulo)
-            .filter(APU.deleted_at.is_(None), APU.capitulo_codigo.isnot(None))
-            .distinct()
-            .order_by(APU.capitulo_codigo)
-            .all()
-        )
+        rows = db.execute(text("""
+            SELECT DISTINCT capitulo_codigo, capitulo
+            FROM apu
+            WHERE deleted_at IS NULL AND capitulo_codigo IS NOT NULL
+            ORDER BY capitulo_codigo
+        """)).fetchall()
     except Exception:
         return []
 
@@ -229,7 +228,7 @@ def list_capitulos(
     return [{"codigo": r[0], "nombre": r[1]} for r in sorted(rows, key=sort_key)]
 
 
-# ── APU list ─────────────────────────────────────────────────────────────────
+# ── APU list (raw SQL — bypasses ORM column-mapping quirks) ──────────────────
 
 @router.get("/", response_model=PaginatedResponse[APUListOut])
 def list_apu(
@@ -240,26 +239,42 @@ def list_apu(
     db: Session = Depends(get_db_session),
     _: Usuario = Depends(get_authenticated_user),
 ):
-    q = db.query(APU).filter(APU.deleted_at.is_(None))
-
+    conds = ["deleted_at IS NULL"]
+    params: dict = {}
     if capitulo:
-        q = q.filter(APU.capitulo_codigo == capitulo)
+        conds.append("capitulo_codigo = :capitulo")
+        params["capitulo"] = capitulo
     if search:
-        term = f"%{search}%"
-        q = q.filter(APU.nombre.ilike(term) | APU.codigo.ilike(term))
+        conds.append("(nombre ILIKE :search OR codigo ILIKE :search)")
+        params["search"] = f"%{search}%"
 
-    total = q.count()
-    items = q.order_by(APU.codigo).offset((page - 1) * limit).limit(limit).all()
+    where = "WHERE " + " AND ".join(conds)
+
+    total = db.execute(text(f"SELECT COUNT(*) FROM apu {where}"), params).scalar() or 0
+    rows = db.execute(text(f"""
+        SELECT id, codigo, nombre, unidad_medida, precio_unitario, capitulo_codigo, capitulo
+        FROM apu {where}
+        ORDER BY codigo
+        LIMIT :limit OFFSET :offset
+    """), {**params, "limit": limit, "offset": (page - 1) * limit}).fetchall()
+
+    data = [
+        APUListOut(
+            id=r[0], codigo=r[1], nombre=r[2], unidad_medida=r[3],
+            precio_unitario=r[4], capitulo_codigo=r[5], capitulo=r[6]
+        )
+        for r in rows
+    ]
 
     return {
-        "total": total,
+        "total": int(total),
         "page": page,
-        "pages": math.ceil(total / limit) if total else 1,
-        "data": items,
+        "pages": math.ceil(int(total) / limit) if total else 1,
+        "data": data,
     }
 
 
-# ── APU detail ───────────────────────────────────────────────────────────────
+# ── APU detail (raw SQL) ──────────────────────────────────────────────────────
 
 @router.get("/{apu_id}", response_model=APUOut)
 def get_apu(
@@ -267,10 +282,36 @@ def get_apu(
     db: Session = Depends(get_db_session),
     _: Usuario = Depends(get_authenticated_user),
 ):
-    apu = db.query(APU).filter(APU.id == apu_id, APU.deleted_at.is_(None)).first()
-    if not apu:
+    row = db.execute(text("""
+        SELECT id, codigo, nombre, unidad_medida, precio_unitario, capitulo_codigo, capitulo
+        FROM apu WHERE id = :id AND deleted_at IS NULL
+    """), {"id": str(apu_id)}).fetchone()
+    if not row:
         raise HTTPException(404, "APU no encontrado")
-    return apu
+
+    mats = db.execute(text("""
+        SELECT id, nombre, unidad, cantidad, precio_unitario, subtotal, orden
+        FROM apu_materiales WHERE apu_id = :id ORDER BY orden
+    """), {"id": str(apu_id)}).fetchall()
+
+    mob = db.execute(text("""
+        SELECT id, descripcion, unidad, cantidad, precio_unitario, subtotal, orden
+        FROM apu_mano_obra WHERE apu_id = :id ORDER BY orden
+    """), {"id": str(apu_id)}).fetchall()
+
+    equ = db.execute(text("""
+        SELECT id, descripcion, unidad, cantidad, precio_unitario, subtotal, orden
+        FROM apu_equipos WHERE apu_id = :id ORDER BY orden
+    """), {"id": str(apu_id)}).fetchall()
+
+    from app.schemas.apu import APUMaterialOut, APUDetalleOut
+    return APUOut(
+        id=row[0], codigo=row[1], nombre=row[2], unidad_medida=row[3],
+        precio_unitario=row[4], capitulo_codigo=row[5], capitulo=row[6],
+        materiales=[APUMaterialOut(id=r[0], nombre=r[1], unidad=r[2], cantidad=r[3], precio_unitario=r[4], subtotal=r[5], orden=r[6]) for r in mats],
+        mano_obra=[APUDetalleOut(id=r[0], descripcion=r[1], unidad=r[2], cantidad=r[3], precio_unitario=r[4], subtotal=r[5], orden=r[6]) for r in mob],
+        equipos=[APUDetalleOut(id=r[0], descripcion=r[1], unidad=r[2], cantidad=r[3], precio_unitario=r[4], subtotal=r[5], orden=r[6]) for r in equ],
+    )
 
 
 # ── Price updates ─────────────────────────────────────────────────────────────
