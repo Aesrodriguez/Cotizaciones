@@ -534,4 +534,86 @@ export const apuAPI = {
   seedStatus: () => api.get<{ running: boolean; count: number }>('/apu/seed/status', { _skipToast: true } as any),
 }
 
+// ─── Materiales ───────────────────────────────────────────────────────────────
+
+export interface Material {
+  id: string
+  nombre: string
+  referencia: string | null
+  categoria: string | null
+  unidad: string
+  descripcion: string | null
+  stock: number
+  precio_promedio: number
+  total_comprado: number
+  total_usado: number
+  created_at: string
+  compras?: CompraMaterial[]
+  usos?: UsoMaterial[]
+}
+
+export interface CompraMaterial {
+  id: string
+  material_id: string
+  fecha: string
+  cantidad: number
+  precio_unitario: number
+  proveedor_nombre: string | null
+  proveedor_nit: string | null
+  factura_id: string | null
+  numero_factura: string | null
+  obra_id: string | null
+  obra_nombre: string | null
+  observaciones: string | null
+  created_at: string
+}
+
+export interface UsoMaterial {
+  id: string
+  material_id: string
+  obra_id: string | null
+  obra_nombre: string | null
+  fecha: string
+  cantidad: number
+  lugar_libre: string | null
+  observaciones: string | null
+  created_at: string
+}
+
+export interface Obra {
+  id: string
+  nombre: string
+  cliente: string | null
+  direccion: string | null
+  ciudad: string | null
+  estado: string
+  fecha_inicio: string | null
+  fecha_fin: string | null
+  notas: string | null
+  created_at: string
+  total_materiales: number
+  n_materiales: number
+}
+
+export const materialesAPI = {
+  getAll: (params?: object) =>
+    api.get<{ data: Material[]; categorias: string[] }>('/materiales/', { params, ..._noToast }),
+  getById: (id: string) => api.get<Material>(`/materiales/${id}`, _noToast),
+  create: (data: object) => api.post<{ id: string }>('/materiales/', data),
+  update: (id: string, data: object) => api.patch<{ ok: boolean }>(`/materiales/${id}`, data),
+  remove: (id: string) => api.delete(`/materiales/${id}`),
+  addCompra: (id: string, data: object) => api.post(`/materiales/${id}/compras`, data),
+  deleteCompra: (mid: string, cid: string) => api.delete(`/materiales/${mid}/compras/${cid}`),
+  addUso: (id: string, data: object) => api.post(`/materiales/${id}/usos`, data),
+  deleteUso: (mid: string, uid: string) => api.delete(`/materiales/${mid}/usos/${uid}`),
+}
+
+export const obrasAPI = {
+  getAll: (params?: object) => api.get<{ data: Obra[] }>('/obras/', { params, ..._noToast }),
+  create: (data: object) => api.post<{ id: string }>('/obras/', data),
+  update: (id: string, data: object) => api.patch<{ ok: boolean }>(`/obras/${id}`, data),
+  remove: (id: string) => api.delete(`/obras/${id}`),
+  getMateriales: (id: string) => api.get<{ data: { id: string; nombre: string; referencia: string | null; unidad: string; categoria: string | null; cantidad_usada: number; precio_promedio: number; total: number }[] }>(`/obras/${id}/materiales`, _noToast),
+}
+
 export default api

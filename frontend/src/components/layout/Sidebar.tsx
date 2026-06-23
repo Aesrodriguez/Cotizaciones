@@ -79,6 +79,14 @@ function IconConciliacion() {
   )
 }
 
+function IconMateriales() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-[18px] h-[18px] flex-shrink-0">
+      <path strokeLinecap="round" strokeLinejoin="round" d="m21 7.5-9-5.25L3 7.5m18 0-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+    </svg>
+  )
+}
+
 const navItems = [
   { to: '/dashboard',    icon: <IconDashboard />, label: 'Dashboard' },
   { to: '/cotizaciones', icon: <IconDocument />,  label: 'Cotizaciones' },
@@ -90,6 +98,7 @@ const navItems = [
   { to: '/facturas',     icon: <IconFactura />,   label: 'Facturas XML' },
   { to: '/extractos',    icon: <IconExtracto />,      label: 'Extractos' },
   { to: '/conciliacion', icon: <IconConciliacion />,  label: 'Conciliación' },
+  { to: '/materiales',   icon: <IconMateriales />,    label: 'Materiales' },
 ]
 
 interface Props { open: boolean; onClose: () => void }
