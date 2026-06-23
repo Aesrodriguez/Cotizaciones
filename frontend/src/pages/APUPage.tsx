@@ -140,6 +140,7 @@ export default function APUPage() {
   const [selectedCap, setSelectedCap] = useState<string>('')
   const [items, setItems] = useState<APUItem[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [expandedData, setExpandedData] = useState<APUItem | null>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
@@ -167,12 +168,17 @@ export default function APUPage() {
     }).catch(() => {})
   }, [capitulos.length])
 
-  useEffect(() => {
-    apuAPI.getCapitulos().then((r) => {
-      setCapitulos(r.data)
-      if (r.data.length > 0) setSelectedCap(r.data[0].codigo)
-    }).catch(() => {})
-  }, []) // eslint-disable-line
+  const loadCapitulos = useCallback(() => {
+    setLoadError(false)
+    apuAPI.getCapitulos()
+      .then((r) => {
+        setCapitulos(r.data)
+        if (r.data.length > 0) setSelectedCap(r.data[0].codigo)
+      })
+      .catch(() => setLoadError(true))
+  }, [])
+
+  useEffect(() => { loadCapitulos() }, [loadCapitulos])
 
   // Start polling when seed is running
   useEffect(() => {
@@ -211,6 +217,9 @@ export default function APUPage() {
       const r = await apuAPI.getAll({ capitulo: selectedCap, search: debouncedSearch, page, limit })
       setItems(r.data.data)
       setTotal(r.data.total)
+    } catch {
+      setItems([])
+      setTotal(0)
     } finally { setLoading(false) }
   }, [selectedCap, debouncedSearch, page])
 
@@ -265,7 +274,19 @@ export default function APUPage() {
         </div>
       </div>
 
-      {capitulos.length === 0 && !seedRunning && (
+      {loadError && (
+        <div className="card text-center py-16">
+          <p className="text-lg font-semibold mb-2" style={{ color: 'var(--text)' }}>No se pudo conectar</p>
+          <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>
+            El servidor puede estar iniciando (frío). Espera 30 segundos y reintenta.
+          </p>
+          <button onClick={loadCapitulos} className="btn-primary">
+            Reintentar
+          </button>
+        </div>
+      )}
+
+      {capitulos.length === 0 && !seedRunning && !loadError && (
         <div className="card text-center py-16">
           <p className="text-lg font-semibold mb-2" style={{ color: 'var(--text)' }}>Base APU vacía</p>
           <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>

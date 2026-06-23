@@ -223,10 +223,12 @@ export const trabajadoresAPI = {
   downloadSoporteUrl: (id: string, soporteId: string) => `${api.defaults.baseURL}/trabajadores/${id}/soportes/${soporteId}/download`,
 }
 
+const _noToast = { _skipToast: true } as any
+
 export const apuAPI = {
-  getCapitulos: () => api.get<{ codigo: string; nombre: string }[]>('/apu/capitulos'),
-  getAll: (params?: object) => api.get<PaginatedResponse<APUItem>>('/apu/', { params }),
-  getById: (id: string) => api.get<APUItem>(`/apu/${id}`),
+  getCapitulos: () => api.get<{ codigo: string; nombre: string }[]>('/apu/capitulos', _noToast),
+  getAll: (params?: object) => api.get<PaginatedResponse<APUItem>>('/apu/', { params, ..._noToast }),
+  getById: (id: string) => api.get<APUItem>(`/apu/${id}`, _noToast),
   updatePrecio: (id: string, precio_unitario: number) =>
     api.patch(`/apu/${id}/precio`, { precio_unitario }),
   updateMaterial: (apuId: string, detId: string, data: { precio_unitario: number; cantidad?: number }) =>
