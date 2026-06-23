@@ -13,6 +13,7 @@ from app.models.auth import Usuario
 from app.models.extracto_bancario import ExtractoBancario, ExtractoBancarioMovimiento
 from app.services.extracto_parser import parse_extracto_txt
 from app.services.detalle_pago_parser import parse_detalle_pago_xlsx
+from app.services.conciliacion import buscar_y_guardar_similitudes, listar_sugerencias
 
 _BANCO_NOMBRE = {
     '7': 'Bancolombia', '51': 'Davivienda', '1': 'Bogotá',
@@ -485,4 +486,108 @@ def get_detalles_resumen(
             "exitosas":    int(trans_stats[2] or 0),
         },
         "archivos_cargados": [r[0] for r in archivos],
+    }
+
+
+# ── Conciliación: buscar similitudes ─────────────────────────────────────────
+
+@router.post("/conciliacion/buscar")
+def buscar_similitudes(
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    result = buscar_y_guardar_similitudes(db)
+    return {
+        "mensaje":        f"{result['nuevas']} nuevas sugerencias · {result['ya_existentes']} ya existentes",
+        "nuevas":         result['nuevas'],
+        "ya_existentes":  result['ya_existentes'],
+    }
+
+
+@router.get("/conciliacion/sugerencias")
+def get_sugerencias(
+    estado: str = Query(""),
+    page:   int  = Query(1, ge=1),
+    limit:  int  = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    return listar_sugerencias(db, estado=estado, page=page, limit=limit)
+
+
+@router.post("/conciliacion/sugerencias/{link_id}/aprobar", status_code=200)
+def aprobar_sugerencia(
+    link_id: UUID,
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    row = db.execute(text("""
+        SELECT id, estado, factura_id FROM pagos_facturas_links WHERE id = :id
+    """), {"id": str(link_id)}).fetchone()
+    if not row:
+        raise HTTPException(404, "Sugerencia no encontrada")
+    if row[1] == 'APROBADO':
+        raise HTTPException(409, "Ya estaba aprobada")
+
+    db.execute(text("""
+        UPDATE pagos_facturas_links
+        SET estado = 'APROBADO', aprobado_en = NOW()
+        WHERE id = :id
+    """), {"id": str(link_id)})
+
+    # Actualizar estado de la factura a PAGADA si estaba RECIBIDA o APROBADA
+    db.execute(text("""
+        UPDATE facturas_electronicas
+        SET estado = 'PAGADA'
+        WHERE id = :fid AND estado IN ('RECIBIDA', 'APROBADA', 'RECIBIDO', 'APROBADO')
+    """), {"fid": str(row[2])})
+
+    db.commit()
+    return {"ok": True, "mensaje": "Enlace aprobado · factura marcada como PAGADA"}
+
+
+@router.post("/conciliacion/sugerencias/{link_id}/rechazar", status_code=200)
+def rechazar_sugerencia(
+    link_id: UUID,
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    row = db.execute(text("""
+        SELECT id, estado FROM pagos_facturas_links WHERE id = :id
+    """), {"id": str(link_id)}).fetchone()
+    if not row:
+        raise HTTPException(404, "Sugerencia no encontrada")
+    if row[1] == 'RECHAZADO':
+        raise HTTPException(409, "Ya estaba rechazada")
+
+    db.execute(text("""
+        UPDATE pagos_facturas_links
+        SET estado = 'RECHAZADO', rechazado_en = NOW()
+        WHERE id = :id
+    """), {"id": str(link_id)})
+    db.commit()
+    return {"ok": True}
+
+
+@router.get("/conciliacion/stats")
+def conciliacion_stats(
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    row = db.execute(text("""
+        SELECT
+            COUNT(*) FILTER (WHERE estado='PENDIENTE')  AS pendientes,
+            COUNT(*) FILTER (WHERE estado='APROBADO')   AS aprobados,
+            COUNT(*) FILTER (WHERE estado='RECHAZADO')  AS rechazados,
+            SUM(CASE WHEN estado='APROBADO' THEN
+                COALESCE(dp.monto, dt.monto) ELSE 0 END) AS monto_conciliado
+        FROM pagos_facturas_links l
+        LEFT JOIN detalle_pagos dp         ON dp.id = l.detalle_pago_id
+        LEFT JOIN detalle_transferencias dt ON dt.id = l.detalle_transferencia_id
+    """)).fetchone()
+    return {
+        "pendientes":       int(row[0] or 0),
+        "aprobados":        int(row[1] or 0),
+        "rechazados":       int(row[2] or 0),
+        "monto_conciliado": float(row[3] or 0),
     }

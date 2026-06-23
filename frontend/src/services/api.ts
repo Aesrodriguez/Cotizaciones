@@ -418,6 +418,53 @@ export const extractosAPI = {
     )
   },
   getDetallesResumen: () => api.get<DetalleResumen>('/extractos-bancarios/detalles/resumen'),
+  buscarSimilitudes: () => api.post<{ mensaje: string; nuevas: number; ya_existentes: number }>(
+    '/extractos-bancarios/conciliacion/buscar'
+  ),
+  getSugerencias: (params?: { estado?: string; page?: number; limit?: number }) =>
+    api.get<{
+      data: ConciliacionSugerencia[]
+      total: number; page: number; pages: number
+    }>('/extractos-bancarios/conciliacion/sugerencias', { params }),
+  aprobarSugerencia:  (id: string) => api.post(`/extractos-bancarios/conciliacion/sugerencias/${id}/aprobar`),
+  rechazarSugerencia: (id: string) => api.post(`/extractos-bancarios/conciliacion/sugerencias/${id}/rechazar`),
+  getConciliacionStats: () => api.get<{
+    pendientes: number; aprobados: number; rechazados: number; monto_conciliado: number
+  }>('/extractos-bancarios/conciliacion/stats'),
+}
+
+export interface ConciliacionSugerencia {
+  id: string
+  tipo: 'PAGO' | 'TRANSFERENCIA'
+  score: number
+  razones: string[]
+  estado: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO'
+  created_at: string
+  aprobado_en: string | null
+  rechazado_en: string | null
+  // pago
+  proceso: string | null
+  nombre_dest: string | null
+  nit_dest: string | null
+  pago_monto: number | null
+  fecha_pago: string | null
+  servicio: string | null
+  pago_estado: string | null
+  descripcion_pago: string | null
+  causal_rechazo: string | null
+  banco_destino: string | null
+  // factura
+  factura_num: string | null
+  prov_nombre: string | null
+  prov_nit: string | null
+  total_pagar: number | null
+  fecha_emision: string | null
+  factura_estado: string | null
+  forma_pago: string | null
+  nota: string | null
+  detalle_pago_id: string | null
+  detalle_transferencia_id: string | null
+  factura_id: string
 }
 
 export const apuAPI = {
