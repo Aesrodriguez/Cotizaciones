@@ -6,6 +6,9 @@ import type { APUItem, Cliente, Contrato, ContratoActa, ContratoCapitulo, Contra
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'https://cotizaciones-api-3uuy.onrender.com/api/v1'
 
+// Axios directo para pings (sin pasar por el interceptor de reintentos)
+export const rawAxios = axios.create({ baseURL: API_URL, timeout: 65000 })
+
 const api = axios.create({
   baseURL: API_URL,
   timeout: 30000,
@@ -50,28 +53,30 @@ api.interceptors.response.use(
     const { refreshToken, setAuth, logout } = useAuthStore.getState()
     const conn = useConnectionStore.getState()
 
-    // ── Network / timeout error → auto-retry GETs up to 3 times ─────────
-    if (isNetworkError && isGet && retryCount < 3) {
-      conn.setReconnecting()
-      original._retryCount = retryCount + 1
-      await sleep(4000 * (retryCount + 1))  // 4s, 8s, 12s
-      return api(original)
-    }
-
-    // After exhausting retries on network error → mark offline
+    // ── Network / timeout → mostrar "reconectando" y esperar en fondo ───────
     if (isNetworkError) {
-      conn.setOffline()
-      // Start background pinging until server is back
-      const pingUntilOnline = async () => {
-        while (useConnectionStore.getState().status !== 'online') {
-          await sleep(10000)
-          try {
-            await axios.get(`${API_URL}/health`, { timeout: 8000 })
-            conn.setOnline()
-          } catch { /* keep trying */ }
+      // Solo lanzar un ping de fondo la primera vez (retryCount === 0)
+      if (retryCount === 0) {
+        conn.setReconnecting()
+        // Ping con timeout largo (65s) — alcanza a esperar el cold start de Render
+        const pingUntilOnline = async () => {
+          let attempts = 0
+          while (useConnectionStore.getState().status !== 'online') {
+            attempts++
+            try {
+              await rawAxios.get('/health')
+              conn.setOnline()
+              // Recargar la página silenciosamente para que los datos aparezcan
+              window.location.reload()
+            } catch {
+              // Después de 5 intentos sin respuesta → marcar offline
+              if (attempts >= 5) conn.setOffline()
+              await sleep(5000)
+            }
+          }
         }
+        pingUntilOnline()
       }
-      pingUntilOnline()
       return Promise.reject(error)
     }
 
