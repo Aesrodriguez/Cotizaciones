@@ -6,7 +6,7 @@ from pydantic import BaseModel, EmailStr, field_validator
 
 
 class CotizacionItemCreate(BaseModel):
-    producto_id: UUID
+    producto_id: Optional[UUID] = None
     descripcion: Optional[str] = None
     cantidad: Decimal
     precio_unitario: Decimal
@@ -17,7 +17,7 @@ class CotizacionItemCreate(BaseModel):
 
 class CotizacionItemOut(BaseModel):
     id: UUID
-    producto_id: UUID
+    producto_id: Optional[UUID] = None
     descripcion: Optional[str] = None
     cantidad: Decimal
     precio_unitario: Decimal

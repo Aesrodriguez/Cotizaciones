@@ -5,9 +5,8 @@ import { cotizacionesAPI, clientesAPI, productosAPI } from '../services/api'
 import { formatCurrency, formatDate } from '../utils/format'
 import Modal from '../components/common/Modal'
 import ClienteAutocomplete from '../components/common/ClienteAutocomplete'
-import ProductoBuscador from '../components/common/ProductoBuscador'
+import ProductoBuscador, { type SelectedItem } from '../components/common/ProductoBuscador'
 import toast from 'react-hot-toast'
-import type { Producto } from '../types'
 
 interface ItemForm {
   producto_id: string
@@ -173,14 +172,14 @@ export default function CotizacionFormPage() {
     setTotals({ subtotal, descuento, impuesto, aiuAdm, aiuImp, aiuUtil, aiu, aiuIva, total })
   }, [watchItems, watchAiu, watchConAiu])
 
-  const addProducto = (p: Producto) => {
+  const addProducto = (item: SelectedItem) => {
     append({
-      producto_id: p.id,
-      descripcion: p.nombre,
+      producto_id: item.id ?? '',
+      descripcion: item.nombre,
       cantidad: 1,
-      precio_unitario: Number(p.precio_unitario),
+      precio_unitario: item.precio_unitario,
       descuento_porcentaje: 0,
-      impuesto_porcentaje: watchConAiu ? 0 : Number(p.impuesto_porcentaje ?? 0),
+      impuesto_porcentaje: watchConAiu ? 0 : item.impuesto_porcentaje,
       orden: fields.length,
     })
   }
@@ -207,13 +206,16 @@ export default function CotizacionFormPage() {
         return
       }
     }
+    const normalizeItems = (items: typeof data.items) =>
+      items.map((it) => ({ ...it, producto_id: it.producto_id || null }))
+
     try {
       if (isEdit && id) {
-        await cotizacionesAPI.update(id, data)
+        await cotizacionesAPI.update(id, { ...data, items: normalizeItems(data.items) })
         toast.success('Cotización actualizada')
       } else {
         const sufijo = parseInt(numeroSufijo, 10)
-        const payload = { ...data, numero_sufijo: isNaN(sufijo) ? undefined : sufijo }
+        const payload = { ...data, items: normalizeItems(data.items), numero_sufijo: isNaN(sufijo) ? undefined : sufijo }
         const res = await cotizacionesAPI.create(payload)
         toast.success(`Cotización ${res.data.numero} creada`)
       }
@@ -237,7 +239,7 @@ export default function CotizacionFormPage() {
     setSavingProducto(true)
     try {
       const res = await productosAPI.create(data)
-      addProducto(res.data)
+      addProducto({ id: res.data.id, nombre: res.data.nombre, precio_unitario: Number(res.data.precio_unitario), unidad_medida: res.data.unidad_medida, impuesto_porcentaje: Number(res.data.impuesto_porcentaje ?? 0), source: 'producto' })
       toast.success(`Producto "${res.data.nombre}" creado`)
       setProductoModal(false)
       productoForm.reset({ impuesto_porcentaje: 19, unidad_medida: 'UN' })

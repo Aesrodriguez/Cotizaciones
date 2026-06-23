@@ -186,7 +186,7 @@ class CotizacionItem(Base, UUIDPrimaryKey, TimestampedMixin):
     producto_id = Column(
         UUID(as_uuid=True),
         ForeignKey("productos.id", ondelete="RESTRICT"),
-        nullable=False
+        nullable=True
     )
     descripcion = Column(
         VARCHAR(255),
