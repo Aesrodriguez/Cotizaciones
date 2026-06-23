@@ -1,13 +1,14 @@
 import axios, { AxiosError, AxiosRequestConfig } from 'axios'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../stores/authStore'
+import { useConnectionStore } from '../stores/connectionStore'
 import type { APUItem, Cliente, Contrato, ContratoActa, ContratoCapitulo, ContratoDashboard, ContratoGasto, ContratoListItem, ContratoPago, CorteQuincenal, Cotizacion, PaginatedResponse, Producto, SoportePago, Stats, Trabajador, TrabajadorAsignacion, TrabajadorDetalle, TrabajadorPago, Usuario } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'https://cotizaciones-api-3uuy.onrender.com/api/v1'
 
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 20000,
+  timeout: 30000,
 })
 
 // ─── Request interceptor ───────────────────────────────────────────────────
@@ -17,7 +18,7 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// ─── Response interceptor with silent token refresh ───────────────────────
+// ─── Response interceptor with silent token refresh + auto-retry ──────────
 let isRefreshing = false
 let pendingQueue: Array<{ resolve: (v: string) => void; reject: (e: unknown) => void }> = []
 
@@ -26,14 +27,55 @@ function processQueue(error: unknown, token: string | null) {
   pendingQueue = []
 }
 
-api.interceptors.response.use(
-  (res) => res,
-  async (error: AxiosError) => {
-    const original = error.config as AxiosRequestConfig & { _retry?: boolean }
-    const status = error.response?.status
-    const { refreshToken, setAuth, logout } = useAuthStore.getState()
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-    // Token expirado → intentar refresh silencioso
+type ExtendedConfig = AxiosRequestConfig & {
+  _retry?: boolean
+  _retryCount?: number
+  _skipToast?: boolean
+}
+
+api.interceptors.response.use(
+  (res) => {
+    // Successful response → mark server as online
+    useConnectionStore.getState().setOnline()
+    return res
+  },
+  async (error: AxiosError) => {
+    const original = error.config as ExtendedConfig
+    const status = error.response?.status
+    const isNetworkError = !error.response
+    const isGet = (original.method ?? 'get').toLowerCase() === 'get'
+    const retryCount = original._retryCount ?? 0
+    const { refreshToken, setAuth, logout } = useAuthStore.getState()
+    const conn = useConnectionStore.getState()
+
+    // ── Network / timeout error → auto-retry GETs up to 3 times ─────────
+    if (isNetworkError && isGet && retryCount < 3) {
+      conn.setReconnecting()
+      original._retryCount = retryCount + 1
+      await sleep(4000 * (retryCount + 1))  // 4s, 8s, 12s
+      return api(original)
+    }
+
+    // After exhausting retries on network error → mark offline
+    if (isNetworkError) {
+      conn.setOffline()
+      // Start background pinging until server is back
+      const pingUntilOnline = async () => {
+        while (useConnectionStore.getState().status !== 'online') {
+          await sleep(10000)
+          try {
+            await axios.get(`${API_URL}/health`, { timeout: 8000 })
+            conn.setOnline()
+          } catch { /* keep trying */ }
+        }
+      }
+      pingUntilOnline()
+      return Promise.reject(error)
+    }
+
+    // ── Token refresh (401) ───────────────────────────────────────────────
     if (status === 401 && refreshToken && !original._retry && !original.url?.includes('/auth/')) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
@@ -71,16 +113,15 @@ api.interceptors.response.use(
       }
     }
 
-    // 401 sin refresh token → logout
     if (status === 401) {
       logout()
       window.location.href = '/login'
       return Promise.reject(error)
     }
 
-    // Mostrar toast de error (excepto 404 o cuando _skipToast está activo)
-    if (status !== 404 && !(original as any)._skipToast) {
-      const msg = (error.response?.data as any)?.detail ?? 'Error de conexión'
+    // ── Show error toast (skip for 404 and _skipToast calls) ─────────────
+    if (status !== 404 && !original._skipToast) {
+      const msg = (error.response?.data as any)?.detail ?? 'Error del servidor'
       toast.error(typeof msg === 'string' ? msg : 'Error del servidor')
     }
 

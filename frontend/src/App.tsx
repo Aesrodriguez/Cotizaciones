@@ -41,12 +41,17 @@ export default function App() {
   const theme = useThemeStore((s) => s.theme)
   const isDark = theme === 'dark'
 
-  // Ping al arrancar + keepalive cada 14 min → evita cold start de Render
+  // Ping al arrancar + keepalive cada 10 min + al recuperar foco de pestaña
   useEffect(() => {
     const ping = () => api.get('/health').catch(() => {})
     ping()
-    const interval = setInterval(ping, 14 * 60 * 1000)
-    return () => clearInterval(interval)
+    const interval = setInterval(ping, 10 * 60 * 1000)
+    const onVisible = () => { if (document.visibilityState === 'visible') ping() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [])
 
   return (
