@@ -55,23 +55,20 @@ api.interceptors.response.use(
 
     // ── Network / timeout → mostrar "reconectando" y esperar en fondo ───────
     if (isNetworkError) {
-      // Solo lanzar un ping de fondo la primera vez (retryCount === 0)
       if (retryCount === 0) {
         conn.setReconnecting()
-        // Ping con timeout largo (65s) — alcanza a esperar el cold start de Render
         const pingUntilOnline = async () => {
           let attempts = 0
           while (useConnectionStore.getState().status !== 'online') {
+            await sleep(5000)
             attempts++
             try {
               await rawAxios.get('/health')
               conn.setOnline()
-              // Recargar la página silenciosamente para que los datos aparezcan
-              window.location.reload()
+              // Emitir evento para que las páginas recarguen sus datos
+              window.dispatchEvent(new CustomEvent('server-reconnected'))
             } catch {
-              // Después de 5 intentos sin respuesta → marcar offline
-              if (attempts >= 5) conn.setOffline()
-              await sleep(5000)
+              if (attempts >= 10) conn.setOffline()
             }
           }
         }
