@@ -311,6 +311,69 @@ export const facturasAPI = {
   remove: (id: string) => api.delete(`/facturas-electronicas/${id}`),
 }
 
+export interface ExtractoBancario {
+  id: string
+  nombre_archivo: string
+  cuenta: string | null
+  periodo: string | null
+  saldo_inicial: number
+  saldo_final: number
+  total_creditos: number
+  total_debitos: number
+  num_movimientos: number
+  observaciones: string | null
+  created_at: string
+}
+
+export interface ExtractoMovimiento {
+  id: string
+  extracto_id: string
+  tipo: 'CREDITO' | 'DEBITO'
+  tipo_codigo: string | null
+  fecha: string
+  fecha_aplicacion: string | null
+  hora: string | null
+  oficina: string | null
+  consecutivo: string | null
+  valor: number
+  valor_con_cargos: number
+  banco_codigo: string | null
+  codigo_servicio: string | null
+  descripcion_servicio: string | null
+  cuenta_ref1: string | null
+  cuenta_ref2: string | null
+  saldo: number
+  referencia: string | null
+  clasificacion: string | null
+}
+
+export interface ExtractoResumen {
+  total_creditos: number
+  total_debitos: number
+  neto: number
+}
+
+export const extractosAPI = {
+  upload: (file: File, observaciones?: string) => {
+    const form = new FormData()
+    form.append('file', file)
+    if (observaciones) form.append('observaciones', observaciones)
+    return api.post<ExtractoBancario>('/extractos-bancarios/upload', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+  getAll: () => api.get<ExtractoBancario[]>('/extractos-bancarios/'),
+  getById: (id: string) => api.get<ExtractoBancario>(`/extractos-bancarios/${id}`),
+  getMovimientos: (id: string, params?: object) =>
+    api.get<{
+      data: ExtractoMovimiento[]
+      total: number; page: number; limit: number; pages: number
+      resumen: ExtractoResumen
+      por_clasificacion: { clasificacion: string; tipo: string; n: number; total: number }[]
+    }>(`/extractos-bancarios/${id}/movimientos`, { params }),
+  remove: (id: string) => api.delete(`/extractos-bancarios/${id}`),
+}
+
 export const apuAPI = {
   getCapitulos: () => api.get<{ codigo: string; nombre: string }[]>('/apu/capitulos', _noToast),
   getAll: (params?: object) => api.get<PaginatedResponse<APUItem>>('/apu/', { params, ..._noToast }),

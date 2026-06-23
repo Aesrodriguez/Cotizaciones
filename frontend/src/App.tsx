@@ -24,6 +24,7 @@ const TrabajadoresPage = lazy(() => import('./pages/TrabajadoresPage'))
 const TrabajadorDetailPage = lazy(() => import('./pages/TrabajadorDetailPage'))
 const APUPage = lazy(() => import('./pages/APUPage'))
 const FacturasElectronicasPage = lazy(() => import('./pages/FacturasElectronicasPage'))
+const ExtractosPage = lazy(() => import('./pages/ExtractosPage'))
 
 function PageLoader() {
   return (
@@ -87,6 +88,7 @@ export default function App() {
             <Route path="trabajadores/:id" element={<TrabajadorDetailPage />} />
             <Route path="apu" element={<APUPage />} />
             <Route path="facturas" element={<FacturasElectronicasPage />} />
+            <Route path="extractos" element={<ExtractosPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
