@@ -19,9 +19,11 @@ target_metadata = Base.metadata
 _raw_url = os.environ["DATABASE_URL"]
 DATABASE_URL = _raw_url.replace("postgres://", "postgresql://", 1)
 
+_connect_args = {"sslmode": "require"} if "neon.tech" in DATABASE_URL else {}
+
 
 def run_migrations_online() -> None:
-    connectable = create_engine(DATABASE_URL, poolclass=pool.NullPool)
+    connectable = create_engine(DATABASE_URL, poolclass=pool.NullPool, connect_args=_connect_args)
     with connectable.connect() as connection:
         context.configure(
             connection=connection,
