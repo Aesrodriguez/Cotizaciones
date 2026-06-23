@@ -28,6 +28,34 @@ def _esc(s) -> str:
     return str(s).replace("'", "''") if s else ''
 
 
+def _col_exists(db: Session, table: str, col: str) -> bool:
+    r = db.execute(text(
+        "SELECT COUNT(*) FROM information_schema.columns "
+        f"WHERE table_name='{table}' AND column_name='{col}'"
+    )).scalar()
+    return bool(r)
+
+
+def _ensure_apu_columns(db: Session):
+    """Add capitulo_codigo / capitulo columns and make codigo nullable — idempotent."""
+    if not _col_exists(db, 'apu', 'capitulo_codigo'):
+        db.execute(text("ALTER TABLE apu ADD COLUMN capitulo_codigo VARCHAR(10)"))
+    if not _col_exists(db, 'apu', 'capitulo'):
+        db.execute(text("ALTER TABLE apu ADD COLUMN capitulo VARCHAR(200)"))
+    for tbl in ('apu_materiales', 'apu_mano_obra', 'apu_equipos'):
+        db.execute(text(f"ALTER TABLE {tbl} ALTER COLUMN codigo DROP NOT NULL") )
+    db.commit()
+
+
+def _seeded_count(db: Session) -> int:
+    try:
+        if not _col_exists(db, 'apu', 'capitulo_codigo'):
+            return 0
+        return int(db.execute(text("SELECT COUNT(*) FROM apu WHERE capitulo_codigo IS NOT NULL")).scalar() or 0)
+    except Exception:
+        return 0
+
+
 def _run_seed():
     global _seed_running
     _seed_running = True
@@ -35,6 +63,8 @@ def _run_seed():
     try:
         if not os.path.exists(_DATA_FILE):
             raise RuntimeError(f"Seed file not found: {_DATA_FILE}")
+
+        _ensure_apu_columns(db)
 
         with open(_DATA_FILE, encoding='utf-8') as f:
             seed = json.load(f)
@@ -130,8 +160,8 @@ def seed_apu(
     global _seed_running
     if _seed_running:
         return {"ok": False, "msg": "Siembra ya en progreso"}
-    count = db.execute(text("SELECT COUNT(*) FROM apu WHERE capitulo_codigo IS NOT NULL")).scalar()
-    if count and count > 0:
+    count = _seeded_count(db)
+    if count > 0:
         return {"ok": False, "msg": f"Ya sembrado ({count} APUs)", "count": count}
     background_tasks.add_task(_run_seed)
     return {"ok": True, "msg": "Siembra iniciada en segundo plano"}
@@ -142,8 +172,7 @@ def seed_status(
     db: Session = Depends(get_db_session),
     _: Usuario = Depends(get_authenticated_user),
 ):
-    count = db.execute(text("SELECT COUNT(*) FROM apu WHERE capitulo_codigo IS NOT NULL")).scalar() or 0
-    return {"running": _seed_running, "count": int(count)}
+    return {"running": _seed_running, "count": _seeded_count(db)}
 
 
 # ── Capítulos ────────────────────────────────────────────────────────────────
@@ -153,6 +182,9 @@ def list_capitulos(
     db: Session = Depends(get_db_session),
     _: Usuario = Depends(get_authenticated_user),
 ):
+    if not _col_exists(db, 'apu', 'capitulo_codigo'):
+        return []
+
     rows = (
         db.query(APU.capitulo_codigo, APU.capitulo)
         .filter(APU.deleted_at.is_(None), APU.capitulo_codigo.isnot(None))
@@ -161,7 +193,6 @@ def list_capitulos(
         .all()
     )
 
-    # Sort numerically by code
     def sort_key(r):
         try: return int(r[0])
         except: return 999
@@ -180,6 +211,8 @@ def list_apu(
     db: Session = Depends(get_db_session),
     _: Usuario = Depends(get_authenticated_user),
 ):
+    if not _col_exists(db, 'apu', 'capitulo_codigo'):
+        return {"total": 0, "page": page, "pages": 1, "data": []}
     q = db.query(APU).filter(APU.deleted_at.is_(None))
 
     if capitulo:

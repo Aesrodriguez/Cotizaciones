@@ -78,8 +78,8 @@ api.interceptors.response.use(
       return Promise.reject(error)
     }
 
-    // Mostrar toast de error (excepto 404)
-    if (status !== 404) {
+    // Mostrar toast de error (excepto 404 o cuando _skipToast está activo)
+    if (status !== 404 && !(original as any)._skipToast) {
       const msg = (error.response?.data as any)?.detail ?? 'Error de conexión'
       toast.error(typeof msg === 'string' ? msg : 'Error del servidor')
     }
@@ -236,7 +236,7 @@ export const apuAPI = {
   updateEquipo: (apuId: string, detId: string, data: { precio_unitario: number; cantidad?: number }) =>
     api.patch(`/apu/${apuId}/equipos/${detId}`, data),
   seed: () => api.post<{ ok: boolean; msg: string; count?: number }>('/apu/seed'),
-  seedStatus: () => api.get<{ running: boolean; count: number }>('/apu/seed/status'),
+  seedStatus: () => api.get<{ running: boolean; count: number }>('/apu/seed/status', { _skipToast: true } as any),
 }
 
 export default api

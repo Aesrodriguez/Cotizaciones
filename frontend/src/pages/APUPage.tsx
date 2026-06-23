@@ -172,8 +172,6 @@ export default function APUPage() {
       setCapitulos(r.data)
       if (r.data.length > 0) setSelectedCap(r.data[0].codigo)
     }).catch(() => {})
-    // Check seed status on mount
-    checkSeedStatus()
   }, []) // eslint-disable-line
 
   // Start polling when seed is running
