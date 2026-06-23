@@ -325,6 +325,34 @@ export interface ExtractoBancario {
   created_at: string
 }
 
+export interface DetallePago {
+  nombre: string
+  nit: string | null
+  descripcion: string | null
+  servicio: string | null        // PROV | NOMI
+  nombre_servicio: string | null
+  estado: string | null          // PAGADO | RECHAZADO | DECLINADA | PAGADOPAR | PENDRESP
+  estado_registro: string | null
+  causal_rechazo: string | null
+  monto: number | null
+  banco_destino: string | null
+  fecha_pago: string | null
+  producto: string | null
+}
+
+export interface DetalleTransferencia {
+  nombre: string
+  nit: string | null
+  servicio: string | null        // TRCN | TRCI
+  nombre_servicio: string | null
+  estado: string | null          // EXITOSO | OTROBANCO
+  causal_rechazo: string | null
+  monto: number | null
+  banco_destino: string | null
+  fecha: string | null
+  producto: string | null
+}
+
 export interface ExtractoMovimiento {
   id: string
   extracto_id: string
@@ -345,6 +373,14 @@ export interface ExtractoMovimiento {
   saldo: number
   referencia: string | null
   clasificacion: string | null
+  detalle_pago?: DetallePago
+  detalle_transferencia?: DetalleTransferencia
+}
+
+export interface DetalleResumen {
+  pagos: { total: number; total_monto: number; pagados: number; rechazados: number; proveedores: number; nomina: number }
+  transferencias: { total: number; total_monto: number; exitosas: number }
+  archivos_cargados: string[]
 }
 
 export interface ExtractoResumen {
@@ -372,6 +408,16 @@ export const extractosAPI = {
       por_clasificacion: { clasificacion: string; tipo: string; n: number; total: number }[]
     }>(`/extractos-bancarios/${id}/movimientos`, { params }),
   remove: (id: string) => api.delete(`/extractos-bancarios/${id}`),
+  uploadDetalle: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post<{ mensaje: string; pagos: number; transferencias: number; hojas: string[] }>(
+      '/extractos-bancarios/upload-detalle',
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    )
+  },
+  getDetallesResumen: () => api.get<DetalleResumen>('/extractos-bancarios/detalles/resumen'),
 }
 
 export const apuAPI = {

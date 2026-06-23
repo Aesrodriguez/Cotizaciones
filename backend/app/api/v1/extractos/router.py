@@ -12,6 +12,13 @@ from app.api.deps import get_authenticated_user, get_db_session
 from app.models.auth import Usuario
 from app.models.extracto_bancario import ExtractoBancario, ExtractoBancarioMovimiento
 from app.services.extracto_parser import parse_extracto_txt
+from app.services.detalle_pago_parser import parse_detalle_pago_xlsx
+
+_BANCO_NOMBRE = {
+    '7': 'Bancolombia', '51': 'Davivienda', '1': 'Bogotá',
+    '13': 'BBVA', '23': 'Occidente', '32': 'Bogotá',
+    '52': 'AV Villas', '53': 'W', '63': 'Banco Popular',
+}
 
 router = APIRouter(prefix="/extractos-bancarios", tags=["Extractos Bancarios"])
 
@@ -178,36 +185,86 @@ def get_movimientos(
     total = db.execute(text(f"SELECT COUNT(*) FROM extractos_bancarios_movimientos {where}"), params).scalar() or 0
 
     rows = db.execute(text(f"""
-        SELECT id, extracto_id, tipo, tipo_codigo, fecha, fecha_aplicacion, hora,
-               oficina, consecutivo, valor, valor_con_cargos, banco_codigo,
-               codigo_servicio, descripcion_servicio, cuenta_ref1, cuenta_ref2,
-               saldo, referencia, clasificacion
-        FROM extractos_bancarios_movimientos {where}
-        ORDER BY fecha ASC, hora ASC
+        SELECT
+            m.id, m.extracto_id, m.tipo, m.tipo_codigo, m.fecha, m.fecha_aplicacion, m.hora,
+            m.oficina, m.consecutivo, m.valor, m.valor_con_cargos, m.banco_codigo,
+            m.codigo_servicio, m.descripcion_servicio, m.cuenta_ref1, m.cuenta_ref2,
+            m.saldo, m.referencia, m.clasificacion,
+            -- Pago detalle
+            dp.nombre_destinatario, dp.nit_destino AS dp_nit,
+            dp.descripcion_pago, dp.servicio AS dp_servicio,
+            dp.nombre_servicio AS dp_nombre_servicio,
+            dp.estado AS dp_estado, dp.estado_registro AS dp_estado_reg,
+            dp.causal_rechazo AS dp_causal, dp.monto AS dp_monto,
+            dp.banco_destino AS dp_banco, dp.fecha_pago AS dp_fecha_pago,
+            dp.producto_destino AS dp_producto,
+            -- Transferencia detalle
+            dt.nombre_destino AS dt_nombre, dt.nit_destino AS dt_nit,
+            dt.servicio AS dt_servicio, dt.nombre_servicio AS dt_nombre_servicio,
+            dt.estado AS dt_estado, dt.causal_rechazo AS dt_causal,
+            dt.monto AS dt_monto, dt.banco_destino AS dt_banco,
+            dt.fecha_pago_actualizacion AS dt_fecha,
+            dt.producto_destino AS dt_producto
+        FROM extractos_bancarios_movimientos m
+        LEFT JOIN detalle_pagos dp
+            ON dp.proceso = m.cuenta_ref1
+        LEFT JOIN detalle_transferencias dt
+            ON dt.proceso = m.cuenta_ref1
+        {where}
+        ORDER BY m.fecha ASC, m.hora ASC
         LIMIT :lim OFFSET :off
     """), {**params, "lim": limit, "off": (page - 1) * limit}).fetchall()
 
-    # Resumen de esta vista filtrada
     sums = db.execute(text(f"""
         SELECT
             SUM(CASE WHEN tipo='CREDITO' THEN valor ELSE 0 END),
-            SUM(CASE WHEN tipo='DEBITO'  THEN valor ELSE 0 END),
-            COUNT(DISTINCT clasificacion)
+            SUM(CASE WHEN tipo='DEBITO'  THEN valor ELSE 0 END)
         FROM extractos_bancarios_movimientos {where}
     """), params).fetchone()
 
-    # Resumen por clasificación
     by_clas = db.execute(text(f"""
-        SELECT clasificacion, tipo,
-               COUNT(*) AS n,
-               SUM(valor) AS total
+        SELECT clasificacion, tipo, COUNT(*) AS n, SUM(valor) AS total
         FROM extractos_bancarios_movimientos {where}
         GROUP BY clasificacion, tipo
         ORDER BY total DESC
     """), params).fetchall()
 
+    def _enrich(r) -> dict:
+        base = _mov_dict(r)
+        # Pago detalle (cols 19-30)
+        if r[19]:
+            base['detalle_pago'] = {
+                'nombre':          r[19],
+                'nit':             r[20],
+                'descripcion':     r[21],
+                'servicio':        r[22],
+                'nombre_servicio': r[23],
+                'estado':          r[24],
+                'estado_registro': r[25],
+                'causal_rechazo':  r[26],
+                'monto':           float(r[27]) if r[27] else None,
+                'banco_destino':   r[28],
+                'fecha_pago':      str(r[29]) if r[29] else None,
+                'producto':        r[30],
+            }
+        # Transferencia detalle (cols 31-40)
+        if r[31]:
+            base['detalle_transferencia'] = {
+                'nombre':          r[31],
+                'nit':             r[32],
+                'servicio':        r[33],
+                'nombre_servicio': r[34],
+                'estado':          r[35],
+                'causal_rechazo':  r[36],
+                'monto':           float(r[37]) if r[37] else None,
+                'banco_destino':   r[38],
+                'fecha':           str(r[39]) if r[39] else None,
+                'producto':        r[40],
+            }
+        return base
+
     return {
-        "data":   [_mov_dict(r) for r in rows],
+        "data":   [_enrich(r) for r in rows],
         "total":  int(total),
         "page":   page,
         "limit":  limit,
@@ -251,3 +308,181 @@ def delete_extracto(
         raise HTTPException(404)
     db.delete(e)
     db.commit()
+
+
+# ── Upload XLSX de detalle de pagos ──────────────────────────────────────────
+
+@router.post("/upload-detalle", status_code=201)
+async def upload_detalle_pago(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    fname = file.filename or ''
+    if not fname.lower().endswith('.xlsx'):
+        raise HTTPException(400, "Solo se aceptan archivos .xlsx")
+
+    raw = await file.read()
+    try:
+        parsed = parse_detalle_pago_xlsx(raw)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    except Exception as e:
+        raise HTTPException(500, f"Error al leer el archivo Excel: {e}")
+
+    pagos_n = 0
+    transferencias_n = 0
+
+    for row in parsed['pagos']:
+        # Upsert por proceso (reemplaza si ya existe el mismo proceso)
+        db.execute(text("""
+            INSERT INTO detalle_pagos (
+                archivo, proceso, servicio, nombre_servicio, descripcion_pago,
+                tipo_producto_origen, producto_origen, fecha_pago_actualizacion,
+                estado, fecha_creacion, usuario_creacion,
+                usuario_aprueba_1, usuario_aprueba_2,
+                nit_destino, nombre_destinatario,
+                tipo_producto_destino, producto_destino,
+                numero_convenio, fecha_pago,
+                referencia_destino, numero_referencia_destino,
+                monto, banco_destino, estado_registro, causal_rechazo
+            ) VALUES (
+                :arch, :proc, :serv, :nserv, :desc,
+                :tpo, :po, :fpa,
+                :est, :fc, :uc, :ua1, :ua2,
+                :nit, :nombre,
+                :tpd, :pd,
+                :nc, :fp,
+                :ref, :nref,
+                :monto, :banco, :ereg, :causal
+            )
+            ON CONFLICT DO NOTHING
+        """), {
+            'arch':   fname,
+            'proc':   row['proceso'],
+            'serv':   row['servicio'],
+            'nserv':  row['nombre_servicio'],
+            'desc':   row['descripcion_pago'],
+            'tpo':    row['tipo_producto_origen'],
+            'po':     row['producto_origen'],
+            'fpa':    row['fecha_pago_actualizacion'],
+            'est':    row['estado'],
+            'fc':     row['fecha_creacion'],
+            'uc':     row['usuario_creacion'],
+            'ua1':    row['usuario_aprueba_1'],
+            'ua2':    row['usuario_aprueba_2'],
+            'nit':    row['nit_destino'],
+            'nombre': row['nombre_destinatario'],
+            'tpd':    row['tipo_producto_destino'],
+            'pd':     row['producto_destino'],
+            'nc':     row['numero_convenio'],
+            'fp':     row['fecha_pago'],
+            'ref':    row['referencia_destino'],
+            'nref':   row['numero_referencia_destino'],
+            'monto':  row['monto'],
+            'banco':  row['banco_destino'],
+            'ereg':   row['estado_registro'],
+            'causal': row['causal_rechazo'],
+        })
+        pagos_n += 1
+
+    for row in parsed['transferencias']:
+        db.execute(text("""
+            INSERT INTO detalle_transferencias (
+                archivo, proceso, servicio, nombre_servicio,
+                tipo_producto_origen, producto_origen,
+                fecha_pago_actualizacion,
+                nit_destino, nombre_destino,
+                fecha_creacion, usuario_creacion, usuario_aprueba, fecha_modificacion,
+                tipo_producto_destino, producto_destino,
+                banco_destino, monto, estado, causal_rechazo
+            ) VALUES (
+                :arch, :proc, :serv, :nserv,
+                :tpo, :po,
+                :fpa,
+                :nit, :nombre,
+                :fc, :uc, :ua, :fm,
+                :tpd, :pd,
+                :banco, :monto, :est, :causal
+            )
+            ON CONFLICT DO NOTHING
+        """), {
+            'arch':   fname,
+            'proc':   row['proceso'],
+            'serv':   row['servicio'],
+            'nserv':  row['nombre_servicio'],
+            'tpo':    row['tipo_producto_origen'],
+            'po':     row['producto_origen'],
+            'fpa':    row['fecha_pago_actualizacion'],
+            'nit':    row['nit_destino'],
+            'nombre': row['nombre_destino'],
+            'fc':     row['fecha_creacion'],
+            'uc':     row['usuario_creacion'],
+            'ua':     row['usuario_aprueba'],
+            'fm':     row['fecha_modificacion'],
+            'tpd':    row['tipo_producto_destino'],
+            'pd':     row['producto_destino'],
+            'banco':  row['banco_destino'],
+            'monto':  row['monto'],
+            'est':    row['estado'],
+            'causal': row['causal_rechazo'],
+        })
+        transferencias_n += 1
+
+    db.commit()
+    return {
+        "mensaje":        f"Archivo cargado: {pagos_n} pagos, {transferencias_n} transferencias",
+        "pagos":          pagos_n,
+        "transferencias": transferencias_n,
+        "hojas":          parsed['hojas_encontradas'],
+    }
+
+
+# ── Estadísticas globales de detalles cargados ───────────────────────────────
+
+@router.get("/detalles/resumen")
+def get_detalles_resumen(
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    pagos_stats = db.execute(text("""
+        SELECT
+            COUNT(*) AS total,
+            SUM(monto) AS total_monto,
+            COUNT(CASE WHEN estado='PAGADO' THEN 1 END) AS pagados,
+            COUNT(CASE WHEN estado='RECHAZADO' OR estado='DECLINADA' THEN 1 END) AS rechazados,
+            COUNT(CASE WHEN servicio='PROV' THEN 1 END) AS proveedores,
+            COUNT(CASE WHEN servicio='NOMI' THEN 1 END) AS nomina
+        FROM detalle_pagos
+    """)).fetchone()
+
+    trans_stats = db.execute(text("""
+        SELECT
+            COUNT(*) AS total,
+            SUM(monto) AS total_monto,
+            COUNT(CASE WHEN estado='EXITOSO' THEN 1 END) AS exitosas
+        FROM detalle_transferencias
+    """)).fetchone()
+
+    archivos = db.execute(text("""
+        SELECT DISTINCT archivo FROM detalle_pagos WHERE archivo IS NOT NULL
+        UNION
+        SELECT DISTINCT archivo FROM detalle_transferencias WHERE archivo IS NOT NULL
+    """)).fetchall()
+
+    return {
+        "pagos": {
+            "total":       int(pagos_stats[0] or 0),
+            "total_monto": float(pagos_stats[1] or 0),
+            "pagados":     int(pagos_stats[2] or 0),
+            "rechazados":  int(pagos_stats[3] or 0),
+            "proveedores": int(pagos_stats[4] or 0),
+            "nomina":      int(pagos_stats[5] or 0),
+        },
+        "transferencias": {
+            "total":       int(trans_stats[0] or 0),
+            "total_monto": float(trans_stats[1] or 0),
+            "exitosas":    int(trans_stats[2] or 0),
+        },
+        "archivos_cargados": [r[0] for r in archivos],
+    }
