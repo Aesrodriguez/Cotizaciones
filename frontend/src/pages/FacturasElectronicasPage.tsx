@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { facturasAPI, type FacturaElectronica, type FacturasResumen } from '../services/api'
 import { formatCurrency } from '../utils/format'
+import { printFacturaPDF } from '../utils/facturasPDF'
 import toast from 'react-hot-toast'
 import { useDebounce } from '../hooks/useDebounce'
 
@@ -220,7 +221,19 @@ function DetalleModal({ facturaId, onClose, onUpdated }: {
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{f.fecha_emision} · {f.moneda}</p>
             </div>
           ) : null}
-          <button onClick={onClose} className="opacity-50 hover:opacity-100 text-xl flex-shrink-0" style={{ color: 'var(--text)' }}>✕</button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {f && (
+              <button
+                onClick={() => printFacturaPDF(f)}
+                className="text-xs px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5"
+                style={{ background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)' }}
+                title="Ver e imprimir PDF"
+              >
+                🖨️ PDF
+              </button>
+            )}
+            <button onClick={onClose} className="opacity-50 hover:opacity-100 text-xl" style={{ color: 'var(--text)' }}>✕</button>
+          </div>
         </div>
 
         {/* Body scrollable */}
