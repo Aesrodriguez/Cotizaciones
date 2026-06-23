@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_authenticated_user, get_db_session
 from app.models.auth import Usuario
-from app.models.factura_electronica import FacturaElectronica, FacturaElectronicaItem
+from app.models.factura_electronica import FacturaElectronica, FacturaElectronicaItem, ItemCatalogoCompras
 from app.services.xml_parser import parse_dian_xml
 
 router = APIRouter(prefix="/facturas-electronicas", tags=["Facturas Electrónicas"])
@@ -83,11 +83,66 @@ def _decode_xml(raw: bytes) -> str:
     raise ValueError("Codificación del XML no soportada")
 
 
+def _upsert_catalogo(db: Session, item: dict, proveedor_nit: str | None,
+                     proveedor_nombre: str | None, fecha_compra) -> str | None:
+    """Inserta o actualiza el catálogo de ítems; devuelve el UUID del registro."""
+    ref  = item.get('referencia')
+    desc = item.get('descripcion')
+    if not desc:
+        return None
+
+    # Buscar existente: primero por referencia+NIT, luego por descripción+NIT
+    existing = db.execute(text("""
+        SELECT id FROM items_catalogo_compras
+        WHERE proveedor_nit = :nit
+          AND (
+            (:ref IS NOT NULL AND referencia = :ref)
+            OR (:ref IS NULL AND LOWER(descripcion) = LOWER(:desc) AND referencia IS NULL)
+          )
+        LIMIT 1
+    """), {"nit": proveedor_nit, "ref": ref, "desc": desc}).fetchone()
+
+    if existing:
+        db.execute(text("""
+            UPDATE items_catalogo_compras
+            SET ultimo_precio  = :precio,
+                ultima_compra  = GREATEST(ultima_compra, :fecha),
+                total_compras  = total_compras + 1,
+                unidad         = COALESCE(:unidad, unidad),
+                updated_at     = NOW()
+            WHERE id = :id
+        """), {
+            "precio": float(item.get('precio_unitario', 0)),
+            "fecha":  fecha_compra,
+            "unidad": item.get('unidad'),
+            "id":     existing[0],
+        })
+        return str(existing[0])
+
+    result = db.execute(text("""
+        INSERT INTO items_catalogo_compras
+            (referencia, descripcion, unidad, proveedor_nit, proveedor_nombre,
+             ultimo_precio, ultima_compra, total_compras)
+        VALUES
+            (:ref, :desc, :unidad, :nit, :nombre, :precio, :fecha, 1)
+        RETURNING id
+    """), {
+        "ref":    ref,
+        "desc":   desc,
+        "unidad": item.get('unidad'),
+        "nit":    proveedor_nit,
+        "nombre": proveedor_nombre,
+        "precio": float(item.get('precio_unitario', 0)),
+        "fecha":  fecha_compra,
+    })
+    return str(result.fetchone()[0])
+
+
 def _save_one_xml(db: Session, xml_content: str, filename: str, observaciones: str) -> dict:
     parsed = parse_dian_xml(xml_content)
     items_data = parsed.pop('items', [])
 
-    cufe  = parsed.get('cufe')
+    cufe   = parsed.get('cufe')
     numero = parsed['numero']
     nit    = parsed.get('proveedor_nit')
 
@@ -112,7 +167,17 @@ def _save_one_xml(db: Session, xml_content: str, filename: str, observaciones: s
     db.flush()  # assigns factura.id
 
     for item in items_data:
-        db.add(FacturaElectronicaItem(factura_id=factura.id, **item))
+        catalogo_id = _upsert_catalogo(
+            db, item,
+            proveedor_nit=nit,
+            proveedor_nombre=parsed.get('proveedor_nombre'),
+            fecha_compra=parsed['fecha_emision'],
+        )
+        db.add(FacturaElectronicaItem(
+            factura_id=factura.id,
+            catalogo_item_id=catalogo_id,
+            **item,
+        ))
 
     return _to_dict(factura, _serialize_items(items_data))
 
@@ -136,18 +201,29 @@ def _serialize_items(items_data: list) -> list:
 
 def _load_items(db: Session, factura_id) -> list:
     rows = db.execute(text("""
-        SELECT linea_num, descripcion, referencia, cantidad, unidad,
-               precio_unitario, subtotal, iva_pct, iva_monto
-        FROM facturas_electronicas_items
-        WHERE factura_id = :fid
-        ORDER BY linea_num
+        SELECT
+            i.linea_num, i.descripcion, i.referencia, i.cantidad, i.unidad,
+            i.precio_unitario, i.subtotal, i.iva_pct, i.iva_monto,
+            c.total_compras, c.ultimo_precio, c.ultima_compra
+        FROM facturas_electronicas_items i
+        LEFT JOIN items_catalogo_compras c ON i.catalogo_item_id = c.id
+        WHERE i.factura_id = :fid
+        ORDER BY i.linea_num
     """), {"fid": str(factura_id)}).fetchall()
     return [
         {
-            'linea_num': r[0], 'descripcion': r[1], 'referencia': r[2],
-            'cantidad': float(r[3] or 0), 'unidad': r[4],
-            'precio_unitario': float(r[5] or 0), 'subtotal': float(r[6] or 0),
-            'iva_pct': float(r[7] or 0), 'iva_monto': float(r[8] or 0),
+            'linea_num':      r[0],
+            'descripcion':    r[1],
+            'referencia':     r[2],
+            'cantidad':       float(r[3] or 0),
+            'unidad':         r[4],
+            'precio_unitario': float(r[5] or 0),
+            'subtotal':       float(r[6] or 0),
+            'iva_pct':        float(r[7] or 0),
+            'iva_monto':      float(r[8] or 0),
+            'total_compras':  int(r[9]) if r[9] else None,
+            'ultimo_precio':  float(r[10]) if r[10] else None,
+            'ultima_compra':  str(r[11]) if r[11] else None,
         }
         for r in rows
     ]

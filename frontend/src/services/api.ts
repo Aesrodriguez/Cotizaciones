@@ -233,6 +233,10 @@ export interface FacturaElectronicaItem {
   subtotal: number
   iva_pct: number
   iva_monto: number
+  // Datos del catálogo (null si es primera compra de este ítem)
+  total_compras: number | null
+  ultimo_precio: number | null
+  ultima_compra: string | null
 }
 
 export interface FacturaElectronica {

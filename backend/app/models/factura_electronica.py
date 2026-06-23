@@ -51,11 +51,28 @@ class FacturaElectronica(Base):
     updated_at             = Column(TIMESTAMP, nullable=False, server_default=sa.text("NOW()"), onupdate=sa.text("NOW()"))
 
 
+class ItemCatalogoCompras(Base):
+    __tablename__ = "items_catalogo_compras"
+
+    id               = Column(UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()"))
+    referencia       = Column(VARCHAR(100))
+    descripcion      = Column(VARCHAR(500), nullable=False)
+    unidad           = Column(VARCHAR(20))
+    proveedor_nit    = Column(VARCHAR(30))
+    proveedor_nombre = Column(VARCHAR(300))
+    ultimo_precio    = Column(Numeric(18, 2))
+    ultima_compra    = Column(Date)
+    total_compras    = Column(Integer, nullable=False, default=1)
+    created_at       = Column(TIMESTAMP, nullable=False, server_default=sa.text("NOW()"))
+    updated_at       = Column(TIMESTAMP, nullable=False, server_default=sa.text("NOW()"))
+
+
 class FacturaElectronicaItem(Base):
     __tablename__ = "facturas_electronicas_items"
 
     id              = Column(UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()"))
     factura_id      = Column(UUID(as_uuid=True), ForeignKey("facturas_electronicas.id", ondelete="CASCADE"), nullable=False)
+    catalogo_item_id = Column(UUID(as_uuid=True), ForeignKey("items_catalogo_compras.id", ondelete="SET NULL"))
     linea_num       = Column(Integer, nullable=False, default=0)
     descripcion     = Column(VARCHAR(500))
     referencia      = Column(VARCHAR(100))

@@ -357,27 +357,58 @@ function DetalleModal({ facturaId, onClose, onUpdated }: {
                         </tr>
                       </thead>
                       <tbody>
-                        {f.items.map((item, idx) => (
-                          <tr key={idx} style={{ borderTop: '1px solid var(--border)' }}>
-                            <td className="px-3 py-2 font-mono" style={{ color: 'var(--text-muted)' }}>{item.linea_num}</td>
-                            <td className="px-3 py-2" style={{ color: 'var(--text)' }}>
-                              <p className="font-medium">{item.descripcion ?? '—'}</p>
-                              {item.referencia && (
-                                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Ref: {item.referencia}</p>
-                              )}
-                            </td>
-                            <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--text)' }}>
-                              {item.cantidad} {item.unidad && <span style={{ color: 'var(--text-muted)' }}>{item.unidad}</span>}
-                            </td>
-                            <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--text)' }}>{fmt(item.precio_unitario)}</td>
-                            <td className="px-3 py-2 text-right font-mono font-semibold" style={{ color: 'var(--text)' }}>{fmt(item.subtotal)}</td>
-                            <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--text-muted)' }}>
-                              {item.iva_pct > 0 ? (
-                                <span title={`${item.iva_pct}%`}>{fmt(item.iva_monto)}</span>
-                              ) : '—'}
-                            </td>
-                          </tr>
-                        ))}
+                        {f.items.map((item, idx) => {
+                          const priceDiff = item.ultimo_precio != null && item.total_compras != null && item.total_compras > 1
+                            ? item.precio_unitario - item.ultimo_precio
+                            : null
+                          return (
+                            <tr key={idx} style={{ borderTop: '1px solid var(--border)' }}>
+                              <td className="px-3 py-2 font-mono" style={{ color: 'var(--text-muted)' }}>{item.linea_num}</td>
+                              <td className="px-3 py-2" style={{ color: 'var(--text)' }}>
+                                <p className="font-medium">{item.descripcion ?? '—'}</p>
+                                <div className="flex flex-wrap gap-1.5 mt-0.5">
+                                  {item.referencia && (
+                                    <span style={{ color: 'var(--text-muted)' }}>Ref: {item.referencia}</span>
+                                  )}
+                                  {item.total_compras != null && item.total_compras > 1 && (
+                                    <span
+                                      className="font-semibold px-1.5 py-0 rounded-full"
+                                      style={{ background: 'color-mix(in srgb, var(--lime) 15%, transparent)', color: 'var(--lime)', fontSize: '10px' }}
+                                      title={`Última compra: ${item.ultima_compra}`}
+                                    >
+                                      × {item.total_compras} compras
+                                    </span>
+                                  )}
+                                  {priceDiff !== null && priceDiff !== 0 && (
+                                    <span
+                                      className="font-semibold px-1.5 py-0 rounded-full"
+                                      style={{
+                                        fontSize: '10px',
+                                        background: priceDiff > 0
+                                          ? 'color-mix(in srgb, #ef4444 15%, transparent)'
+                                          : 'color-mix(in srgb, #22c55e 15%, transparent)',
+                                        color: priceDiff > 0 ? '#ef4444' : '#22c55e',
+                                      }}
+                                      title={`Precio anterior: ${fmt(item.ultimo_precio)}`}
+                                    >
+                                      {priceDiff > 0 ? '▲' : '▼'} {fmt(Math.abs(priceDiff))}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--text)' }}>
+                                {item.cantidad} {item.unidad && <span style={{ color: 'var(--text-muted)' }}>{item.unidad}</span>}
+                              </td>
+                              <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--text)' }}>{fmt(item.precio_unitario)}</td>
+                              <td className="px-3 py-2 text-right font-mono font-semibold" style={{ color: 'var(--text)' }}>{fmt(item.subtotal)}</td>
+                              <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--text-muted)' }}>
+                                {item.iva_pct > 0 ? (
+                                  <span title={`${item.iva_pct}%`}>{fmt(item.iva_monto)}</span>
+                                ) : '—'}
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                       <tfoot>
                         <tr style={{ background: 'var(--surface)', borderTop: '2px solid var(--border)' }}>
