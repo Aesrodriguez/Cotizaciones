@@ -18,6 +18,27 @@ interface Props {
   placeholder?: string
 }
 
+// Row hover handled via inline onMouseEnter/Leave to avoid Tailwind class conflicts in dark mode
+function ResultRow({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  const [hovered, setHovered] = useState(false)
+  const highlighted = active || hovered
+  return (
+    <button
+      type="button"
+      onMouseDown={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors"
+      style={{
+        background: highlighted ? 'color-mix(in srgb, var(--lime) 12%, var(--card))' : 'var(--card)',
+        borderTop: '1px solid var(--border)',
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
 export default function ProductoBuscador({ onSelect, onCreateNew, placeholder }: Props) {
   const [mode, setMode] = useState<'producto' | 'apu'>('producto')
   const [query, setQuery] = useState('')
@@ -94,10 +115,26 @@ export default function ProductoBuscador({ onSelect, onCreateNew, placeholder }:
 
   const ph = placeholder ?? (mode === 'producto' ? 'Buscar producto por código o nombre...' : 'Buscar APU por código o nombre...')
 
+  const dropdownStyle: React.CSSProperties = {
+    position: 'absolute',
+    zIndex: 50,
+    top: 'calc(100% + 4px)',
+    left: 0,
+    right: mode === 'producto' ? '2.75rem' : 0,
+    background: 'var(--card)',
+    border: '1px solid var(--border)',
+    borderRadius: '12px',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+    overflow: 'hidden',
+  }
+
   return (
     <div ref={containerRef} className="flex flex-col gap-2">
       {/* Mode tabs */}
-      <div className="flex items-center gap-1 p-1 rounded-lg self-start" style={{ background: 'var(--surface, #f5f5f5)', border: '1px solid var(--border, #e5e7eb)' }}>
+      <div
+        className="flex items-center gap-1 p-1 rounded-lg self-start"
+        style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+      >
         {(['producto', 'apu'] as const).map((m) => (
           <button
             key={m}
@@ -105,8 +142,8 @@ export default function ProductoBuscador({ onSelect, onCreateNew, placeholder }:
             onClick={() => switchMode(m)}
             className="px-3 py-1 text-xs rounded-md font-medium transition-all"
             style={{
-              background: mode === m ? '#c8f135' : 'transparent',
-              color: mode === m ? '#111' : '#6b7280',
+              background: mode === m ? 'var(--lime)' : 'transparent',
+              color: mode === m ? '#111' : 'var(--text-muted)',
             }}
           >
             {m === 'producto' ? 'Producto' : 'Base APU'}
@@ -117,7 +154,7 @@ export default function ProductoBuscador({ onSelect, onCreateNew, placeholder }:
       {/* Search row */}
       <div className="relative flex gap-2">
         <div className="relative flex-1">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none select-none">🔍</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm pointer-events-none select-none" style={{ color: 'var(--text-muted)' }}>🔍</span>
           <input
             ref={inputRef}
             type="text"
@@ -130,7 +167,7 @@ export default function ProductoBuscador({ onSelect, onCreateNew, placeholder }:
           />
           {loading && (
             <div className="absolute right-3 top-1/2 -translate-y-1/2">
-              <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--lime)', borderTopColor: 'transparent' }} />
             </div>
           )}
         </div>
@@ -139,65 +176,59 @@ export default function ProductoBuscador({ onSelect, onCreateNew, placeholder }:
           <button
             type="button"
             onClick={onCreateNew}
-            className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 bg-white hover:bg-blue-50 text-blue-600 font-bold text-lg shadow-sm transition-colors"
+            className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg font-bold text-lg transition-colors"
+            style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--lime)' }}
             title="Crear nuevo producto"
           >+</button>
         )}
 
-        {/* Dropdown */}
+        {/* Dropdown — results */}
         {open && results.length > 0 && (
-          <div
-            className="absolute z-50 top-full mt-1 left-0 bg-white rounded-xl border border-gray-200 shadow-lg overflow-y-auto"
-            style={{ right: mode === 'producto' ? '2.75rem' : 0, maxHeight: '320px' }}
-          >
+          <div style={{ ...dropdownStyle, maxHeight: '320px', overflowY: 'auto' }}>
             {mode === 'producto'
               ? (results as Producto[]).map((p, i) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onMouseDown={() => selectProducto(p)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-blue-50 transition-colors ${i === activeIdx ? 'bg-blue-50' : ''} ${i > 0 ? 'border-t border-gray-50' : ''}`}
-                >
-                  <div className="w-8 h-7 rounded bg-gray-100 flex items-center justify-center text-gray-500 text-xs font-mono flex-shrink-0 uppercase">
+                <ResultRow key={p.id} active={i === activeIdx} onClick={() => selectProducto(p)}>
+                  <div
+                    className="w-8 h-7 rounded flex items-center justify-center text-xs font-mono flex-shrink-0 uppercase"
+                    style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                  >
                     {p.codigo.slice(0, 4)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{p.nombre}</p>
-                    <p className="text-xs text-gray-400">{p.unidad_medida} · IVA {p.impuesto_porcentaje ?? 0}%</p>
+                    <p className="text-sm font-medium truncate" style={{ color: 'var(--text)' }}>{p.nombre}</p>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{p.unidad_medida} · IVA {p.impuesto_porcentaje ?? 0}%</p>
                   </div>
-                  <span className="text-sm font-semibold text-gray-700 flex-shrink-0 ml-2">{formatCurrency(p.precio_unitario)}</span>
-                </button>
+                  <span className="text-sm font-semibold flex-shrink-0 ml-2" style={{ color: 'var(--lime)' }}>{formatCurrency(p.precio_unitario)}</span>
+                </ResultRow>
               ))
               : (results as APUItem[]).map((a, i) => (
-                <button
-                  key={a.id}
-                  type="button"
-                  onMouseDown={() => selectAPU(a)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-blue-50 transition-colors ${i === activeIdx ? 'bg-blue-50' : ''} ${i > 0 ? 'border-t border-gray-50' : ''}`}
-                >
-                  <div className="w-8 h-7 rounded flex items-center justify-center text-xs font-mono font-bold flex-shrink-0 uppercase" style={{ background: '#c8f135', color: '#111' }}>
+                <ResultRow key={a.id} active={i === activeIdx} onClick={() => selectAPU(a)}>
+                  <div
+                    className="w-8 h-7 rounded flex items-center justify-center text-xs font-mono font-bold flex-shrink-0 uppercase"
+                    style={{ background: 'var(--lime)', color: '#111' }}
+                  >
                     {(a.codigo ?? '').slice(0, 4)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{a.nombre}</p>
-                    <p className="text-xs text-gray-400">{a.unidad_medida} · APU</p>
+                    <p className="text-sm font-medium truncate" style={{ color: 'var(--text)' }}>{a.nombre}</p>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{a.unidad_medida} · APU</p>
                   </div>
-                  <span className="text-sm font-semibold text-gray-700 flex-shrink-0 ml-2">{formatCurrency(Number(a.precio_unitario ?? 0))}</span>
-                </button>
+                  <span className="text-sm font-semibold flex-shrink-0 ml-2" style={{ color: 'var(--lime)' }}>{formatCurrency(Number(a.precio_unitario ?? 0))}</span>
+                </ResultRow>
               ))
             }
           </div>
         )}
 
+        {/* Dropdown — empty state */}
         {open && !loading && results.length === 0 && query.trim() && (
-          <div
-            className="absolute z-50 top-full mt-1 left-0 bg-white rounded-xl border border-gray-200 shadow-lg"
-            style={{ right: mode === 'producto' ? '2.75rem' : 0 }}
-          >
-            <div className="px-4 py-3 text-sm text-gray-500 flex items-center justify-between">
+          <div style={dropdownStyle}>
+            <div className="px-4 py-3 text-sm flex items-center justify-between" style={{ color: 'var(--text-muted)' }}>
               <span>No se encontraron {mode === 'producto' ? 'productos' : 'APUs'}.</span>
               {mode === 'producto' && (
-                <button type="button" onClick={onCreateNew} className="text-blue-600 hover:underline font-medium text-xs">+ Crear nuevo</button>
+                <button type="button" onClick={onCreateNew} className="text-xs font-medium hover:underline" style={{ color: 'var(--lime)' }}>
+                  + Crear nuevo
+                </button>
               )}
             </div>
           </div>
