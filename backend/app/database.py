@@ -9,8 +9,6 @@ _raw_url = os.getenv(
 )
 DATABASE_URL = _raw_url.replace("postgres://", "postgresql://", 1)
 
-_is_remote = "localhost" not in DATABASE_URL and "127.0.0.1" not in DATABASE_URL
-
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
@@ -19,7 +17,6 @@ engine = create_engine(
     pool_recycle=300,
     echo=os.getenv("DATABASE_ECHO", "False").lower() == "true",
     future=True,
-    connect_args={"sslmode": "require"} if _is_remote else {},
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

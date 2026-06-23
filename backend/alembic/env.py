@@ -19,12 +19,8 @@ target_metadata = Base.metadata
 _raw_url = os.environ["DATABASE_URL"]
 DATABASE_URL = _raw_url.replace("postgres://", "postgresql://", 1)
 
-_is_remote = "localhost" not in DATABASE_URL and "127.0.0.1" not in DATABASE_URL
-_connect_args = {"sslmode": "require"} if _is_remote else {}
-
-
 def run_migrations_online() -> None:
-    connectable = create_engine(DATABASE_URL, poolclass=pool.NullPool, connect_args=_connect_args)
+    connectable = create_engine(DATABASE_URL, poolclass=pool.NullPool)
     with connectable.connect() as connection:
         context.configure(
             connection=connection,
