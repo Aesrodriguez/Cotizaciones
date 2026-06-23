@@ -35,11 +35,11 @@
   --card:         #f9f9f9;
   --border:       #e0e0e0;
   --border-light: #ebebeb;
-  --lime:         #c8f135;
-  --lime-hover:   #b8e020;
-  --lime-dim:     rgba(80,108,0,0.08);
-  --lime-border:  rgba(80,108,0,0.20);
-  --lime-text:    #4d6a00;
+  --lime:         #16a34a;
+  --lime-hover:   #15803d;
+  --lime-dim:     rgba(22,163,74,0.10);
+  --lime-border:  rgba(22,163,74,0.28);
+  --lime-text:    #15803d;
   --text:         #111111;
   --text-muted:   #555555;
   --text-faint:   #aaaaaa;
@@ -48,6 +48,8 @@
   --shadow:       0 4px 24px rgba(0,0,0,0.09);
   color-scheme: light;
 }
+
+[data-theme="light"] .btn-primary { color: #ffffff; }
 
 /* ══════════════════════════════════════════════════════════════════════════
    BASE
