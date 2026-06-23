@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   extractosAPI,
   type DetalleResumen,
@@ -476,8 +476,8 @@ function MovimientosTable({
                     const benef = det?.nombre ?? (m.detalle_transferencia?.nombre ?? null)
 
                     return (
-                      <>
-                        <tr key={m.id}
+                      <React.Fragment key={m.id}>
+                        <tr
                           className={isClickable ? 'cursor-pointer' : ''}
                           style={{ borderBottom: isOpen ? 'none' : '1px solid var(--border)' }}
                           onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface)')}
@@ -541,17 +541,16 @@ function MovimientosTable({
                           </td>
                         </tr>
                         {/* Detalle Excel (pago/transferencia) */}
-                        {hasDetail && isOpen && <DetalleExpandido key={m.id + '_det'} m={m} />}
+                        {hasDetail && isOpen && <DetalleExpandido m={m} />}
                         {/* Facturas coincidentes (monto+fecha) */}
                         {hasFacMatch && isOpen && (
                           <FacturasMatchPanel
-                            key={m.id + '_fac'}
                             matches={facMatches}
                             movimientoId={m.id}
                             onVinculado={onMatchVinculado}
                           />
                         )}
-                      </>
+                      </React.Fragment>
                     )
                   })}
                 </tbody>

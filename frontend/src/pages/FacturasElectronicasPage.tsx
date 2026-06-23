@@ -625,6 +625,7 @@ export default function FacturasElectronicasPage() {
   const [search, setSearch] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('')
   const [filtroRet, setFiltroRet] = useState('')
+  const [filtroTipo, setFiltroTipo] = useState('RECIBIDA')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const debouncedSearch = useDebounce(search, 350)
@@ -633,16 +634,16 @@ export default function FacturasElectronicasPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const r = await facturasAPI.getAll({ page, limit, search: debouncedSearch, estado: filtroEstado, tiene_retencion: filtroRet })
+      const r = await facturasAPI.getAll({ page, limit, search: debouncedSearch, estado: filtroEstado, tiene_retencion: filtroRet, tipo: filtroTipo })
       setFacturas(r.data.data)
       setTotal(r.data.total)
       setResumen(r.data.resumen)
     } catch { setFacturas([]) }
     finally { setLoading(false) }
-  }, [page, debouncedSearch, filtroEstado, filtroRet])
+  }, [page, debouncedSearch, filtroEstado, filtroRet, filtroTipo])
 
   useEffect(() => { load() }, [load])
-  useEffect(() => { setPage(1) }, [debouncedSearch, filtroEstado, filtroRet])
+  useEffect(() => { setPage(1) }, [debouncedSearch, filtroEstado, filtroRet, filtroTipo])
 
   const handleDelete = async (f: FacturaElectronica) => {
     if (!confirm(`¿Eliminar factura ${f.numero}?`)) return
@@ -656,10 +657,25 @@ export default function FacturasElectronicasPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold" style={{ color: 'var(--text)' }}>Facturas Electrónicas</h1>
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Control de recepción, retenciones y estados · DIAN UBL 2.1</p>
+        </div>
+        {/* Tabs: Recibidas / Emitidas / Todas */}
+        <div className="flex rounded-xl overflow-hidden flex-shrink-0" style={{ border: '1px solid var(--border)' }}>
+          {([['RECIBIDA', 'Recibidas'], ['EMITIDA', 'Emitidas'], ['', 'Todas']] as const).map(([val, label]) => (
+            <button
+              key={val}
+              onClick={() => setFiltroTipo(val)}
+              className="text-xs px-4 py-2 font-medium transition-all"
+              style={{
+                background: filtroTipo === val ? 'var(--lime-dim)' : 'var(--surface)',
+                color: filtroTipo === val ? 'var(--lime-text)' : 'var(--text-muted)',
+                borderRight: val !== '' ? '1px solid var(--border)' : undefined,
+              }}
+            >{label}</button>
+          ))}
         </div>
       </div>
 
@@ -668,11 +684,11 @@ export default function FacturasElectronicasPage() {
       {resumen && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <KPI label="Total facturas" value={String(total)} sub={`${resumen.con_retencion} con retención`} />
-          <KPI label="Subtotal" value={formatCurrency(resumen.subtotal_total)} />
-          <KPI label="IVA total" value={formatCurrency(resumen.iva_total)} />
+          <KPI label="Subtotal" value={formatCurrency(resumen.subtotal_total)} sub={filtroTipo === '' ? 'Solo recibidas' : undefined} />
+          <KPI label="IVA total" value={formatCurrency(resumen.iva_total)} sub={filtroTipo === '' ? 'Solo recibidas' : undefined} />
           <KPI label="Retefuente" value={formatCurrency(resumen.retefuente_total)} sub="Retención en la fuente" />
           <KPI label="ReteIVA + ReteICA" value={formatCurrency(resumen.reteiva_total + resumen.reteica_total)} />
-          <KPI label="Total a pagar" value={formatCurrency(resumen.pagar_total)} sub="Neto después de retenciones" />
+          <KPI label="Total a pagar" value={formatCurrency(resumen.pagar_total)} sub={filtroTipo === '' ? 'Solo recibidas' : 'Neto después de retenciones'} />
         </div>
       )}
 
@@ -747,10 +763,18 @@ export default function FacturasElectronicasPage() {
                     onClick={() => setSelectedId(f.id)}
                   >
                     <td className="px-4 py-3">
-                      <span className="font-mono text-xs font-bold" style={{ color: 'var(--lime)' }}>{f.numero}</span>
-                      {f.dian_validado && (
-                        <span className="ml-1 text-xs" style={{ color: 'var(--lime)', opacity: 0.7 }} title="Validado DIAN">✓</span>
-                      )}
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-xs font-bold" style={{ color: 'var(--lime)' }}>{f.numero}</span>
+                        {f.dian_validado && (
+                          <span className="text-xs" style={{ color: 'var(--lime)', opacity: 0.7 }} title="Validado DIAN">✓</span>
+                        )}
+                        {f.tipo === 'EMITIDA' && (
+                          <span
+                            className="text-xs font-semibold px-1.5 py-0.5 rounded-md"
+                            style={{ background: 'rgba(168,85,247,0.15)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.3)' }}
+                          >Emitida</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 font-mono text-xs" style={{ color: 'var(--text-muted)' }}>{f.fecha_emision}</td>
                     <td className="px-4 py-3 max-w-[180px]">

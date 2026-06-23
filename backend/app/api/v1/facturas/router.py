@@ -19,6 +19,16 @@ router = APIRouter(prefix="/facturas-electronicas", tags=["Facturas Electrónica
 
 ESTADOS = {"RECIBIDA", "CONTABILIZADA", "PAGADA", "ANULADA"}
 
+# Palabras clave para detectar facturas emitidas por la propia empresa
+_EMPRESA_KEYWORDS = ["TRIPLE A CONSTRUCCIONES", "TRIPLAA CONSTRUCCIONES"]
+
+
+def _es_factura_emitida(proveedor_nombre: str | None) -> bool:
+    if not proveedor_nombre:
+        return False
+    upper = proveedor_nombre.upper()
+    return any(kw in upper for kw in _EMPRESA_KEYWORDS)
+
 _ITEM_FIELDS = (
     'id', 'linea_num', 'descripcion', 'referencia',
     'cantidad', 'unidad', 'precio_unitario', 'subtotal', 'iva_pct', 'iva_monto',
@@ -69,6 +79,7 @@ def _to_dict(f: FacturaElectronica, items: list | None = None) -> dict:
         "autorizacion_hasta":     str(f.autorizacion_hasta) if f.autorizacion_hasta else None,
         "prefijo":                f.prefijo,
         "qr_url":                 f.qr_url,
+        "tipo":                   f.tipo or 'RECIBIDA',
         "items":                  items or [],
     }
     return d
@@ -157,11 +168,14 @@ def _save_one_xml(db: Session, xml_content: str, filename: str, observaciones: s
     if dup:
         raise ValueError(f"La factura '{numero}' ya fue registrada (duplicado)")
 
+    tipo = 'EMITIDA' if _es_factura_emitida(parsed.get('proveedor_nombre')) else 'RECIBIDA'
+
     factura = FacturaElectronica(
         **parsed,
         xml_filename=filename,
         xml_content=xml_content,
         observaciones=observaciones or None,
+        tipo=tipo,
     )
     db.add(factura)
     db.flush()  # assigns factura.id
@@ -292,6 +306,7 @@ def list_facturas(
     estado: str = Query(""),
     search: str = Query(""),
     tiene_retencion: str = Query(""),
+    tipo: str = Query(""),   # RECIBIDA | EMITIDA | "" (todas)
     db: Session = Depends(get_db_session),
     _: Usuario = Depends(get_authenticated_user),
 ):
@@ -301,6 +316,9 @@ def list_facturas(
     if estado:
         conds.append("estado = :estado")
         params["estado"] = estado
+    if tipo:
+        conds.append("tipo = :tipo")
+        params["tipo"] = tipo.upper()
     if search:
         conds.append("(numero ILIKE :s OR proveedor_nombre ILIKE :s OR proveedor_nit ILIKE :s)")
         params["s"] = f"%{search}%"
@@ -318,7 +336,7 @@ def list_facturas(
                total_bruto, total_pagar, tiene_retencion, estado,
                xml_filename, observaciones, created_at,
                cufe, tipo_documento, forma_pago, dian_validado,
-               proveedor_ciudad, adquiriente_ciudad
+               proveedor_ciudad, adquiriente_ciudad, tipo
         FROM facturas_electronicas {where}
         ORDER BY fecha_emision DESC, created_at DESC
         LIMIT :limit OFFSET :offset
@@ -338,16 +356,19 @@ def list_facturas(
             "cufe": r[19], "tipo_documento": r[20], "forma_pago": r[21],
             "dian_validado": bool(r[22]) if r[22] is not None else False,
             "proveedor_ciudad": r[23], "adquiriente_ciudad": r[24],
+            "tipo": r[25] or 'RECIBIDA',
             "items": [],
         })
 
+    # El resumen solo suma RECIBIDAS (facturas de proveedores externos)
+    where_recibidas = where + " AND tipo = 'RECIBIDA'"
     sums = db.execute(text(f"""
         SELECT
             SUM(subtotal), SUM(iva),
             SUM(retefuente), SUM(reteiva), SUM(reteica),
             SUM(total_pagar),
             COUNT(*) FILTER (WHERE tiene_retencion = TRUE)
-        FROM facturas_electronicas {where}
+        FROM facturas_electronicas {where_recibidas}
     """), params).fetchone()
 
     return {

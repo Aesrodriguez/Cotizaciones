@@ -280,6 +280,7 @@ export interface FacturaElectronica {
   autorizacion_hasta: string | null
   prefijo: string | null
   qr_url: string | null
+  tipo: 'RECIBIDA' | 'EMITIDA'
   items: FacturaElectronicaItem[]
 }
 
