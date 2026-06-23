@@ -235,6 +235,8 @@ export const apuAPI = {
     api.patch(`/apu/${apuId}/mano_obra/${detId}`, data),
   updateEquipo: (apuId: string, detId: string, data: { precio_unitario: number; cantidad?: number }) =>
     api.patch(`/apu/${apuId}/equipos/${detId}`, data),
+  seed: () => api.post<{ ok: boolean; msg: string; count?: number }>('/apu/seed'),
+  seedStatus: () => api.get<{ running: boolean; count: number }>('/apu/seed/status'),
 }
 
 export default api

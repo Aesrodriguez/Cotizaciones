@@ -1,19 +1,149 @@
 """API router for APU (Análisis de Precios Unitarios) module."""
 from __future__ import annotations
 
+import json
 import math
+import os
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_authenticated_user, get_db_session
+from app.api.deps import get_authenticated_user, get_db_session, require_admin
+from app.database import SessionLocal
 from app.models.auth import Usuario
 from app.models.apu import APU, APUMaterial, APUManoObra, APUEquipo
 from app.schemas.apu import APUListOut, APUOut, APUPrecioUpdate, APUDetallePrecioUpdate
 from app.schemas.common import PaginatedResponse
 
 router = APIRouter(prefix="/apu", tags=["APU"])
+
+_DATA_FILE = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'data', 'apu_seed.json')
+_BATCH = 500
+_seed_running = False
+
+
+def _esc(s) -> str:
+    return str(s).replace("'", "''") if s else ''
+
+
+def _run_seed():
+    global _seed_running
+    _seed_running = True
+    db = SessionLocal()
+    try:
+        if not os.path.exists(_DATA_FILE):
+            raise RuntimeError(f"Seed file not found: {_DATA_FILE}")
+
+        with open(_DATA_FILE, encoding='utf-8') as f:
+            seed = json.load(f)
+
+        apus = seed['apus']
+        mat_rows, equ_rows, mob_rows = [], [], []
+
+        for apu in apus:
+            code = _esc(apu['code'])
+            nombre = _esc(apu['nombre'])
+            unidad = _esc(apu['unidad'])
+            precio = apu.get('precio', 0) or 0
+            cap_code = _esc(apu.get('cap_code', ''))
+            cap_name = _esc(apu.get('cap_name', ''))
+
+            db.execute(text(f"""
+                INSERT INTO apu (id, codigo, nombre, unidad_medida, precio_unitario,
+                                 capitulo_codigo, capitulo, estado, created_at, updated_at)
+                VALUES (gen_random_uuid(), '{code}', '{nombre}', '{unidad}', {precio},
+                        '{cap_code}', '{cap_name}', 'ACTIVO', NOW(), NOW())
+                ON CONFLICT (codigo) DO UPDATE
+                  SET capitulo_codigo = EXCLUDED.capitulo_codigo,
+                      capitulo        = EXCLUDED.capitulo,
+                      precio_unitario = EXCLUDED.precio_unitario
+            """))
+
+            for i, r in enumerate(apu.get('mat', [])):
+                if r.get('c') and float(r['c']) > 0:
+                    mat_rows.append((code, _esc(r['d']), _esc(r['u']), float(r['c']), float(r['p']), float(r['v']), i))
+            for i, r in enumerate(apu.get('equ', [])):
+                if r.get('c') and float(r['c']) > 0:
+                    equ_rows.append((code, _esc(r['d']), _esc(r['u']), float(r['c']), float(r['p']), float(r['v']), i))
+            for i, r in enumerate(apu.get('mob', [])):
+                if r.get('c') and float(r['c']) > 0:
+                    mob_rows.append((code, _esc(r['d']), _esc(r['u']), float(r['c']), float(r['p']), float(r['v']), i))
+
+        db.commit()
+
+        # Clear existing details
+        for tbl in ('apu_materiales', 'apu_mano_obra', 'apu_equipos'):
+            db.execute(text(f"DELETE FROM {tbl}"))
+        db.commit()
+
+        def bulk_mat(rows):
+            for start in range(0, len(rows), _BATCH):
+                batch = rows[start:start + _BATCH]
+                vals = ', '.join(
+                    f"(gen_random_uuid(),"
+                    f"(SELECT id FROM apu WHERE codigo='{r[0]}' LIMIT 1),"
+                    f"'{r[1]}','{r[2]}',{r[3]},{r[4]},{r[5]},{r[6]},NOW(),NOW())"
+                    for r in batch
+                )
+                db.execute(text(
+                    f"INSERT INTO apu_materiales"
+                    f" (id,apu_id,nombre,unidad,cantidad,precio_unitario,subtotal,orden,created_at,updated_at)"
+                    f" VALUES {vals}"
+                ))
+                db.commit()
+
+        def bulk_detail(table, rows):
+            for start in range(0, len(rows), _BATCH):
+                batch = rows[start:start + _BATCH]
+                vals = ', '.join(
+                    f"(gen_random_uuid(),"
+                    f"(SELECT id FROM apu WHERE codigo='{r[0]}' LIMIT 1),"
+                    f"'{r[1]}','{r[2]}',{r[3]},{r[4]},{r[5]},{r[6]},NOW(),NOW())"
+                    for r in batch
+                )
+                db.execute(text(
+                    f"INSERT INTO {table}"
+                    f" (id,apu_id,descripcion,unidad,cantidad,precio_unitario,subtotal,orden,created_at,updated_at)"
+                    f" VALUES {vals}"
+                ))
+                db.commit()
+
+        bulk_mat(mat_rows)
+        bulk_detail('apu_mano_obra', mob_rows)
+        bulk_detail('apu_equipos', equ_rows)
+
+    finally:
+        db.close()
+        _seed_running = False
+
+
+# ── Seed endpoint ─────────────────────────────────────────────────────────────
+
+@router.post("/seed")
+def seed_apu(
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(require_admin),
+):
+    global _seed_running
+    if _seed_running:
+        return {"ok": False, "msg": "Siembra ya en progreso"}
+    count = db.execute(text("SELECT COUNT(*) FROM apu WHERE capitulo_codigo IS NOT NULL")).scalar()
+    if count and count > 0:
+        return {"ok": False, "msg": f"Ya sembrado ({count} APUs)", "count": count}
+    background_tasks.add_task(_run_seed)
+    return {"ok": True, "msg": "Siembra iniciada en segundo plano"}
+
+
+@router.get("/seed/status")
+def seed_status(
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    count = db.execute(text("SELECT COUNT(*) FROM apu WHERE capitulo_codigo IS NOT NULL")).scalar() or 0
+    return {"running": _seed_running, "count": int(count)}
 
 
 # ── Capítulos ────────────────────────────────────────────────────────────────

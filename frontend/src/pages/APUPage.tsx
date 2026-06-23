@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { apuAPI } from '../services/api'
+import { useAuthStore } from '../stores/authStore'
 import { formatCurrency } from '../utils/format'
 import { useDebounce } from '../hooks/useDebounce'
 import SkeletonTable from '../components/common/SkeletonTable'
@@ -132,6 +133,9 @@ function APUDetail({ apu, onPriceUpdated }: { apu: APUItem; onPriceUpdated: () =
 }
 
 export default function APUPage() {
+  const user = useAuthStore((s) => s.user)
+  const isAdmin = user?.roles?.some((r) => r.nombre === 'ADMIN' || r.nombre === 'ADMINISTRADOR') ?? false
+
   const [capitulos, setCapitulos] = useState<Capitulo[]>([])
   const [selectedCap, setSelectedCap] = useState<string>('')
   const [items, setItems] = useState<APUItem[]>([])
@@ -142,15 +146,64 @@ export default function APUPage() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
+  const [seedRunning, setSeedRunning] = useState(false)
+  const [seedCount, setSeedCount] = useState(0)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const debouncedSearch = useDebounce(search, 350)
   const limit = 50
+
+  const checkSeedStatus = useCallback(() => {
+    apuAPI.seedStatus().then((r) => {
+      setSeedRunning(r.data.running)
+      setSeedCount(r.data.count)
+      if (!r.data.running && r.data.count > 0 && capitulos.length === 0) {
+        // Seed finished — reload capitulos
+        apuAPI.getCapitulos().then((rc) => {
+          setCapitulos(rc.data)
+          if (rc.data.length > 0) setSelectedCap(rc.data[0].codigo)
+        })
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+      }
+    }).catch(() => {})
+  }, [capitulos.length])
 
   useEffect(() => {
     apuAPI.getCapitulos().then((r) => {
       setCapitulos(r.data)
       if (r.data.length > 0) setSelectedCap(r.data[0].codigo)
-    })
-  }, [])
+    }).catch(() => {})
+    // Check seed status on mount
+    checkSeedStatus()
+  }, []) // eslint-disable-line
+
+  // Start polling when seed is running
+  useEffect(() => {
+    if (seedRunning && !pollRef.current) {
+      pollRef.current = setInterval(checkSeedStatus, 3000)
+    }
+    return () => {
+      if (pollRef.current && !seedRunning) {
+        clearInterval(pollRef.current)
+        pollRef.current = null
+      }
+    }
+  }, [seedRunning, checkSeedStatus])
+
+  const triggerSeed = async () => {
+    try {
+      const r = await apuAPI.seed()
+      if (r.data.ok) {
+        toast.success('Siembra iniciada — esto puede tardar 1-2 minutos')
+        setSeedRunning(true)
+        pollRef.current = setInterval(checkSeedStatus, 3000)
+      } else {
+        toast(r.data.msg)
+        checkSeedStatus()
+      }
+    } catch {
+      toast.error('Error al iniciar la siembra')
+    }
+  }
 
   const loadItems = useCallback(async () => {
     setLoading(true)
@@ -190,12 +243,55 @@ export default function APUPage() {
         <div>
           <h1>Base de Datos APU</h1>
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-            Master Pack Colombia 2026 · {total.toLocaleString()} actividades
+            Master Pack Colombia 2026
+            {seedCount > 0 && ` · ${seedCount.toLocaleString()} APUs cargados`}
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {seedRunning && (
+            <span className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: 'var(--surface)', color: 'var(--lime)' }}>
+              <span className="inline-block w-2 h-2 rounded-full animate-pulse" style={{ background: 'var(--lime)' }} />
+              Cargando datos APU…
+            </span>
+          )}
+          {isAdmin && !seedRunning && seedCount === 0 && (
+            <button onClick={triggerSeed} className="btn-primary text-sm">
+              Cargar Base APU
+            </button>
+          )}
+          {isAdmin && !seedRunning && seedCount > 0 && (
+            <button onClick={triggerSeed} className="btn-secondary text-xs">
+              Re-cargar datos
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="flex gap-4 items-start">
+      {capitulos.length === 0 && !seedRunning && (
+        <div className="card text-center py-16">
+          <p className="text-lg font-semibold mb-2" style={{ color: 'var(--text)' }}>Base APU vacía</p>
+          <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>
+            Los datos del Master Pack 2026 aún no están en la base de datos.
+            {isAdmin ? ' Haz clic en "Cargar Base APU" para sembrarlos.' : ' Contacta al administrador.'}
+          </p>
+          {isAdmin && (
+            <button onClick={triggerSeed} className="btn-primary">
+              Cargar Base APU (2113 actividades)
+            </button>
+          )}
+        </div>
+      )}
+
+      {seedRunning && capitulos.length === 0 && (
+        <div className="card text-center py-16">
+          <div className="inline-block w-8 h-8 rounded-full border-2 border-t-transparent animate-spin mb-4" style={{ borderColor: 'var(--lime)', borderTopColor: 'transparent' }} />
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+            Cargando 2113 actividades APU… puede tardar 1-2 minutos
+          </p>
+        </div>
+      )}
+
+      <div className={`flex gap-4 items-start ${capitulos.length === 0 ? 'hidden' : ''}`}>
         {/* ── Chapter sidebar ─────────────────────────────── */}
         <div
           className="w-64 flex-shrink-0 rounded-xl overflow-hidden"
