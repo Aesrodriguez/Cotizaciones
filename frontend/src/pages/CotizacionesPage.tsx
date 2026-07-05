@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { cotizacionesAPI } from '../services/api'
-import { formatCurrency, formatDate, STATUS_CONFIG } from '../utils/format'
+import { formatCurrency, formatDate } from '../utils/format'
 import { useAuthStore } from '../stores/authStore'
 import Pagination from '../components/common/Pagination'
 import ConfirmDialog from '../components/common/ConfirmDialog'
@@ -10,14 +10,12 @@ import toast from 'react-hot-toast'
 import type { Cotizacion, PaginatedResponse } from '../types'
 import { useDebounce } from '../hooks/useDebounce'
 
-const ESTADOS = ['BORRADOR', 'PENDIENTE', 'ACEPTADA', 'RECHAZADA', 'CANCELADA']
-
 export default function CotizacionesPage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const isAdmin = user?.roles?.some((r) => ['ADMIN', 'ADMINISTRADOR'].includes(r.nombre))
   const [data, setData] = useState<PaginatedResponse<Cotizacion>>({ data: [], total: 0, page: 1, limit: 10, pages: 1 })
-  const [filters, setFilters] = useState({ status: '', search: '', page: 1 })
+  const [filters, setFilters] = useState({ search: '', page: 1 })
   const debouncedSearch = useDebounce(filters.search, 350)
   const [loading, setLoading] = useState(true)
   const [deleteTarget, setDeleteTarget] = useState<Cotizacion | null>(null)
@@ -27,12 +25,11 @@ export default function CotizacionesPage() {
     setLoading(true)
     try {
       const params: Record<string, string | number> = { page: filters.page, limit: 10 }
-      if (filters.status) params.estado = filters.status
       if (debouncedSearch) params.search = debouncedSearch
       const res = await cotizacionesAPI.getAll(params)
       setData(res.data)
     } finally { setLoading(false) }
-  }, [filters.page, filters.status, debouncedSearch])
+  }, [filters.page, debouncedSearch])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -63,14 +60,6 @@ export default function CotizacionesPage() {
             onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value, page: 1 }))}
             className="input max-w-xs"
           />
-          <select
-            value={filters.status}
-            onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value, page: 1 }))}
-            className="input max-w-[180px]"
-          >
-            <option value="">Todos los estados</option>
-            {ESTADOS.map((s) => <option key={s} value={s}>{STATUS_CONFIG[s]?.label}</option>)}
-          </select>
         </div>
 
         {loading ? (
@@ -84,7 +73,6 @@ export default function CotizacionesPage() {
                 <tr className="bg-gray-50 border-b border-gray-200">
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Número</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Cliente</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Estado</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Emisión</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Total</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Acciones</th>
@@ -97,9 +85,6 @@ export default function CotizacionesPage() {
                     <td className="px-4 py-3">
                       <div className="font-medium text-gray-900">{q.cliente_nombre}</div>
                       <div className="text-xs text-gray-400 mt-0.5">{q.usuario_nombre}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`badge ${STATUS_CONFIG[q.estado]?.className}`}>{STATUS_CONFIG[q.estado]?.label}</span>
                     </td>
                     <td className="px-4 py-3 text-gray-600">{formatDate(q.fecha_emision)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-gray-900">{formatCurrency(q.total, q.moneda)}</td>
