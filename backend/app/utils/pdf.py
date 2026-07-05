@@ -286,8 +286,8 @@ def generate_cotizacion_pdf(cotizacion) -> bytes:
     cur_y += 2
 
     # ── FOOTER: notes (left) + totals (right) ────────────────────────────────
-    notes_w = 115
-    totals_w = _CW - notes_w  # 75
+    notes_w = 107
+    totals_w = _CW - notes_w  # 83
 
     footer_start_y = cur_y
 
@@ -327,7 +327,7 @@ def generate_cotizacion_pdf(cotizacion) -> bytes:
     tot_x = _LM + notes_w
     tot_y = footer_start_y
     tot_row_h = 7
-    lbl_w = 40
+    lbl_w = 48
     val_w = totals_w - lbl_w
 
     def tot_row(label: str, value: str, bold: bool = False):
@@ -345,9 +345,9 @@ def generate_cotizacion_pdf(cotizacion) -> bytes:
         tot_row("Subtotal",   _cop(subtotal))
         if descuento_monto > 0:
             tot_row("Descuento", _cop(descuento_monto))
-        tot_row(f"A ({aiu_adm:g}%)", _cop(costos_base * aiu_adm / 100))
-        tot_row(f"I ({aiu_imp:g}%)", _cop(costos_base * aiu_imp / 100))
-        tot_row(f"U ({aiu_uti:g}%)", _cop(costos_base * aiu_uti / 100))
+        tot_row(f"Administracion ({aiu_adm:g}%)", _cop(costos_base * aiu_adm / 100))
+        tot_row(f"Imprevistos ({aiu_imp:g}%)",    _cop(costos_base * aiu_imp / 100))
+        tot_row(f"Utilidad ({aiu_uti:g}%)",        _cop(costos_base * aiu_uti / 100))
         if aiu_iva > 0:
             tot_row("IVA AIU (19%)", _cop(aiu_iva))
         tot_row("Total", _cop(total), bold=True)
