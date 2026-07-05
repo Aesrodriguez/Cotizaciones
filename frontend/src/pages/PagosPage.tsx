@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { pagosAPI, obrasAPI, facturasAPI } from '../services/api'
+import { pagosAPI, obrasAPI, facturasAPI, trabajadoresAPI } from '../services/api'
 import type { MetodoPago, Obra, Pago, PagoDestinatario, PagosResumen, TipoPago } from '../services/api'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -224,7 +224,7 @@ function PagoFormModal({ initial, obras, onClose, onSaved }: {
     } : { ...EMPTY_FORM }
   )
   const [facturas, setFacturas] = useState<{ id: string; numero: string; proveedor_nombre: string | null; total_pagar: number }[]>([])
-  const [trabajadores, setTrabajadores] = useState<{ id: string; nombre: string; apellido: string }[]>([])
+  const [trabajadores, setTrabajadores] = useState<{ id: string; nombres: string; apellidos: string; cargo?: string }[]>([])
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -237,17 +237,17 @@ function PagoFormModal({ initial, obras, onClose, onSaved }: {
       })))
     }).catch(() => {})
     // Cargar trabajadores
-    fetch('/api/v1/trabajadores/?limit=200', {
-      headers: { Authorization: `Bearer ${localStorage.getItem('token') ?? ''}` }
-    }).then(r => r.json()).then(d => setTrabajadores(d.data ?? [])).catch(() => {})
+    trabajadoresAPI.getAll({ limit: 200 }).then(r => setTrabajadores(
+      r.data.data.map(t => ({ id: t.id, nombres: t.nombres, apellidos: t.apellidos, cargo: t.cargo }))
+    )).catch(() => {})
   }, [])
 
   // Sugerencias estáticas según tipo seleccionado
   const staticSugs: Sugerencia[] = (() => {
     if (form.tipo === 'TRABAJADOR') {
       return trabajadores.map(t => ({
-        label: `${t.nombre} ${t.apellido}`.trim(),
-        sub: (t as unknown as Record<string, string>).cargo ?? undefined,
+        label: `${t.nombres} ${t.apellidos}`.trim(),
+        sub: t.cargo ?? undefined,
         tipo: 'TRABAJADOR' as TipoPago,
         fuente: 'trabajador' as const,
         id: t.id,
@@ -386,7 +386,7 @@ function PagoFormModal({ initial, obras, onClose, onSaved }: {
             <select className="input w-full text-sm" value={form.trabajador_id} onChange={f('trabajador_id')}>
               <option value="">— Sin vincular —</option>
               {trabajadores.map(t => (
-                <option key={t.id} value={t.id}>{t.nombre} {t.apellido}</option>
+                <option key={t.id} value={t.id}>{t.nombres} {t.apellidos}</option>
               ))}
             </select>
           </Field>
