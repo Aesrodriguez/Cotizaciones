@@ -72,26 +72,78 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 // ─── Autocomplete destinatario ────────────────────────────────────────────────
-function DestinatarioInput({ value, tipo, onChange }: {
+
+interface Sugerencia {
+  label: string
+  sub?: string        // NIT / cargo / ciudad
+  tipo: TipoPago
+  fuente: 'trabajador' | 'proveedor' | 'reciente'
+  id?: string         // trabajador_id si aplica
+}
+
+function DestinatarioInput({ value, tipo, staticSugs, onChange, onSelectId }: {
   value: string
   tipo: TipoPago
+  staticSugs: Sugerencia[]   // trabajadores + proveedores precargados
   onChange: (v: string) => void
+  onSelectId?: (id: string | undefined) => void
 }) {
-  const [suggestions, setSuggestions] = useState<{ destinatario: string; tipo: string }[]>([])
+  const [recientes, setRecientes] = useState<Sugerencia[]>([])
   const [open, setOpen] = useState(false)
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Cargar recientes al montar
+  useEffect(() => {
+    pagosAPI.autocompleteDestinatarios('').then(r => {
+      setRecientes(r.data.map(d => ({
+        label: d.destinatario, tipo: d.tipo as TipoPago, fuente: 'reciente' as const,
+      })))
+    }).catch(() => {})
+  }, [])
+
+  // Todas las sugerencias combinadas (estáticas primero, recientes al final sin duplicar)
+  const allSugs: Sugerencia[] = (() => {
+    const seen = new Set<string>()
+    const result: Sugerencia[] = []
+    for (const s of [...staticSugs, ...recientes]) {
+      const key = s.label.toLowerCase()
+      if (!seen.has(key)) { seen.add(key); result.push(s) }
+    }
+    return result
+  })()
+
+  const q = value.toLowerCase().trim()
+  const filtered = allSugs.filter(s =>
+    !q || s.label.toLowerCase().includes(q) || (s.sub ?? '').toLowerCase().includes(q)
+  ).slice(0, 12)
 
   const handleChange = (v: string) => {
     onChange(v)
     if (debounce.current) clearTimeout(debounce.current)
-    if (v.length < 2) { setSuggestions([]); setOpen(false); return }
-    debounce.current = setTimeout(async () => {
-      try {
-        const r = await pagosAPI.autocompleteDestinatarios(v)
-        setSuggestions(r.data)
-        setOpen(r.data.length > 0)
-      } catch { /* ignore */ }
-    }, 250)
+    // Refresh recientes si hay texto
+    if (v.length >= 2) {
+      debounce.current = setTimeout(async () => {
+        try {
+          const r = await pagosAPI.autocompleteDestinatarios(v)
+          setRecientes(r.data.map(d => ({
+            label: d.destinatario, tipo: d.tipo as TipoPago, fuente: 'reciente' as const,
+          })))
+        } catch { /* ignore */ }
+      }, 250)
+    }
+    setOpen(true)
+  }
+
+  const select = (s: Sugerencia) => {
+    onChange(s.label)
+    onSelectId?.(s.id)
+    setOpen(false)
+  }
+
+  const FUENTE_ICON: Record<Sugerencia['fuente'], string> = {
+    trabajador: '👷',
+    proveedor:  '🏢',
+    reciente:   '🕐',
   }
 
   return (
@@ -100,19 +152,31 @@ function DestinatarioInput({ value, tipo, onChange }: {
         className="input w-full text-sm"
         value={value}
         onChange={e => handleChange(e.target.value)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder={tipo === 'TRABAJADOR' ? 'Nombre del trabajador…' : tipo === 'PROVEEDOR' ? 'Nombre del proveedor…' : 'Destinatario…'}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 180)}
+        placeholder={
+          tipo === 'TRABAJADOR' ? 'Buscar trabajador…' :
+          tipo === 'PROVEEDOR'  ? 'Buscar proveedor…' :
+          'Destinatario…'
+        }
         autoFocus
       />
-      {open && (
-        <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-xl overflow-hidden shadow-xl"
+      {open && filtered.length > 0 && (
+        <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-xl overflow-hidden shadow-2xl max-h-60 overflow-y-auto"
           style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
-          {suggestions.map((s, i) => (
+          {filtered.map((s, i) => (
             <button key={i}
-              className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-[var(--surface)]"
-              onMouseDown={() => { onChange(s.destinatario); setOpen(false) }}>
-              <TipoBadge tipo={s.tipo as TipoPago} />
-              <span style={{ color: 'var(--text)' }}>{s.destinatario}</span>
+              className="w-full text-left px-3 py-2.5 flex items-start gap-2.5 transition-colors"
+              style={{ borderBottom: i < filtered.length - 1 ? '1px solid var(--border)' : undefined }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface)')}
+              onMouseLeave={e => (e.currentTarget.style.background = '')}
+              onMouseDown={() => select(s)}>
+              <span className="text-base flex-shrink-0 mt-0.5">{FUENTE_ICON[s.fuente]}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate" style={{ color: 'var(--text)' }}>{s.label}</p>
+                {s.sub && <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{s.sub}</p>}
+              </div>
+              <TipoBadge tipo={s.tipo} />
             </button>
           ))}
         </div>
@@ -177,6 +241,33 @@ function PagoFormModal({ initial, obras, onClose, onSaved }: {
       headers: { Authorization: `Bearer ${localStorage.getItem('token') ?? ''}` }
     }).then(r => r.json()).then(d => setTrabajadores(d.data ?? [])).catch(() => {})
   }, [])
+
+  // Sugerencias estáticas según tipo seleccionado
+  const staticSugs: Sugerencia[] = (() => {
+    if (form.tipo === 'TRABAJADOR') {
+      return trabajadores.map(t => ({
+        label: `${t.nombre} ${t.apellido}`.trim(),
+        sub: (t as unknown as Record<string, string>).cargo ?? undefined,
+        tipo: 'TRABAJADOR' as TipoPago,
+        fuente: 'trabajador' as const,
+        id: t.id,
+      }))
+    }
+    if (form.tipo === 'PROVEEDOR') {
+      const seen = new Set<string>()
+      return facturas.flatMap(f => {
+        if (!f.proveedor_nombre || seen.has(f.proveedor_nombre)) return []
+        seen.add(f.proveedor_nombre)
+        return [{
+          label: f.proveedor_nombre,
+          sub: undefined,
+          tipo: 'PROVEEDOR' as TipoPago,
+          fuente: 'proveedor' as const,
+        }]
+      })
+    }
+    return []
+  })()
 
   const f = (k: keyof PagoFormData) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm(p => ({ ...p, [k]: e.target.value }))
@@ -247,8 +338,15 @@ function PagoFormModal({ initial, obras, onClose, onSaved }: {
         </div>
 
         <Field label="Destinatario *">
-          <DestinatarioInput value={form.destinatario} tipo={form.tipo}
-            onChange={v => setForm(p => ({ ...p, destinatario: v }))} />
+          <DestinatarioInput
+            value={form.destinatario}
+            tipo={form.tipo}
+            staticSugs={staticSugs}
+            onChange={v => setForm(p => ({ ...p, destinatario: v }))}
+            onSelectId={id => {
+              if (form.tipo === 'TRABAJADOR') setForm(p => ({ ...p, trabajador_id: id ?? '' }))
+            }}
+          />
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
