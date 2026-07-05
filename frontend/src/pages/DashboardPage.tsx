@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { cotizacionesAPI } from '../services/api'
+import { cotizacionesAPI, reportesAPI } from '../services/api'
+import type { Alerta } from '../services/api'
 import { formatCurrency, STATUS_CONFIG } from '../utils/format'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 import type { Stats } from '../types'
@@ -47,12 +48,21 @@ function KPICard({ label, value, accent, icon }: { label: string; value: string 
   )
 }
 
+const ALERTA_COLOR: Record<string, { bg: string; border: string; text: string; dot: string }> = {
+  STOCK:    { bg: 'rgba(239,68,68,0.08)',   border: 'rgba(239,68,68,0.25)',   text: '#f87171', dot: '#ef4444' },
+  FACTURA:  { bg: 'rgba(245,158,11,0.08)',  border: 'rgba(245,158,11,0.25)',  text: '#fbbf24', dot: '#f59e0b' },
+  EQUIPO:   { bg: 'rgba(129,140,248,0.08)', border: 'rgba(129,140,248,0.25)', text: '#a78bfa', dot: '#8b5cf6' },
+  OBRA:     { bg: 'rgba(96,165,250,0.08)',  border: 'rgba(96,165,250,0.25)',  text: '#93c5fd', dot: '#60a5fa' },
+}
+
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [alertas, setAlertas] = useState<Alerta[]>([])
 
   useEffect(() => {
     cotizacionesAPI.getStats().then((r) => setStats(r.data)).catch(() => {}).finally(() => setLoading(false))
+    reportesAPI.getAlertas().then(r => setAlertas(r.data.alertas ?? [])).catch(() => {})
   }, [])
 
   if (loading) {
@@ -80,6 +90,32 @@ export default function DashboardPage() {
         <KPICard label="Pendientes" value={stats.pendientes} accent="border-l-amber-400" icon={<IconClock />} />
         <KPICard label="Ingresos aprobados" value={formatCurrency(stats.ingresos_aprobados)} accent="border-l-emerald-500" icon={<IconMoney />} />
       </div>
+
+      {alertas.length > 0 && (
+        <div className="rounded-xl p-4 space-y-2" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+          <p className="text-sm font-bold mb-3" style={{ color: 'var(--text)' }}>
+            Alertas activas
+            <span className="ml-2 text-xs font-semibold px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171' }}>
+              {alertas.length}
+            </span>
+          </p>
+          <div className="space-y-1.5">
+            {alertas.map((a, i) => {
+              const c = ALERTA_COLOR[a.tipo] ?? ALERTA_COLOR.OBRA
+              return (
+                <div key={i} className="flex items-start gap-2.5 px-3 py-2 rounded-lg"
+                  style={{ background: c.bg, border: `1px solid ${c.border}` }}>
+                  <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ background: c.dot }} />
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: c.text }}>{a.titulo}</p>
+                    {a.detalle && <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{a.detalle}</p>}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="card lg:col-span-2">

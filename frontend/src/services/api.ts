@@ -666,4 +666,85 @@ export const pagosAPI = {
     api.get<{ destinatario: string; tipo: string }[]>(`/pagos/autocomplete/destinatarios?q=${encodeURIComponent(q)}`, _noToast),
 }
 
+// ─── Equipos ──────────────────────────────────────────────────────────────────
+
+export interface Equipo {
+  id: string
+  nombre: string
+  marca: string | null
+  modelo: string | null
+  serial: string | null
+  categoria: string | null
+  estado: 'ACTIVO' | 'EN_MANTENIMIENTO' | 'BAJA'
+  fecha_compra: string | null
+  valor_compra: number | null
+  notas: string | null
+  created_at: string
+  uso_actual: string | null
+  total_usos: number
+}
+
+export interface UsoEquipo {
+  id: string
+  equipo_id: string
+  obra_id: string | null
+  obra_nombre: string | null
+  fecha_inicio: string
+  fecha_fin: string | null
+  lugar_libre: string | null
+  observaciones: string | null
+  created_at: string
+  activo: boolean
+}
+
+export const equiposAPI = {
+  getAll: (params?: object) => api.get<{ data: Equipo[]; categorias: string[] }>('/equipos/', { params, ..._noToast }),
+  create: (data: object) => api.post<{ id: string }>('/equipos/', data),
+  update: (id: string, data: object) => api.patch<{ ok: boolean }>(`/equipos/${id}`, data),
+  remove: (id: string) => api.delete(`/equipos/${id}`),
+  getUsos: (id: string) => api.get<{ data: UsoEquipo[] }>(`/equipos/${id}/usos`, _noToast),
+  addUso: (id: string, data: object) => api.post(`/equipos/${id}/usos`, data),
+  deleteUso: (id: string, uid: string) => api.delete(`/equipos/${id}/usos/${uid}`),
+}
+
+// ─── Reportes ─────────────────────────────────────────────────────────────────
+
+export interface Alerta {
+  tipo: string
+  nivel: 'ERROR' | 'WARNING' | 'INFO'
+  titulo: string
+  detalle: string
+  link: string
+}
+
+export interface RetencionesPeriodo {
+  periodo: string
+  n_facturas: number
+  subtotal: number
+  iva: number
+  retefuente: number
+  reteiva: number
+  reteica: number
+  total_retenciones: number
+  total_pagar: number
+}
+
+export interface FlujoCajaMes {
+  mes: string
+  ingresos: number
+  egresos_pagos: number
+  egresos_compras: number
+  total_egresos: number
+  neto: number
+  saldo_acumulado: number
+}
+
+export const reportesAPI = {
+  getAlertas: () => api.get<{ alertas: Alerta[]; total: number }>('/reportes/alertas', _noToast),
+  getRetenciones: (anio?: number) => api.get<{ anio: number; periodos: RetencionesPeriodo[]; totales: Record<string, number> }>('/reportes/retenciones', { params: { anio }, ..._noToast }),
+  getFlujoCaja: (anio?: number) => api.get<{ anio: number; meses: FlujoCajaMes[] }>('/reportes/flujo-caja', { params: { anio }, ..._noToast }),
+  getObraResumen: (obraId: string) => api.get<Record<string, unknown>>(`/reportes/obras/${obraId}`, _noToast),
+  getObraPdfUrl: (obraId: string) => `${api.defaults.baseURL}/reportes/obras/${obraId}/pdf`,
+}
+
 export default api
