@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from app.db import get_db
+from app.api.deps import get_db_session as get_db
 
 router = APIRouter(prefix="/obras", tags=["obras"])
 
