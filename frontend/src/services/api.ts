@@ -616,4 +616,54 @@ export const obrasAPI = {
   getMateriales: (id: string) => api.get<{ data: { id: string; nombre: string; referencia: string | null; unidad: string; categoria: string | null; cantidad_usada: number; precio_promedio: number; total: number }[] }>(`/obras/${id}/materiales`, _noToast),
 }
 
+// ─── Pagos ────────────────────────────────────────────────────────────────────
+
+export type TipoPago = 'PROVEEDOR' | 'TRABAJADOR' | 'SERVICIO' | 'IMPUESTO' | 'OTRO'
+export type MetodoPago = 'TRANSFERENCIA' | 'EFECTIVO' | 'CHEQUE' | 'PSE' | 'NEQUI' | 'DAVIPLATA' | 'OTRO'
+
+export interface Pago {
+  id: string
+  fecha: string
+  monto: number
+  destinatario: string
+  tipo: TipoPago
+  metodo_pago: MetodoPago | null
+  referencia: string | null
+  concepto: string | null
+  factura_id: string | null
+  factura_num: string | null
+  trabajador_id: string | null
+  trabajador_nombre: string | null
+  obra_id: string | null
+  obra_nombre: string | null
+  notas: string | null
+  created_at: string
+}
+
+export interface PagosResumen {
+  total: number
+  proveedor: number
+  trabajador: number
+  servicio: number
+  impuesto: number
+  otro: number
+}
+
+export interface PagoDestinatario {
+  destinatario: string
+  tipo: TipoPago
+  total: number
+  n_pagos: number
+}
+
+export const pagosAPI = {
+  getAll: (params?: object) =>
+    api.get<{ data: Pago[]; total: number; page: number; pages: number; resumen: PagosResumen; por_destinatario: PagoDestinatario[] }>('/pagos/', { params, ..._noToast }),
+  create: (data: object) => api.post<{ id: string }>('/pagos/', data),
+  update: (id: string, data: object) => api.patch<{ ok: boolean }>(`/pagos/${id}`, data),
+  remove: (id: string) => api.delete(`/pagos/${id}`),
+  autocompleteDestinatarios: (q: string) =>
+    api.get<{ destinatario: string; tipo: string }[]>(`/pagos/autocomplete/destinatarios?q=${encodeURIComponent(q)}`, _noToast),
+}
+
 export default api
