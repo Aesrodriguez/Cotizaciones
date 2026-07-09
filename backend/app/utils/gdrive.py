@@ -1,48 +1,48 @@
-"""Subida de archivos a Google Drive mediante Service Account."""
+"""Subida de archivos a Google Drive usando OAuth2 con cuenta personal."""
 import io
-import json
 import logging
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
-def upload_to_drive(
-    content: bytes,
-    filename: str,
-    mime_type: str,
-) -> Optional[str]:
+def upload_to_drive(content: bytes, filename: str, mime_type: str) -> Optional[str]:
     """
-    Sube `content` a la carpeta de Google Drive configurada.
-    Retorna el webViewLink del archivo, o None si Drive no está configurado o falla.
-    Nunca lanza excepción — el fallo de Drive no debe bloquear el guardado de la planilla.
+    Sube `content` a la carpeta de Google Drive configurada usando OAuth2.
+    Retorna el webViewLink, o None si Drive no está configurado o falla.
+    Nunca lanza excepción — el fallo de Drive no bloquea el guardado.
     """
     try:
         from app.config.settings import get_settings
         settings = get_settings()
 
-        creds_raw = settings.GOOGLE_CREDENTIALS_JSON.strip()
+        client_id = settings.GOOGLE_CLIENT_ID.strip()
+        client_secret = settings.GOOGLE_CLIENT_SECRET.strip()
+        refresh_token = settings.GOOGLE_REFRESH_TOKEN.strip()
         folder_id = settings.GDRIVE_FOLDER_ID.strip()
 
-        if not creds_raw or not folder_id:
+        if not all([client_id, client_secret, refresh_token, folder_id]):
             return None
 
-        from google.oauth2 import service_account
+        from google.oauth2.credentials import Credentials
+        from google.auth.transport.requests import Request
         from googleapiclient.discovery import build
         from googleapiclient.http import MediaIoBaseUpload
 
-        creds_dict = json.loads(creds_raw)
-        creds = service_account.Credentials.from_service_account_info(
-            creds_dict,
-            scopes=['https://www.googleapis.com/auth/drive.file'],
+        creds = Credentials(
+            token=None,
+            refresh_token=refresh_token,
+            client_id=client_id,
+            client_secret=client_secret,
+            token_uri='https://oauth2.googleapis.com/token',
         )
+        creds.refresh(Request())
+
         service = build('drive', 'v3', credentials=creds, cache_discovery=False)
 
         media = MediaIoBaseUpload(io.BytesIO(content), mimetype=mime_type, resumable=False)
-        file_meta = {'name': filename, 'parents': [folder_id]}
-
         created = service.files().create(
-            body=file_meta,
+            body={'name': filename, 'parents': [folder_id]},
             media_body=media,
             fields='id,webViewLink',
         ).execute()
