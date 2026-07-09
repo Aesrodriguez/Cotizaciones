@@ -149,10 +149,22 @@ function PlanillaCard({
           </p>
           <p className="text-xs mt-0.5 font-mono" style={{ color: 'var(--text-muted)' }}>#{p.numero_planilla}</p>
         </div>
-        <button
-          onClick={(e) => { e.stopPropagation(); onDelete() }}
-          className="opacity-40 hover:opacity-100 text-xs px-1.5 py-0.5 rounded transition-opacity"
-          style={{ color: '#f87171' }}>✕</button>
+        <div className="flex items-center gap-1">
+          {p.archivo_url && (
+            <a href={p.archivo_url} target="_blank" rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="opacity-50 hover:opacity-100 transition-opacity"
+              title="Ver en Google Drive">
+              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor" style={{ color: '#4ade80' }}>
+                <path d="M12.012 1.559L7.008 10.5h10.007L12.012 1.559zM6.004 12.5l-4.5 7.78h8.004L6.004 12.5zm10.004 0L10.504 20.28H22L16.008 12.5z"/>
+              </svg>
+            </a>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete() }}
+            className="opacity-40 hover:opacity-100 text-xs px-1.5 py-0.5 rounded transition-opacity"
+            style={{ color: '#f87171' }}>✕</button>
+        </div>
       </div>
       <div className="mt-2 flex items-end justify-between">
         <div>
@@ -199,13 +211,25 @@ function PlanillaDetail({ id }: { id: number }) {
     <div className="space-y-4">
       {/* Header info */}
       <div className="rounded-xl p-4 space-y-3" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
-        <div className="flex items-center gap-2 flex-wrap">
-          <h2 className="text-base font-bold" style={{ color: 'var(--text)' }}>{p.razon_social}</h2>
-          <span className="text-xs font-mono px-2 py-0.5 rounded-full"
-            style={{ background: 'var(--surface)', color: 'var(--text-muted)' }}>NIT {p.nit}</span>
-          {p.exonerado_sena_icbf && (
-            <span className="text-xs px-2 py-0.5 rounded-full"
-              style={{ background: 'rgba(34,197,94,0.12)', color: '#4ade80' }}>Exonerado SENA/ICBF</span>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-base font-bold" style={{ color: 'var(--text)' }}>{p.razon_social}</h2>
+            <span className="text-xs font-mono px-2 py-0.5 rounded-full"
+              style={{ background: 'var(--surface)', color: 'var(--text-muted)' }}>NIT {p.nit}</span>
+            {p.exonerado_sena_icbf && (
+              <span className="text-xs px-2 py-0.5 rounded-full"
+                style={{ background: 'rgba(34,197,94,0.12)', color: '#4ade80' }}>Exonerado SENA/ICBF</span>
+            )}
+          </div>
+          {p.archivo_url && (
+            <a href={p.archivo_url} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-opacity hover:opacity-80"
+              style={{ background: 'rgba(34,197,94,0.12)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.25)' }}>
+              <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="currentColor">
+                <path d="M12.012 1.559L7.008 10.5h10.007L12.012 1.559zM6.004 12.5l-4.5 7.78h8.004L6.004 12.5zm10.004 0L10.504 20.28H22L16.008 12.5z"/>
+              </svg>
+              Ver en Drive
+            </a>
           )}
         </div>
 

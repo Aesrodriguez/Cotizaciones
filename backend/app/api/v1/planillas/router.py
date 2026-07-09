@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy import text
 from app.api.deps import get_db_session as get_db
 from app.utils.planilla_parser import parse_planilla_pdf, parse_planilla_txt
+from app.utils.gdrive import upload_to_drive
 
 router = APIRouter(prefix='/planillas', tags=['planillas'])
 
@@ -37,7 +38,7 @@ def upload_planilla(file: UploadFile = File(...), db=Depends(get_db)):
         parsed = parse_planilla_txt(txt)
 
     if not parsed.get('numero_planilla'):
-        raise HTTPException(422, 'No se pudo identificar el número de planilla en el PDF')
+        raise HTTPException(422, 'No se pudo identificar el número de planilla en el archivo')
 
     # Verificar duplicado
     exists = db.execute(
@@ -47,15 +48,20 @@ def upload_planilla(file: UploadFile = File(...), db=Depends(get_db)):
     if exists:
         raise HTTPException(409, f"Planilla {parsed['numero_planilla']} ya fue cargada (id={exists[0]})")
 
+    # Subir archivo original a Google Drive (no bloquea si falla)
+    original_name = file.filename or f"planilla_{parsed['numero_planilla']}"
+    mime_type = 'application/pdf' if is_pdf else 'text/plain'
+    archivo_url = upload_to_drive(content, original_name, mime_type)
+
     # Insertar planilla principal
     row = db.execute(text("""
         INSERT INTO planillas
             (numero_planilla, nit, razon_social, periodo_pension, periodo_salud,
              tipo, fecha_limite, fecha_pago, banco, dias_mora, valor_total,
-             total_afiliados, exonerado_sena_icbf, archivo_nombre)
+             total_afiliados, exonerado_sena_icbf, archivo_nombre, archivo_url)
         VALUES
             (:np, :nit, :rs, :pp, :ps, :tipo, :fl, :fp, :banco, :dm, :vt,
-             :ta, :ex, :fn)
+             :ta, :ex, :fn, :fu)
         RETURNING id
     """), {
         'np': parsed['numero_planilla'],
@@ -72,6 +78,7 @@ def upload_planilla(file: UploadFile = File(...), db=Depends(get_db)):
         'ta': parsed.get('total_afiliados', 0),
         'ex': parsed.get('exonerado_sena_icbf', False),
         'fn': file.filename,
+        'fu': archivo_url,
     }).fetchone()
     planilla_id = row[0]
 
@@ -157,6 +164,7 @@ def upload_planilla(file: UploadFile = File(...), db=Depends(get_db)):
         'periodo': parsed.get('periodo_pension'),
         'valor_total': parsed.get('valor_total', 0),
         'total_afiliados': parsed.get('total_afiliados', 0),
+        'archivo_url': archivo_url,
         'warnings': parsed.get('warnings', []),
     }
 

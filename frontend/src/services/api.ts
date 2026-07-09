@@ -763,6 +763,7 @@ export interface Planilla {
   total_afiliados: number
   exonerado_sena_icbf: boolean
   archivo_nombre: string | null
+  archivo_url: string | null
   created_at: string | null
 }
 

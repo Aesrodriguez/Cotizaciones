@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: List[str] = Field(default=["http://localhost:5173"])
 
+    # Google Drive (Service Account JSON como string + ID de carpeta)
+    GOOGLE_CREDENTIALS_JSON: str = Field(default="")
+    GDRIVE_FOLDER_ID: str = Field(default="")
+
     # Email — SendGrid API (HTTPS, sin bloqueo de Render)
     SENDGRID_API_KEY: str = Field(default="")
     EMAIL_FROM: str = Field(default="Triple A Construcciones <tripleaconstruccionessas@gmail.com>")
