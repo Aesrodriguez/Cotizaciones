@@ -32,6 +32,7 @@ const EquiposPage = lazy(() => import('./pages/EquiposPage'))
 const RetencionesPeriodoPage = lazy(() => import('./pages/RetencionesPeriodoPage'))
 const FlujoCajaPage = lazy(() => import('./pages/FlujoCajaPage'))
 const ObraDetailPage = lazy(() => import('./pages/ObraDetailPage'))
+const PlanillasPage = lazy(() => import('./pages/PlanillasPage'))
 
 function PageLoader() {
   return (
@@ -103,6 +104,7 @@ export default function App() {
             <Route path="retenciones" element={<RetencionesPeriodoPage />} />
             <Route path="flujo-caja" element={<FlujoCajaPage />} />
             <Route path="obras/:id" element={<ObraDetailPage />} />
+            <Route path="planillas" element={<PlanillasPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

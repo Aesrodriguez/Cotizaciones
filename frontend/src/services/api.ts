@@ -747,4 +747,83 @@ export const reportesAPI = {
   getObraPdfUrl: (obraId: string) => `${api.defaults.baseURL}/reportes/obras/${obraId}/pdf`,
 }
 
+// ─── Planillas PILA ───────────────────────────────────────────────────────────
+
+export interface Planilla {
+  id: number
+  numero_planilla: string
+  nit: string | null
+  razon_social: string | null
+  periodo_pension: string | null
+  periodo_salud: string | null
+  fecha_pago: string | null
+  banco: string | null
+  dias_mora: number
+  valor_total: number
+  total_afiliados: number
+  exonerado_sena_icbf: boolean
+  archivo_nombre: string | null
+  created_at: string | null
+}
+
+export interface PlanillaEmpleado {
+  numero: number
+  tipo_doc: string
+  cedula: string
+  nombre: string
+  cod_pension: string | null
+  dias_pension: number
+  ibc_pension: number
+  aporte_pension: number
+  cod_salud: string | null
+  dias_salud: number
+  ibc_salud: number
+  aporte_salud: number
+  cod_ccf: string | null
+  dias_ccf: number
+  ibc_ccf: number
+  aporte_ccf: number
+  cod_riesgo: string | null
+  dias_riesgo: number
+  ibc_riesgo: number
+  tarifa_riesgo: number
+  aporte_riesgo: number
+  dias_parafiscales: number
+  ibc_parafiscales: number
+  aporte_parafiscales: number
+  exonerado: boolean
+  total_aportes: number
+}
+
+export interface PlanillaEntidad {
+  categoria: string
+  entidad: string
+  codigo: string | null
+  nit_entidad: string | null
+  dv: string | null
+  afiliados: number
+  valor_liquidado: number
+  intereses_mora: number
+  saldos_incapacidades: number
+  valor_a_pagar: number
+  es_subtotal: boolean
+}
+
+export interface PlanillaDetalle {
+  planilla: Planilla & { tipo: string | null; fecha_limite: string | null; archivo_url: string | null }
+  empleados: PlanillaEmpleado[]
+  entidades: PlanillaEntidad[]
+}
+
+export const planillasAPI = {
+  upload: (file: File) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return api.post<{ id: number; numero_planilla: string; periodo: string; valor_total: number; total_afiliados: number; warnings: string[] }>('/planillas/upload', fd)
+  },
+  list: (params?: object) => api.get<{ data: Planilla[]; total: number; page: number; pages: number }>('/planillas/', { params, ..._noToast }),
+  get: (id: number) => api.get<PlanillaDetalle>(`/planillas/${id}`, _noToast),
+  delete: (id: number) => api.delete(`/planillas/${id}`),
+}
+
 export default api
