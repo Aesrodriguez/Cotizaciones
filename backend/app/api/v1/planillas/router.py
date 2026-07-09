@@ -49,9 +49,11 @@ def upload_planilla(file: UploadFile = File(...), db=Depends(get_db)):
         raise HTTPException(409, f"Planilla {parsed['numero_planilla']} ya fue cargada (id={exists[0]})")
 
     # Subir archivo original a Google Drive (no bloquea si falla)
-    original_name = file.filename or f"planilla_{parsed['numero_planilla']}"
+    periodo = parsed.get('periodo_pension') or parsed.get('periodo_salud') or 'sin-periodo'
+    ext = '.pdf' if is_pdf else '.txt'
+    drive_name = f"{periodo}_{parsed['numero_planilla']}{ext}"
     mime_type = 'application/pdf' if is_pdf else 'text/plain'
-    archivo_url = upload_to_drive(content, original_name, mime_type)
+    archivo_url = upload_to_drive(content, drive_name, mime_type)
 
     # Insertar planilla principal
     row = db.execute(text("""
