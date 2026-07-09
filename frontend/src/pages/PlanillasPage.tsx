@@ -17,35 +17,45 @@ const CAT_COLOR: Record<string, { bg: string; text: string }> = {
 
 // ── Upload zone ───────────────────────────────────────────────────────────────
 
+type FileStatus = { file: File; state: 'pending' | 'uploading' | 'done' | 'error'; msg?: string }
+
 function UploadZone({ onUploaded }: { onUploaded: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
-  const [uploading, setUploading] = useState(false)
+  const [queue, setQueue] = useState<FileStatus[]>([])
+  const processing = queue.some(q => q.state === 'pending' || q.state === 'uploading')
 
-  const upload = async (file: File) => {
-    const n = file.name.toLowerCase()
-    if (!n.endsWith('.pdf') && !n.endsWith('.txt')) {
-      toast.error('Solo se aceptan archivos PDF o TXT'); return
-    }
-    setUploading(true)
-    try {
-      const res = await planillasAPI.upload(file)
-      const d = res.data
-      toast.success(`Planilla ${d.numero_planilla} cargada · ${d.total_afiliados} afiliados · ${fmt(d.valor_total)}`)
-      if (d.warnings?.length) toast(d.warnings.join('\n'), { icon: '⚠️', duration: 6000 })
-      onUploaded()
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      toast.error(msg ?? 'Error al cargar planilla')
-    } finally {
-      setUploading(false)
-    }
+  const uploadFiles = async (files: File[]) => {
+    const valid = files.filter(f => { const n = f.name.toLowerCase(); return n.endsWith('.pdf') || n.endsWith('.txt') })
+    if (!valid.length) { toast.error('Solo se aceptan archivos PDF o TXT'); return }
+
+    const initial: FileStatus[] = valid.map(f => ({ file: f, state: 'pending' }))
+    setQueue(initial)
+
+    await Promise.allSettled(
+      valid.map(async (file, idx) => {
+        setQueue(q => q.map((item, i) => i === idx ? { ...item, state: 'uploading' } : item))
+        try {
+          const res = await planillasAPI.upload(file)
+          const d = res.data
+          const info = `${d.numero_planilla} · ${d.total_afiliados} afil. · ${fmt(d.valor_total)}`
+          setQueue(q => q.map((item, i) => i === idx ? { ...item, state: 'done', msg: info } : item))
+          if (d.warnings?.length) toast(d.warnings.join('\n'), { icon: '⚠️', duration: 6000 })
+        } catch (err: unknown) {
+          const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Error'
+          setQueue(q => q.map((item, i) => i === idx ? { ...item, state: 'error', msg } : item))
+        }
+      })
+    )
+
+    onUploaded()
+    setTimeout(() => setQueue([]), 5000)
   }
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDragging(false)
-    const file = e.dataTransfer.files[0]
-    if (file) upload(file)
+    const files = Array.from(e.dataTransfer.files)
+    if (files.length) uploadFiles(files)
   }
 
   return (
@@ -53,22 +63,52 @@ function UploadZone({ onUploaded }: { onUploaded: () => void }) {
       onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}
-      onClick={() => !uploading && inputRef.current?.click()}
-      className="rounded-2xl flex flex-col items-center justify-center gap-3 cursor-pointer transition-all py-12"
+      onClick={() => !processing && inputRef.current?.click()}
+      className="rounded-2xl transition-all"
       style={{
         border: `2px dashed ${dragging ? 'var(--lime)' : 'var(--border)'}`,
         background: dragging ? 'var(--lime-dim)' : 'var(--surface)',
+        cursor: processing ? 'default' : 'pointer',
+        padding: queue.length ? '16px' : '48px 24px',
       }}
     >
-      <input ref={inputRef} type="file" accept=".pdf,.txt" className="hidden"
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f) }} />
-      {uploading ? (
-        <>
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: 'var(--lime)' }} />
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Procesando planilla…</p>
-        </>
+      <input ref={inputRef} type="file" accept=".pdf,.txt" multiple className="hidden"
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? [])
+          if (files.length) uploadFiles(files)
+          e.target.value = ''
+        }} />
+
+      {queue.length > 0 ? (
+        <div className="space-y-2">
+          {queue.map((item, i) => (
+            <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-lg"
+              style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+              <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
+                {item.state === 'uploading' && (
+                  <div className="animate-spin w-4 h-4 rounded-full border-2"
+                    style={{ borderColor: 'var(--lime)', borderTopColor: 'transparent' }} />
+                )}
+                {item.state === 'pending' && (
+                  <div className="w-2 h-2 rounded-full" style={{ background: 'var(--border)' }} />
+                )}
+                {item.state === 'done' && <span style={{ color: '#4ade80', fontSize: 14 }}>✓</span>}
+                {item.state === 'error' && <span style={{ color: '#f87171', fontSize: 14 }}>✕</span>}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-mono truncate" style={{ color: 'var(--text)' }}>{item.file.name}</p>
+                {item.msg && (
+                  <p className="text-xs truncate mt-0.5"
+                    style={{ color: item.state === 'error' ? '#f87171' : 'var(--text-muted)' }}>
+                    {item.msg}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
-        <>
+        <div className="flex flex-col items-center gap-3">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}
             className="w-10 h-10" style={{ color: 'var(--text-muted)' }}>
             <path strokeLinecap="round" strokeLinejoin="round"
@@ -76,13 +116,13 @@ function UploadZone({ onUploaded }: { onUploaded: () => void }) {
           </svg>
           <div className="text-center">
             <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
-              Arrastra el archivo aquí o haz clic para seleccionar
+              Arrastra archivos aquí o haz clic para seleccionar
             </p>
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-              Planilla de Aportes en Línea (PILA) · PDF o TXT
+              Múltiples archivos · Planillas PILA · PDF o TXT
             </p>
           </div>
-        </>
+        </div>
       )}
     </div>
   )
