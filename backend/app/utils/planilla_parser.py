@@ -1,4 +1,4 @@
-"""Parser de Planillas de Aportes en Línea (PILA) en formato PDF."""
+"""Parser de Planillas de Aportes en Línea (PILA) en formato PDF y TXT."""
 import io
 import re
 from typing import Any, Optional
@@ -414,6 +414,234 @@ def parse_planilla_pdf(pdf_bytes: bytes) -> dict:
                 total_m = re.search(r'^TOTAL\s+\d+\s+\$([\d,]+)', p2_text, re.MULTILINE)
                 if total_m:
                     result['valor_total'] = _money('$' + total_m.group(1))
+
+    if not result['numero_planilla']:
+        result['warnings'].append('No se pudo extraer el número de planilla')
+    if not result['empleados']:
+        result['warnings'].append('No se pudieron extraer los empleados')
+
+    return result
+
+
+# ─── TXT parser ───────────────────────────────────────────────────────────────
+
+_ENTITY_NAMES: dict = {
+    # AFP
+    '25-14': 'Porvenir',
+    '230201': 'Protección Social',
+    '230301': 'Colpensiones',
+    '270101': 'Colfondos',
+    # ARL
+    '14-11': 'ARL SURA',
+    '14-23': 'Positiva',
+    '14-29': 'Colmena CGNA',
+    '14-01': 'Bolívar',
+    # EPS
+    'EPS001': 'Compensar',
+    'EPS002': 'Colmédica / Medisanitas',
+    'EPS005': 'Sanitas',
+    'EPS010': 'Nueva EPS',
+    'EPS017': 'Famisanar',
+    'EPS023': 'SURA EPS',
+    'EPS033': 'Coomeva',
+    'EPS040': 'Aliansalud',
+    # CCF
+    'CCF01': 'Compensar CCF',
+    'CCF03': 'Cafam',
+    'CCF06': 'Comfamiliar Huila',
+    'CCF22': 'Colsubsidio',
+}
+
+
+def _tf(fields: list, idx: int) -> str:
+    """Obtiene un campo del TXT pipe-delimited de forma segura."""
+    try:
+        return fields[idx].strip()
+    except IndexError:
+        return ''
+
+
+def _ti(fields: list, idx: int) -> int:
+    v = _tf(fields, idx)
+    try:
+        return int(float(v)) if v else 0
+    except (ValueError, TypeError):
+        return 0
+
+
+def _tfloat(fields: list, idx: int) -> float:
+    v = _tf(fields, idx)
+    try:
+        return float(v) if v else 0.0
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def parse_planilla_txt(txt_content: str) -> dict:
+    """
+    Parsea una planilla PILA en formato TXT pipe-delimited (Aportes en Línea).
+    Registros: 1=aportante, 2=empleado, 3=AFP, 5=EPS, 6=ARL, 7=CCF, 12=totales.
+    Retorna el mismo dict que parse_planilla_pdf.
+    """
+    result: dict = {
+        'numero_planilla': None,
+        'nit': None,
+        'razon_social': None,
+        'periodo_pension': None,
+        'periodo_salud': None,
+        'tipo': None,
+        'fecha_limite': None,
+        'fecha_pago': None,
+        'banco': None,
+        'dias_mora': 0,
+        'valor_total': 0,
+        'total_afiliados': 0,
+        'exonerado_sena_icbf': False,
+        'empleados': [],
+        'entidades': [],
+        'warnings': [],
+    }
+
+    afp_rows: list = []
+    eps_rows: list = []
+    arl_rows: list = []
+    ccf_rows: list = []
+    rec12: Optional[list] = None
+
+    for raw_line in txt_content.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        f = line.split('|')
+        rt = f[0] if f else ''
+
+        if rt == '1':
+            result['numero_planilla'] = _tf(f, 5)
+            result['tipo'] = _tf(f, 7)
+            result['razon_social'] = _tf(f, 8)
+            result['nit'] = _tf(f, 10)
+            result['exonerado_sena_icbf'] = _tf(f, 37).upper() == 'S'
+            result['periodo_pension'] = _tf(f, 42) or None
+            result['periodo_salud'] = _tf(f, 43) or None
+            result['total_afiliados'] = _ti(f, 45)
+            fp = _tf(f, 48)
+            result['fecha_pago'] = fp if fp else None
+
+        elif rt == '2':
+            ap1 = _tf(f, 16)
+            ap2 = _tf(f, 17)
+            nom1 = _tf(f, 18)
+            nom2 = _tf(f, 19)
+            nombre = ' '.join(part for part in [ap1, ap2, nom1, nom2] if part)
+
+            cod_afp = _tf(f, 42)
+            cod_eps = _tf(f, 44)
+            cod_ccf = _tf(f, 46)
+            ibc = _ti(f, 52)
+
+            tarifa_p = _tfloat(f, 58)
+            aporte_p = _ti(f, 59)
+            tarifa_s = _tfloat(f, 66)
+            aporte_s = _ti(f, 67)
+            tarifa_r = _tfloat(f, 69)
+            nivel_r = _tf(f, 70)
+            aporte_r = _ti(f, 71)
+            tarifa_c = _tfloat(f, 72)
+            aporte_c = _ti(f, 73)
+            cod_arl = _tf(f, 85)
+
+            result['empleados'].append({
+                'numero':              _ti(f, 1),
+                'tipo_doc':            _tf(f, 4) or 'CC',
+                'cedula':              _tf(f, 5),
+                'nombre':              nombre,
+                'cod_pension':         cod_afp or None,
+                'dias_pension':        _ti(f, 47),
+                'ibc_pension':         ibc,
+                'aporte_pension':      aporte_p,
+                'cod_salud':           cod_eps or None,
+                'dias_salud':          _ti(f, 48),
+                'ibc_salud':           ibc,
+                'aporte_salud':        aporte_s,
+                'cod_ccf':             cod_ccf or None,
+                'dias_ccf':            _ti(f, 50),
+                'ibc_ccf':             ibc,
+                'aporte_ccf':          aporte_c,
+                'cod_riesgo':          cod_arl or None,
+                'dias_riesgo':         _ti(f, 49),
+                'ibc_riesgo':          ibc,
+                'tarifa_riesgo':       round(tarifa_r * 100, 4),
+                'aporte_riesgo':       aporte_r,
+                'dias_parafiscales':   0,
+                'ibc_parafiscales':    0,
+                'aporte_parafiscales': 0,
+                'exonerado':           _tf(f, 84).upper() == 'S',
+                'total_aportes':       aporte_p + aporte_s + aporte_r + aporte_c,
+            })
+
+        elif rt == '3':
+            afp_rows.append(f)
+        elif rt == '5':
+            eps_rows.append(f)
+        elif rt == '6':
+            arl_rows.append(f)
+        elif rt == '7':
+            ccf_rows.append(f)
+        elif rt == '12':
+            rec12 = f
+
+    if rec12:
+        result['valor_total'] = _ti(rec12, 13)
+        if not result['total_afiliados']:
+            result['total_afiliados'] = _ti(rec12, 14)
+
+    if not result['total_afiliados'] and result['empleados']:
+        result['total_afiliados'] = len(result['empleados'])
+
+    def _build_ents(rows: list, cat: str, int_idx: int, pagar_idx: int, afil_idx: int) -> list:
+        if not rows:
+            return []
+        items = []
+        t_liq = t_int = t_pagar = t_afil = 0
+        for fld in rows:
+            cod = _tf(fld, 4)
+            liq = _ti(fld, 7)
+            mora = _ti(fld, int_idx)
+            pagar = _ti(fld, pagar_idx)
+            afil = _ti(fld, afil_idx)
+            t_liq += liq; t_int += mora; t_pagar += pagar; t_afil += afil
+            items.append({
+                'categoria': cat,
+                'entidad': _ENTITY_NAMES.get(cod, cod),
+                'codigo': cod or None,
+                'nit_entidad': _tf(fld, 5) or None,
+                'dv': _tf(fld, 6) or None,
+                'afiliados': afil,
+                'valor_liquidado': liq,
+                'intereses_mora': mora,
+                'saldos_incapacidades': 0,
+                'valor_a_pagar': pagar,
+                'es_subtotal': False,
+            })
+        return [{
+            'categoria': cat, 'entidad': f'{cat} (Total)',
+            'codigo': None, 'nit_entidad': None, 'dv': None,
+            'afiliados': t_afil, 'valor_liquidado': t_liq,
+            'intereses_mora': t_int, 'saldos_incapacidades': 0,
+            'valor_a_pagar': t_pagar, 'es_subtotal': True,
+        }] + items
+
+    # Field positions confirmed from sample files:
+    # AFP rec3:  [13]=intereses, [16]=valor_a_pagar, [17]=afiliados
+    # EPS rec5:  [10]=intereses, [12]=valor_a_pagar, [15]=afiliados
+    # ARL rec6:  [13]=intereses, [14]=valor_a_pagar, [19]=afiliados
+    # CCF rec7:  [9]=intereses,  [10]=valor_a_pagar, [11]=afiliados
+    result['entidades'] = (
+        _build_ents(afp_rows, 'AFP', 13, 16, 17) +
+        _build_ents(eps_rows, 'EPS', 10, 12, 15) +
+        _build_ents(arl_rows, 'ARL', 13, 14, 19) +
+        _build_ents(ccf_rows, 'CCF',  9, 10, 11)
+    )
 
     if not result['numero_planilla']:
         result['warnings'].append('No se pudo extraer el número de planilla')

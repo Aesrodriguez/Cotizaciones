@@ -1,25 +1,40 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy import text
 from app.api.deps import get_db_session as get_db
-from app.utils.planilla_parser import parse_planilla_pdf
+from app.utils.planilla_parser import parse_planilla_pdf, parse_planilla_txt
 
 router = APIRouter(prefix='/planillas', tags=['planillas'])
 
-MAX_PDF_MB = 20
+MAX_FILE_MB = 20
 
 
 # ── Upload y guardar ──────────────────────────────────────────────────────────
 
 @router.post('/upload', status_code=201)
 def upload_planilla(file: UploadFile = File(...), db=Depends(get_db)):
-    if not file.filename or not file.filename.lower().endswith('.pdf'):
-        raise HTTPException(400, 'Solo se aceptan archivos PDF')
+    fname = (file.filename or '').lower()
+    is_pdf = fname.endswith('.pdf')
+    is_txt = fname.endswith('.txt')
+    if not (is_pdf or is_txt):
+        raise HTTPException(400, 'Solo se aceptan archivos PDF o TXT')
 
     content = file.file.read()
-    if len(content) > MAX_PDF_MB * 1024 * 1024:
-        raise HTTPException(400, f'PDF demasiado grande (máx {MAX_PDF_MB} MB)')
+    if len(content) > MAX_FILE_MB * 1024 * 1024:
+        raise HTTPException(400, f'Archivo demasiado grande (máx {MAX_FILE_MB} MB)')
 
-    parsed = parse_planilla_pdf(content)
+    if is_pdf:
+        parsed = parse_planilla_pdf(content)
+    else:
+        # Intentar UTF-8, luego latin-1
+        for enc in ('utf-8', 'latin-1', 'cp1252'):
+            try:
+                txt = content.decode(enc)
+                break
+            except UnicodeDecodeError:
+                continue
+        else:
+            raise HTTPException(400, 'No se pudo decodificar el archivo TXT')
+        parsed = parse_planilla_txt(txt)
 
     if not parsed.get('numero_planilla'):
         raise HTTPException(422, 'No se pudo identificar el número de planilla en el PDF')

@@ -23,8 +23,9 @@ function UploadZone({ onUploaded }: { onUploaded: () => void }) {
   const [uploading, setUploading] = useState(false)
 
   const upload = async (file: File) => {
-    if (!file.name.toLowerCase().endsWith('.pdf')) {
-      toast.error('Solo se aceptan archivos PDF'); return
+    const n = file.name.toLowerCase()
+    if (!n.endsWith('.pdf') && !n.endsWith('.txt')) {
+      toast.error('Solo se aceptan archivos PDF o TXT'); return
     }
     setUploading(true)
     try {
@@ -59,7 +60,7 @@ function UploadZone({ onUploaded }: { onUploaded: () => void }) {
         background: dragging ? 'var(--lime-dim)' : 'var(--surface)',
       }}
     >
-      <input ref={inputRef} type="file" accept=".pdf" className="hidden"
+      <input ref={inputRef} type="file" accept=".pdf,.txt" className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f) }} />
       {uploading ? (
         <>
@@ -75,10 +76,10 @@ function UploadZone({ onUploaded }: { onUploaded: () => void }) {
           </svg>
           <div className="text-center">
             <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
-              Arrastra el PDF aquí o haz clic para seleccionar
+              Arrastra el archivo aquí o haz clic para seleccionar
             </p>
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-              Planilla de Aportes en Línea (PILA) · PDF
+              Planilla de Aportes en Línea (PILA) · PDF o TXT
             </p>
           </div>
         </>
