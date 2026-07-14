@@ -65,6 +65,49 @@ export default function ContratoDetailPage() {
   const [addingCapTo, setAddingCapTo] = useState<string | null>(null)  // null=root cap, capId=item
   const [showCapForm, setShowCapForm] = useState(false)
 
+  // Carga en serie
+  const [serieCapId, setSerieCapId] = useState<string | null>(null)
+  const [serie, setSerie] = useState({
+    prefijo: '', sufijo: '', modo: 'rango' as 'rango' | 'lista',
+    desde: 1, hasta: 10, lista: '', unidad: 'UN', valor_unitario: 0,
+  })
+  const [creandoSerie, setCreandoSerie] = useState(false)
+
+  const serieItems = (): string[] => {
+    if (serie.modo === 'rango') {
+      if (serie.hasta < serie.desde) return []
+      return Array.from({ length: serie.hasta - serie.desde + 1 }, (_, i) =>
+        `${serie.prefijo}${serie.desde + i}${serie.sufijo}`
+      )
+    }
+    return serie.lista.split('\n').map(l => l.trim()).filter(Boolean)
+      .map(l => `${serie.prefijo}${l}${serie.sufijo}`)
+  }
+
+  const handleCreateSerie = async () => {
+    if (!id || !serieCapId) return
+    const items = serieItems()
+    if (!items.length) return
+    if (!serie.valor_unitario) { toast.error('Ingresa el valor unitario'); return }
+    setCreandoSerie(true)
+    try {
+      await Promise.all(items.map((desc, i) =>
+        contratosAPI.createItem(id, serieCapId, {
+          descripcion: desc,
+          unidad: serie.unidad || 'UN',
+          cantidad_contratada: 1,
+          valor_unitario: Number(serie.valor_unitario),
+          codigo: String(i + 1).padStart(2, '0'),
+        })
+      ))
+      toast.success(`${items.length} ítems creados`)
+      setSerieCapId(null)
+      setSerie({ prefijo: '', sufijo: '', modo: 'rango', desde: 1, hasta: 10, lista: '', unidad: 'UN', valor_unitario: 0 })
+      loadAll()
+    } catch { toast.error('Error al crear ítems') }
+    finally { setCreandoSerie(false) }
+  }
+
   const ejecForm = useForm<{ cantidad: number; fecha: string; observaciones?: string }>({
     defaultValues: { fecha: new Date().toISOString().slice(0, 10) },
   })
@@ -452,10 +495,17 @@ export default function ContratoDetailPage() {
                   {cap.codigo && <span className="font-mono text-xs text-blue-300">{cap.codigo}</span>}
                   <span className="font-semibold text-sm">{cap.nombre}</span>
                 </div>
-                <button
-                  onClick={() => { setAddingCapTo(cap.id); itemForm.reset({ unidad: 'UN', cantidad_contratada: 1, valor_unitario: 0 }) }}
-                  className="text-xs text-blue-300 hover:text-white transition-colors"
-                >+ Ítem</button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { setAddingCapTo(cap.id); setSerieCapId(null); itemForm.reset({ unidad: 'UN', cantidad_contratada: 1, valor_unitario: 0 }) }}
+                    className="text-xs text-blue-300 hover:text-white transition-colors"
+                  >+ Ítem</button>
+                  <button
+                    onClick={() => { setSerieCapId(cap.id); setAddingCapTo(null) }}
+                    className="text-xs text-blue-300 hover:text-white transition-colors border border-blue-600 rounded px-1.5 py-0.5"
+                    title="Crear múltiples ítems con un patrón"
+                  >⚡ En serie</button>
+                </div>
               </div>
 
               {addingCapTo === cap.id && (
@@ -471,6 +521,89 @@ export default function ContratoDetailPage() {
                       <button type="button" onClick={() => setAddingCapTo(null)} className="btn-secondary py-1 px-2 text-xs">×</button>
                     </div>
                   </form>
+                </div>
+              )}
+
+              {serieCapId === cap.id && (
+                <div className="px-4 py-4 bg-indigo-50 border-b border-indigo-100 space-y-3">
+                  <p className="text-xs font-bold text-indigo-700 uppercase tracking-wide">Crear ítems en serie</p>
+
+                  {/* Modo */}
+                  <div className="flex gap-3">
+                    {(['rango', 'lista'] as const).map(m => (
+                      <label key={m} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                        <input type="radio" checked={serie.modo === m}
+                          onChange={() => setSerie(s => ({ ...s, modo: m }))} />
+                        <span className="capitalize">{m === 'rango' ? 'Rango numérico' : 'Lista personalizada'}</span>
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div className="sm:col-span-2">
+                      <label className="text-xs text-gray-500 mb-0.5 block">Prefijo</label>
+                      <input className="input text-xs py-1.5 w-full" placeholder='ej: "Chimenea Casa "'
+                        value={serie.prefijo} onChange={e => setSerie(s => ({ ...s, prefijo: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500 mb-0.5 block">Sufijo (opcional)</label>
+                      <input className="input text-xs py-1.5 w-full" placeholder='ej: " Bloque A"'
+                        value={serie.sufijo} onChange={e => setSerie(s => ({ ...s, sufijo: e.target.value }))} />
+                    </div>
+                  </div>
+
+                  {serie.modo === 'rango' ? (
+                    <div className="flex gap-2 items-end">
+                      <div>
+                        <label className="text-xs text-gray-500 mb-0.5 block">Desde</label>
+                        <input type="number" className="input text-xs py-1.5 w-24"
+                          value={serie.desde} onChange={e => setSerie(s => ({ ...s, desde: Number(e.target.value) }))} />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 mb-0.5 block">Hasta</label>
+                        <input type="number" className="input text-xs py-1.5 w-24"
+                          value={serie.hasta} onChange={e => setSerie(s => ({ ...s, hasta: Number(e.target.value) }))} />
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="text-xs text-gray-500 mb-0.5 block">Etiquetas (una por línea)</label>
+                      <textarea className="input text-xs py-1.5 w-full h-24 resize-none font-mono"
+                        placeholder={"101\n102\n103\nApto 4B\n..."}
+                        value={serie.lista} onChange={e => setSerie(s => ({ ...s, lista: e.target.value }))} />
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-gray-500 mb-0.5 block">Unidad</label>
+                      <input className="input text-xs py-1.5 w-full"
+                        value={serie.unidad} onChange={e => setSerie(s => ({ ...s, unidad: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500 mb-0.5 block">Valor unitario *</label>
+                      <input type="number" step="0.01" className="input text-xs py-1.5 w-full"
+                        value={serie.valor_unitario || ''} onChange={e => setSerie(s => ({ ...s, valor_unitario: Number(e.target.value) }))} />
+                    </div>
+                  </div>
+
+                  {/* Preview */}
+                  {serieItems().length > 0 && (
+                    <div className="rounded-lg bg-white border border-indigo-200 p-2 max-h-32 overflow-y-auto">
+                      <p className="text-xs font-semibold text-indigo-600 mb-1">{serieItems().length} ítems a crear:</p>
+                      <p className="text-xs text-gray-500 font-mono leading-relaxed">
+                        {serieItems().slice(0, 8).join(' · ')}{serieItems().length > 8 ? ` · … (+${serieItems().length - 8} más)` : ''}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2">
+                    <button onClick={handleCreateSerie} disabled={creandoSerie || !serieItems().length}
+                      className="btn-primary py-1.5 px-4 text-xs disabled:opacity-50">
+                      {creandoSerie ? 'Creando…' : `Crear ${serieItems().length} ítem${serieItems().length !== 1 ? 's' : ''}`}
+                    </button>
+                    <button onClick={() => setSerieCapId(null)} className="btn-secondary py-1.5 px-3 text-xs">Cancelar</button>
+                  </div>
                 </div>
               )}
 
