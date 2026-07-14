@@ -32,7 +32,7 @@ def _next_codigo_cliente(db: Session) -> str:
 def list_clientes(
     search: str = Query(""),
     page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=500),
     db: Session = Depends(get_db_session),
     _: Usuario = Depends(get_authenticated_user),
 ):
