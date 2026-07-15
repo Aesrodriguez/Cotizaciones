@@ -47,6 +47,9 @@ from .contrato import (
     EstadoActa, CategoriaGastoContrato,
 )
 
+# Actas de Corte de Pago
+from .acp import ContratoAcp, ContratoAcpItem
+
 # Audit & System
 from .audit import (
     AuditLog, Notificacion, ParametroSistema, Secuencia,
@@ -111,4 +114,7 @@ __all__ = [
     "ParametroSistema",
     "Secuencia",
     "TipoNotificacion",
+    # ACP
+    "ContratoAcp",
+    "ContratoAcpItem",
 ]

@@ -827,4 +827,97 @@ export const planillasAPI = {
   delete: (id: number) => api.delete(`/planillas/${id}`),
 }
 
+// ─── ACPs (Actas de Corte de Pago) ────────────────────────────────────────────
+
+export interface AcpItem {
+  id: string
+  actividad: string
+  articulo: string | null
+  unidad: string | null
+  cantidad: number | null
+  vr_unitario: number | null
+  vr_iva: number
+  vr_total: number | null
+  observaciones: string | null
+  orden: number
+}
+
+export interface Acp {
+  id: string
+  contrato_id: string | null
+  numero_acta: string
+  codigo_corte: number | null
+  obra: string | null
+  numero_contrato_cliente: string | null
+  objeto: string | null
+  contratista: string | null
+  nit_contratista: string | null
+  elaborado_por: string | null
+  fecha_acta: string | null
+  fecha_terminacion: string | null
+  forma_pago: string | null
+  archivo_nombre: string | null
+  archivo_url: string | null
+  vr_inicial: number | null
+  vr_modificacion: number
+  vr_contrato: number | null
+  acumulado_anterior: number | null
+  acumulado_actual: number | null
+  saldo_contrato: number | null
+  vr_neto: number | null
+  pct_administracion: number
+  vr_administracion: number
+  pct_imprevistos: number
+  vr_imprevistos: number
+  pct_utilidad: number
+  vr_utilidad: number
+  vr_subtotal_antes_iva: number | null
+  pct_iva: number
+  base_iva: number
+  vr_iva: number
+  vr_acta: number | null
+  pct_anticipo: number
+  vr_amortizacion_anticipo: number
+  vr_anticipos_girados: number
+  pct_ret_anticipo: number
+  vr_ret_anticipo_acta: number
+  vr_ret_anticipo_acumulado: number
+  pct_retencion_garantia: number
+  vr_retencion_acta: number
+  vr_retencion_acumulado: number
+  vr_total_descuentos: number
+  vr_total_pagar: number | null
+  observaciones: string | null
+  created_at: string | null
+  items: AcpItem[]
+}
+
+export interface AcpListItem {
+  id: string
+  contrato_id: string | null
+  numero_acta: string
+  codigo_corte: number | null
+  obra: string | null
+  fecha_acta: string | null
+  vr_acta: number | null
+  vr_total_pagar: number | null
+  vr_retencion_acumulado: number | null
+  acumulado_actual: number | null
+  saldo_contrato: number | null
+  archivo_url: string | null
+  created_at: string | null
+}
+
+export const acpAPI = {
+  upload: (file: File, contrato_id?: string) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    const url = contrato_id ? `/acps/upload?contrato_id=${contrato_id}` : '/acps/upload'
+    return api.post<Acp>(url, fd)
+  },
+  list: (params?: object) => api.get<AcpListItem[]>('/acps/', { params, ..._noToast }),
+  get: (id: string) => api.get<Acp>(`/acps/${id}`, _noToast),
+  delete: (id: string) => api.delete(`/acps/${id}`),
+}
+
 export default api

@@ -1,12 +1,13 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
-import { contratosAPI } from '../services/api'
+import { contratosAPI, acpAPI } from '../services/api'
+import type { AcpListItem, Acp } from '../services/api'
 import { formatCurrency, formatDate } from '../utils/format'
 import toast from 'react-hot-toast'
 import type { Contrato, ContratoActa, ContratoCapitulo, ContratoGasto, ContratoPago, ContratoDashboard } from '../types'
 
-type Tab = 'resumen' | 'presupuesto' | 'ejecucion' | 'actas' | 'gastos' | 'pagos' | 'documentos'
+type Tab = 'resumen' | 'presupuesto' | 'ejecucion' | 'actas' | 'acps' | 'gastos' | 'pagos' | 'documentos'
 
 const CATEGORIAS_GASTO = [
   'MATERIALES', 'MANO_OBRA', 'EQUIPOS', 'TRANSPORTE',
@@ -49,6 +50,12 @@ export default function ContratoDetailPage() {
   const [gastos, setGastos] = useState<ContratoGasto[]>([])
   const [pagos, setPagos] = useState<ContratoPago[]>([])
   const [actas, setActas] = useState<ContratoActa[]>([])
+  const [acps, setAcps] = useState<AcpListItem[]>([])
+  const [selectedAcp, setSelectedAcp] = useState<Acp | null>(null)
+  const [expandedAcpId, setExpandedAcpId] = useState<string | null>(null)
+  const [acpUploading, setAcpUploading] = useState(false)
+  const [acpDragging, setAcpDragging] = useState(false)
+  const acpInputRef = useRef<HTMLInputElement>(null)
   const [loading, setLoading] = useState(true)
 
   // Actas modal state
@@ -190,13 +197,14 @@ export default function ContratoDetailPage() {
     if (!id) return
     setLoading(true)
     try {
-      const [cRes, dRes, capRes, gRes, pRes, aRes] = await Promise.all([
+      const [cRes, dRes, capRes, gRes, pRes, aRes, acpRes] = await Promise.all([
         contratosAPI.getById(id),
         contratosAPI.getDashboard(id),
         contratosAPI.getCapitulos(id),
         contratosAPI.getGastos(id),
         contratosAPI.getPagos(id),
         contratosAPI.getActas(id),
+        acpAPI.list({ contrato_id: id }),
       ])
       setContrato(cRes.data)
       setDashboard(dRes.data)
@@ -204,10 +212,53 @@ export default function ContratoDetailPage() {
       setGastos(gRes.data)
       setPagos(pRes.data)
       setActas(aRes.data)
+      setAcps(acpRes.data)
     } finally { setLoading(false) }
   }, [id])
 
   useEffect(() => { loadAll() }, [loadAll])
+
+  // ── ACP handlers ──────────────────────────────────────────────────────────
+
+  const handleAcpUpload = async (file: File) => {
+    if (!id) return
+    setAcpUploading(true)
+    try {
+      await acpAPI.upload(file, id)
+      toast.success('ACP cargado correctamente')
+      const res = await acpAPI.list({ contrato_id: id })
+      setAcps(res.data)
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      toast.error(msg || 'Error al procesar el PDF')
+    } finally {
+      setAcpUploading(false)
+      if (acpInputRef.current) acpInputRef.current.value = ''
+    }
+  }
+
+  const handleAcpExpand = async (acp: AcpListItem) => {
+    if (expandedAcpId === acp.id) {
+      setExpandedAcpId(null)
+      setSelectedAcp(null)
+      return
+    }
+    setExpandedAcpId(acp.id)
+    try {
+      const res = await acpAPI.get(acp.id)
+      setSelectedAcp(res.data)
+    } catch { setSelectedAcp(null) }
+  }
+
+  const handleAcpDelete = async (acp: AcpListItem) => {
+    if (!confirm(`¿Eliminar ${acp.numero_acta}?`)) return
+    try {
+      await acpAPI.delete(acp.id)
+      toast.success('ACP eliminado')
+      setAcps(prev => prev.filter(a => a.id !== acp.id))
+      if (expandedAcpId === acp.id) { setExpandedAcpId(null); setSelectedAcp(null) }
+    } catch {}
+  }
 
   // ── Handlers ───────────────────────────────────────────────────────────────
 
@@ -360,6 +411,7 @@ export default function ContratoDetailPage() {
     { id: 'presupuesto', label: 'Presupuesto' },
     { id: 'ejecucion', label: 'Ejecución' },
     { id: 'actas', label: `Cortes / Actas${actas.length ? ` (${actas.length})` : ''}` },
+    { id: 'acps', label: `ACPs${acps.length ? ` (${acps.length})` : ''}` },
     { id: 'gastos', label: 'Gastos' },
     { id: 'pagos', label: 'Pagos' },
     { id: 'documentos', label: 'Documentos' },
@@ -843,6 +895,237 @@ export default function ContratoDetailPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Tab: ACPs ────────────────────────────────────────────────────── */}
+      {activeTab === 'acps' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2>Actas de Corte de Pago</h2>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                Adjunta los PDF que envía el cliente (ej: ACP-708) para registrar el control financiero por corte
+              </p>
+            </div>
+          </div>
+
+          {/* Upload zone */}
+          <div
+            onDragOver={e => { e.preventDefault(); setAcpDragging(true) }}
+            onDragLeave={() => setAcpDragging(false)}
+            onDrop={async e => {
+              e.preventDefault(); setAcpDragging(false)
+              const f = Array.from(e.dataTransfer.files).find(x => x.name.toLowerCase().endsWith('.pdf'))
+              if (f) await handleAcpUpload(f)
+            }}
+            onClick={() => !acpUploading && acpInputRef.current?.click()}
+            className="card text-center py-8 cursor-pointer transition-all"
+            style={{
+              border: `2px dashed ${acpDragging ? 'var(--lime)' : 'var(--border)'}`,
+              background: acpDragging ? 'var(--lime-dim)' : 'var(--card)',
+            }}
+          >
+            <input
+              ref={acpInputRef} type="file" accept=".pdf" className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleAcpUpload(f) }}
+            />
+            {acpUploading ? (
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Procesando PDF…</p>
+            ) : (
+              <>
+                <p className="text-sm font-medium" style={{ color: 'var(--lime-text)' }}>
+                  Arrastra el PDF del ACP o haz clic para seleccionarlo
+                </p>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                  El sistema extrae automáticamente todos los datos financieros
+                </p>
+              </>
+            )}
+          </div>
+
+          {/* Lista de ACPs */}
+          {acps.length === 0 && !acpUploading && (
+            <div className="card text-center py-10" style={{ color: 'var(--text-muted)' }}>
+              <p className="text-sm">No hay ACPs registrados</p>
+              <p className="text-xs mt-1">Sube el primer ACP para empezar el control de cortes</p>
+            </div>
+          )}
+
+          {acps.map(acp => (
+            <div key={acp.id} className="card !p-0 overflow-hidden">
+              {/* Header del ACP */}
+              <div
+                className="flex items-center justify-between px-4 py-3 cursor-pointer"
+                style={{ borderBottom: expandedAcpId === acp.id ? '1px solid var(--border)' : 'none' }}
+                onClick={() => handleAcpExpand(acp)}
+              >
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="font-bold text-sm font-mono" style={{ color: 'var(--lime-text)' }}>
+                    {acp.numero_acta}
+                  </span>
+                  {acp.fecha_acta && (
+                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(acp.fecha_acta)}</span>
+                  )}
+                  {acp.obra && (
+                    <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--surface)', color: 'var(--text)' }}>
+                      {acp.obra}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {acp.archivo_url && (
+                    <a href={acp.archivo_url} target="_blank" rel="noreferrer"
+                       className="text-xs px-2 py-1 rounded"
+                       style={{ color: 'var(--lime-text)', background: 'var(--lime-dim)' }}
+                       onClick={e => e.stopPropagation()}>
+                      Drive ↗
+                    </a>
+                  )}
+                  <button
+                    onClick={e => { e.stopPropagation(); handleAcpDelete(acp) }}
+                    className="text-xs px-2 py-1 rounded"
+                    style={{ color: 'var(--text-muted)' }}
+                  >✕</button>
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    {expandedAcpId === acp.id ? '▲' : '▼'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Resumen financiero rápido */}
+              <div className="grid grid-cols-3 divide-x px-0" style={{ borderTop: '1px solid var(--border)' }}>
+                {[
+                  { label: 'Valor Acta', val: acp.vr_acta },
+                  { label: 'Ret. Garantía (acum.)', val: acp.vr_retencion_acumulado },
+                  { label: 'Total a Pagar', val: acp.vr_total_pagar },
+                ].map(({ label, val }) => (
+                  <div key={label} className="px-4 py-2.5 text-center"
+                       style={{ borderColor: 'var(--border)' }}>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{label}</p>
+                    <p className="text-sm font-bold mt-0.5" style={{ color: 'var(--text)' }}>
+                      {val != null ? formatCurrency(val, 'COP') : '—'}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Detalle expandido */}
+              {expandedAcpId === acp.id && selectedAcp?.id === acp.id && (
+                <div className="px-4 py-4 space-y-5" style={{ borderTop: '1px solid var(--border)' }}>
+                  {/* Valores del contrato */}
+                  <div>
+                    <p className="text-xs font-semibold uppercase mb-2" style={{ color: 'var(--text-muted)' }}>
+                      Estado del Contrato
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {[
+                        { label: 'Vr. Contrato', val: selectedAcp.vr_contrato },
+                        { label: 'Acum. Anterior', val: selectedAcp.acumulado_anterior },
+                        { label: 'Acum. Actual', val: selectedAcp.acumulado_actual },
+                        { label: 'Saldo', val: selectedAcp.saldo_contrato },
+                      ].map(({ label, val }) => (
+                        <div key={label} className="rounded-lg p-3" style={{ background: 'var(--surface)' }}>
+                          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{label}</p>
+                          <p className="text-sm font-bold mt-0.5">{val != null ? formatCurrency(val, 'COP') : '—'}</p>
+                        </div>
+                      ))}
+                    </div>
+                    {selectedAcp.elaborado_por && (
+                      <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+                        Elaborado por: <strong>{selectedAcp.elaborado_por}</strong>
+                        {selectedAcp.forma_pago ? ` · Forma de pago: ${selectedAcp.forma_pago}` : ''}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Items */}
+                  {selectedAcp.items.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase mb-2" style={{ color: 'var(--text-muted)' }}>
+                        Detalle del Acta
+                      </p>
+                      <div className="overflow-x-auto rounded-lg" style={{ border: '1px solid var(--border)' }}>
+                        <table className="w-full text-xs">
+                          <thead style={{ background: 'var(--surface)' }}>
+                            <tr>
+                              {['Actividad', 'Artículo', 'Um', 'Cant.', 'Vr. Unitario', 'Total'].map(h => (
+                                <th key={h} className="px-3 py-2 text-left font-semibold" style={{ color: 'var(--text-muted)' }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {selectedAcp.items.map((it, i) => (
+                              <tr key={it.id} style={{ borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
+                                <td className="px-3 py-2">{it.actividad}</td>
+                                <td className="px-3 py-2 font-mono text-xs">{it.articulo || '—'}</td>
+                                <td className="px-3 py-2">{it.unidad || '—'}</td>
+                                <td className="px-3 py-2 text-right">{it.cantidad?.toFixed(2) ?? '—'}</td>
+                                <td className="px-3 py-2 text-right">{it.vr_unitario != null ? formatCurrency(it.vr_unitario, 'COP') : '—'}</td>
+                                <td className="px-3 py-2 text-right font-semibold">{it.vr_total != null ? formatCurrency(it.vr_total, 'COP') : '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Resumen financiero completo */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* AIU + IVA */}
+                    <div className="rounded-lg p-4 space-y-2" style={{ background: 'var(--surface)' }}>
+                      <p className="text-xs font-semibold uppercase mb-3" style={{ color: 'var(--text-muted)' }}>Resumen del Acta</p>
+                      {[
+                        { label: 'Vr. Neto', val: selectedAcp.vr_neto },
+                        { label: `Administración (${selectedAcp.pct_administracion}%)`, val: selectedAcp.vr_administracion },
+                        { label: `Imprevistos (${selectedAcp.pct_imprevistos}%)`, val: selectedAcp.vr_imprevistos },
+                        { label: `Utilidad (${selectedAcp.pct_utilidad}%)`, val: selectedAcp.vr_utilidad },
+                        { label: 'Subtotal antes IVA', val: selectedAcp.vr_subtotal_antes_iva, bold: true },
+                        { label: `IVA (${selectedAcp.pct_iva}%)`, val: selectedAcp.vr_iva },
+                        { label: 'Valor Acta', val: selectedAcp.vr_acta, bold: true },
+                      ].map(({ label, val, bold }) => (
+                        <div key={label} className="flex justify-between text-xs">
+                          <span style={{ color: 'var(--text-muted)' }}>{label}</span>
+                          <span className={bold ? 'font-bold' : ''}>{val != null ? formatCurrency(val, 'COP') : '—'}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Retenciones y total */}
+                    <div className="rounded-lg p-4 space-y-2" style={{ background: 'var(--surface)' }}>
+                      <p className="text-xs font-semibold uppercase mb-3" style={{ color: 'var(--text-muted)' }}>Retenciones y Pagos</p>
+                      {[
+                        { label: `Ret. Garantía acta (${selectedAcp.pct_retencion_garantia}%)`, val: selectedAcp.vr_retencion_acta },
+                        { label: 'Ret. Garantía acumulada', val: selectedAcp.vr_retencion_acumulado, bold: true },
+                        { label: `Anticipo (${selectedAcp.pct_anticipo}%)`, val: selectedAcp.vr_anticipos_girados },
+                        { label: 'Amortización anticipo', val: selectedAcp.vr_amortizacion_anticipo },
+                        { label: 'Descuentos', val: selectedAcp.vr_total_descuentos },
+                        { label: 'Total a Pagar', val: selectedAcp.vr_total_pagar, bold: true, highlight: true },
+                      ].map(({ label, val, bold, highlight }) => (
+                        <div key={label} className="flex justify-between text-xs">
+                          <span style={{ color: 'var(--text-muted)' }}>{label}</span>
+                          <span
+                            className={bold ? 'font-bold' : ''}
+                            style={{ color: highlight ? 'var(--lime-text)' : 'var(--text)' }}
+                          >
+                            {val != null ? formatCurrency(val, 'COP') : '—'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Loading spinner while fetching detail */}
+              {expandedAcpId === acp.id && !selectedAcp && (
+                <div className="py-4 text-center text-xs" style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border)' }}>
+                  Cargando detalle…
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
 
