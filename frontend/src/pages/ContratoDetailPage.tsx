@@ -197,14 +197,13 @@ export default function ContratoDetailPage() {
     if (!id) return
     setLoading(true)
     try {
-      const [cRes, dRes, capRes, gRes, pRes, aRes, acpRes] = await Promise.all([
+      const [cRes, dRes, capRes, gRes, pRes, aRes] = await Promise.all([
         contratosAPI.getById(id),
         contratosAPI.getDashboard(id),
         contratosAPI.getCapitulos(id),
         contratosAPI.getGastos(id),
         contratosAPI.getPagos(id),
         contratosAPI.getActas(id),
-        acpAPI.list({ contrato_id: id }),
       ])
       setContrato(cRes.data)
       setDashboard(dRes.data)
@@ -212,7 +211,7 @@ export default function ContratoDetailPage() {
       setGastos(gRes.data)
       setPagos(pRes.data)
       setActas(aRes.data)
-      setAcps(acpRes.data)
+      acpAPI.list({ contrato_id: id }).then(r => setAcps(r.data)).catch(() => {})
     } finally { setLoading(false) }
   }, [id])
 
