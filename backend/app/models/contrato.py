@@ -89,9 +89,14 @@ class Contrato(Base, UUIDPrimaryKey, TimestampedMixin, SoftDeleteMixin):
         comment="Responsible person"
     )
     archivo_contrato = Column(
-        VARCHAR(255),
+        VARCHAR(500),
         nullable=True,
-        comment="Contract document file path"
+        comment="Contract document Drive URL"
+    )
+    archivo_contrato_nombre = Column(
+        VARCHAR(300),
+        nullable=True,
+        comment="Contract document original filename"
     )
     terminos = Column(
         Text,

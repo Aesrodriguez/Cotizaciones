@@ -183,6 +183,13 @@ export const contratosAPI = {
   // Documentos institucionales
   generarDocumento: (id: string, tipo: string, data: object) =>
     api.post(`/contratos/${id}/documentos/${tipo}`, data, { responseType: 'blob' }),
+
+  // Contrato firmado
+  uploadContrato: (id: string, file: File) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return api.post<Contrato>(`/contratos/${id}/upload-contrato`, fd)
+  },
 }
 
 export const trabajadoresAPI = {

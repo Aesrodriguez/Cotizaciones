@@ -6,7 +6,7 @@ import math
 from datetime import date, datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -661,6 +661,31 @@ def generar_documento(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.post('/{id}/upload-contrato', response_model=ContratoOut)
+async def upload_contrato_firmado(
+    id: UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    """Sube el contrato firmado a Google Drive y guarda la URL en el contrato."""
+    repo = ContratoRepository(db)
+    contrato = _assert_contrato(repo, id)
+
+    content = await file.read()
+    fname = file.filename or 'contrato.pdf'
+
+    from app.utils.gdrive import upload_to_drive
+    mime = 'application/pdf' if fname.lower().endswith('.pdf') else 'application/octet-stream'
+    url = upload_to_drive(content, fname, mime)
+
+    contrato.archivo_contrato = url
+    contrato.archivo_contrato_nombre = fname
+    db.commit()
+    db.refresh(contrato)
+    return _enrich_full(contrato)
 
 
 # ---------------------------------------------------------------------------

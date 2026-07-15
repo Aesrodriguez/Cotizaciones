@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { contratosAPI, clientesAPI, usuariosAPI } from '../services/api'
@@ -42,6 +42,10 @@ export default function ContratoFormPage() {
   const isEdit = Boolean(id)
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
+  const [contratoFile, setContratoFile] = useState<File | null>(null)
+  const [contratoActual, setContratoActual] = useState<{ url?: string; nombre?: string } | null>(null)
+  const [uploadingFile, setUploadingFile] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { register, handleSubmit, watch, setValue, reset, formState: { isSubmitting, errors } } = useForm<FormData>({
     defaultValues: {
@@ -58,6 +62,7 @@ export default function ContratoFormPage() {
   })
 
   const watchConAiu = watch('con_aiu')
+  const watchClienteId = watch('cliente_id')
   const watchMonto = watch('monto_total')
   const watchAdm = watch('aiu_administracion')
   const watchImp = watch('aiu_imprevistos')
@@ -69,10 +74,20 @@ export default function ContratoFormPage() {
     usuariosAPI.getAll().then((r) => setUsuarios(r.data))
   }, [])
 
+  // Auto-fill NIT when client changes
+  useEffect(() => {
+    if (!watchClienteId) return
+    const cliente = clientes.find(c => c.id === watchClienteId)
+    if (cliente?.rut) setValue('nit_cliente', cliente.rut)
+  }, [watchClienteId, clientes, setValue])
+
   useEffect(() => {
     if (isEdit && id) {
       contratosAPI.getById(id).then((r) => {
         const c = r.data
+        if (c.archivo_contrato || c.archivo_contrato_nombre) {
+          setContratoActual({ url: c.archivo_contrato, nombre: c.archivo_contrato_nombre })
+        }
         reset({
           numero: c.numero,
           titulo: c.titulo,
@@ -133,16 +148,27 @@ export default function ContratoFormPage() {
         cotizacion_id: data.cotizacion_id || null,
         fecha_termino: data.fecha_termino || null,
       }
+      let contratoId = id
       if (isEdit && id) {
         await contratosAPI.update(id, payload)
         toast.success('Contrato actualizado')
       } else {
         const res = await contratosAPI.create(payload)
+        contratoId = res.data.id
         toast.success('Contrato creado')
-        navigate(`/contratos/${res.data.id}`)
-        return
       }
-      navigate(`/contratos/${id}`)
+      if (contratoFile && contratoId) {
+        setUploadingFile(true)
+        try {
+          await contratosAPI.uploadContrato(contratoId, contratoFile)
+          toast.success('Contrato firmado guardado en Drive')
+        } catch {
+          toast.error('Error al subir el contrato firmado')
+        } finally {
+          setUploadingFile(false)
+        }
+      }
+      navigate(`/contratos/${contratoId}`)
     } catch { /* interceptor shows toast */ }
   }
 
@@ -318,10 +344,55 @@ export default function ContratoFormPage() {
           </div>
         </div>
 
+        {/* Contrato firmado */}
+        <div className="form-section">
+          <div className="form-section-header">
+            <h2>Contrato firmado</h2>
+          </div>
+          <div className="form-section-body space-y-3">
+            {contratoActual?.url && !contratoFile && (
+              <div className="flex items-center gap-3 p-3 rounded-lg" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                <span className="text-lg">📄</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{contratoActual.nombre || 'Contrato firmado'}</p>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Guardado en Google Drive</p>
+                </div>
+                <a href={contratoActual.url} target="_blank" rel="noreferrer"
+                   className="text-xs px-2 py-1 rounded"
+                   style={{ color: 'var(--lime-text)', background: 'var(--lime-dim)' }}>
+                  Ver ↗
+                </a>
+              </div>
+            )}
+            <div
+              className="rounded-lg p-4 text-center cursor-pointer transition-all"
+              style={{ border: '2px dashed var(--border)', background: contratoFile ? 'var(--lime-dim)' : 'var(--card)' }}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <input
+                ref={fileInputRef} type="file" className="hidden"
+                accept=".pdf,.doc,.docx"
+                onChange={e => setContratoFile(e.target.files?.[0] ?? null)}
+              />
+              {contratoFile ? (
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-sm font-medium" style={{ color: 'var(--lime-text)' }}>📎 {contratoFile.name}</span>
+                  <button type="button" className="text-xs" style={{ color: 'var(--text-muted)' }}
+                          onClick={e => { e.stopPropagation(); setContratoFile(null) }}>✕</button>
+                </div>
+              ) : (
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                  {contratoActual?.url ? 'Reemplazar contrato firmado (PDF/Word)' : 'Adjuntar contrato firmado (PDF/Word)'}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
         <div className="flex justify-end gap-3 pb-4">
           <button type="button" onClick={() => navigate(-1)} className="btn-secondary">Cancelar</button>
-          <button type="submit" disabled={isSubmitting} className="btn-primary px-6">
-            {isSubmitting ? 'Guardando...' : isEdit ? 'Actualizar contrato' : 'Crear contrato'}
+          <button type="submit" disabled={isSubmitting || uploadingFile} className="btn-primary px-6">
+            {isSubmitting ? 'Guardando...' : uploadingFile ? 'Subiendo archivo…' : isEdit ? 'Actualizar contrato' : 'Crear contrato'}
           </button>
         </div>
       </form>

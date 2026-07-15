@@ -39,6 +39,7 @@ class ContratoCreate(BaseModel):
     nit_cliente: Optional[str] = None
     responsable_id: Optional[UUID] = None
     archivo_contrato: Optional[str] = None
+    archivo_contrato_nombre: Optional[str] = None
     terminos: Optional[str] = None
     observaciones: Optional[str] = None
 
@@ -68,6 +69,7 @@ class ContratoUpdate(BaseModel):
     nit_cliente: Optional[str] = None
     responsable_id: Optional[UUID] = None
     archivo_contrato: Optional[str] = None
+    archivo_contrato_nombre: Optional[str] = None
     terminos: Optional[str] = None
     observaciones: Optional[str] = None
 
@@ -121,6 +123,8 @@ class ContratoOut(BaseModel):
     responsable_id: Optional[UUID] = None
     usuario_id: UUID
     usuario_nombre: Optional[str] = None
+    archivo_contrato: Optional[str] = None
+    archivo_contrato_nombre: Optional[str] = None
     terminos: Optional[str] = None
     observaciones: Optional[str] = None
     created_at: datetime

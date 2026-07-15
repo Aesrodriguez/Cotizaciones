@@ -510,6 +510,24 @@ export default function ContratoDetailPage() {
               <p className="text-sm text-gray-700 leading-relaxed">{contrato.objeto}</p>
             </div>
           )}
+
+          {contrato.archivo_contrato && (
+            <div className="card flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="text-xl">📄</span>
+                <div>
+                  <p className="text-sm font-medium">Contrato firmado</p>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    {contrato.archivo_contrato_nombre || 'Documento en Google Drive'}
+                  </p>
+                </div>
+              </div>
+              <a href={contrato.archivo_contrato} target="_blank" rel="noreferrer"
+                 className="btn-secondary text-sm py-1.5 px-3">
+                Ver en Drive ↗
+              </a>
+            </div>
+          )}
         </div>
       )}
 

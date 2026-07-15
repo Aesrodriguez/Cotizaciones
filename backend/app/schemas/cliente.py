@@ -64,6 +64,7 @@ class ClienteList(BaseModel):
     id: UUID
     codigo: str
     nombre: str
+    rut: Optional[str] = None
     contacto_nombre: Optional[str] = None
     contacto_email: Optional[str] = None
     ciudad: Optional[str] = None

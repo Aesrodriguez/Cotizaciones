@@ -142,6 +142,8 @@ export interface Contrato extends ContratoListItem {
   cotizacion_id?: string
   responsable_id?: string
   usuario_id: string
+  archivo_contrato?: string
+  archivo_contrato_nombre?: string
   terminos?: string
   observaciones?: string
   updated_at: string
