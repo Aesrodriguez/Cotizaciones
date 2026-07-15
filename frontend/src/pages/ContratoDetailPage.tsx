@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { contratosAPI, acpAPI } from '../services/api'
 import type { AcpListItem, Acp } from '../services/api'
@@ -43,7 +43,9 @@ function KPI({ label, value, sub, accent = 'border-l-blue-500' }: { label: strin
 export default function ContratoDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState<Tab>('resumen')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeTab = (searchParams.get('tab') as Tab) || 'resumen'
+  const setActiveTab = (tab: Tab) => setSearchParams({ tab }, { replace: true })
   const [contrato, setContrato] = useState<Contrato | null>(null)
   const [dashboard, setDashboard] = useState<ContratoDashboard | null>(null)
   const [capitulos, setCapitulos] = useState<ContratoCapitulo[]>([])
