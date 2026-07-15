@@ -192,7 +192,7 @@ CapituloOut.model_rebuild()
 # ---------------------------------------------------------------------------
 
 class ItemCreate(BaseModel):
-    capitulo_id: UUID
+    capitulo_id: Optional[UUID] = None
     codigo: Optional[str] = None
     descripcion: str
     unidad: str = "UN"
