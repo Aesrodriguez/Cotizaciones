@@ -274,6 +274,24 @@ export default function ContratoDetailPage() {
     } catch {}
   })
 
+  const handleDeleteCapitulo = async (capId: string) => {
+    if (!id || !confirm('¿Eliminar este capítulo y todos sus ítems?')) return
+    try {
+      await contratosAPI.deleteCapitulo(id, capId)
+      toast.success('Capítulo eliminado')
+      loadAll()
+    } catch {}
+  }
+
+  const handleDeleteItem = async (itemId: string) => {
+    if (!id || !confirm('¿Eliminar este ítem?')) return
+    try {
+      await contratosAPI.deleteItem(id, itemId)
+      toast.success('Ítem eliminado')
+      loadAll()
+    } catch {}
+  }
+
   const handleCreateItem = itemForm.handleSubmit(async (data) => {
     if (!id || !addingCapTo) return
     try {
@@ -533,195 +551,276 @@ export default function ContratoDetailPage() {
       )}
 
       {/* ── TAB: PRESUPUESTO ─────────────────────────────────────────────── */}
-      {activeTab === 'presupuesto' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2>Capítulos e ítems</h2>
-            <button onClick={() => setShowCapForm(true)} className="btn-primary text-sm py-1.5">+ Capítulo</button>
-          </div>
+      {activeTab === 'presupuesto' && (() => {
+        const grandTotal = capitulos.reduce((s, cap) => {
+          const capItems = [...cap.items, ...cap.subcapitulos.flatMap(sub => sub.items)]
+          return s + capItems.reduce((ss, it) => ss + Number(it.valor_total), 0)
+        }, 0)
 
-          {showCapForm && (
-            <div className="card border-blue-200 bg-blue-50/30">
-              <h2 className="text-sm font-semibold text-gray-700 mb-3">Nuevo capítulo</h2>
-              <form onSubmit={handleCreateCapitulo} className="flex gap-3 flex-wrap">
-                <input {...capForm.register('codigo')} className="input w-28" placeholder="Cód." />
-                <input {...capForm.register('nombre', { required: true })} className="input flex-1" placeholder="Nombre del capítulo *" />
-                <button type="submit" className="btn-primary">Crear</button>
-                <button type="button" onClick={() => setShowCapForm(false)} className="btn-secondary">Cancelar</button>
-              </form>
+        const ItemsTable = ({ items, capId }: { items: typeof capitulos[0]['items']; capId: string }) => (
+          items.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="px-3 py-2 text-left text-gray-500 font-semibold uppercase tracking-wider w-16">Cód</th>
+                    <th className="px-3 py-2 text-left text-gray-500 font-semibold uppercase tracking-wider">Descripción</th>
+                    <th className="px-3 py-2 text-center text-gray-500 font-semibold uppercase tracking-wider w-14">Und</th>
+                    <th className="px-3 py-2 text-right text-gray-500 font-semibold uppercase tracking-wider w-20">Cant.</th>
+                    <th className="px-3 py-2 text-right text-gray-500 font-semibold uppercase tracking-wider w-28">V. Unit</th>
+                    <th className="px-3 py-2 text-right text-gray-500 font-semibold uppercase tracking-wider w-28">Total</th>
+                    <th className="px-3 py-2 text-center text-gray-500 font-semibold uppercase tracking-wider w-24">Ejec %</th>
+                    <th className="px-3 py-2 w-8" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {items.map((item) => {
+                    const pct = item.pct_ejecutado ?? 0
+                    return (
+                      <tr key={item.id} className="hover:bg-gray-50 group">
+                        <td className="px-3 py-2 font-mono text-gray-400">{item.codigo || '-'}</td>
+                        <td className="px-3 py-2 text-gray-800">{item.descripcion}</td>
+                        <td className="px-3 py-2 text-center text-gray-500">{item.unidad}</td>
+                        <td className="px-3 py-2 text-right text-gray-700">{Number(item.cantidad_contratada).toLocaleString()}</td>
+                        <td className="px-3 py-2 text-right text-gray-700">{formatCurrency(item.valor_unitario)}</td>
+                        <td className="px-3 py-2 text-right font-semibold text-gray-900">{formatCurrency(item.valor_total)}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-1.5">
+                            <ProgressBar value={pct} className="flex-1" />
+                            <span className={`text-xs font-medium w-10 text-right ${pct >= 100 ? 'text-green-600' : 'text-gray-600'}`}>
+                              {pct.toFixed(0)}%
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-2 py-2">
+                          <button
+                            onClick={() => handleDeleteItem(item.id)}
+                            className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-all text-xs"
+                            title="Eliminar ítem"
+                          >✕</button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  <tr className="bg-gray-50 border-t-2 border-gray-300">
+                    <td colSpan={5} className="px-3 py-1.5 text-xs font-semibold text-gray-500 text-right">Subtotal</td>
+                    <td className="px-3 py-1.5 text-xs font-bold text-gray-900 text-right">
+                      {formatCurrency(items.reduce((s, it) => s + Number(it.valor_total), 0))}
+                    </td>
+                    <td colSpan={2} />
+                  </tr>
+                </tbody>
+              </table>
             </div>
-          )}
+          ) : null
+        )
 
-          {capitulos.length === 0 && (
-            <div className="card text-center py-12 text-gray-400">
-              <p className="mb-3">No hay capítulos aún</p>
-              <button onClick={() => setShowCapForm(true)} className="btn-primary">Agregar primer capítulo</button>
+        const SerieForm = ({ capId }: { capId: string }) => serieCapId === capId ? (
+          <div className="px-4 py-4 bg-indigo-50 border-b border-indigo-100 space-y-3">
+            <p className="text-xs font-bold text-indigo-700 uppercase tracking-wide">Crear ítems en serie</p>
+            <div className="flex gap-3">
+              {(['rango', 'lista'] as const).map(m => (
+                <label key={m} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                  <input type="radio" checked={serie.modo === m} onChange={() => setSerie(s => ({ ...s, modo: m }))} />
+                  <span className="capitalize">{m === 'rango' ? 'Rango numérico' : 'Lista personalizada'}</span>
+                </label>
+              ))}
             </div>
-          )}
-
-          {capitulos.map((cap) => (
-            <div key={cap.id} className="card !p-0 overflow-hidden">
-              <div className="bg-blue-950 text-white px-4 py-2.5 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  {cap.codigo && <span className="font-mono text-xs text-blue-300">{cap.codigo}</span>}
-                  <span className="font-semibold text-sm">{cap.nombre}</span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="sm:col-span-2">
+                <label className="text-xs text-gray-500 mb-0.5 block">Prefijo</label>
+                <input className="input text-xs py-1.5 w-full" placeholder='ej: "Chimenea Casa "'
+                  value={serie.prefijo} onChange={e => setSerie(s => ({ ...s, prefijo: e.target.value }))} />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-0.5 block">Sufijo (opcional)</label>
+                <input className="input text-xs py-1.5 w-full" placeholder='ej: " Bloque A"'
+                  value={serie.sufijo} onChange={e => setSerie(s => ({ ...s, sufijo: e.target.value }))} />
+              </div>
+            </div>
+            {serie.modo === 'rango' ? (
+              <div className="flex gap-2 items-end">
+                <div>
+                  <label className="text-xs text-gray-500 mb-0.5 block">Desde</label>
+                  <input type="number" className="input text-xs py-1.5 w-24"
+                    value={serie.desde} onChange={e => setSerie(s => ({ ...s, desde: Number(e.target.value) }))} />
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => { setAddingCapTo(cap.id); setSerieCapId(null); itemForm.reset({ unidad: 'UN', cantidad_contratada: 1, valor_unitario: 0 }) }}
-                    className="text-xs text-blue-300 hover:text-white transition-colors"
-                  >+ Ítem</button>
-                  <button
-                    onClick={() => { setSerieCapId(cap.id); setAddingCapTo(null) }}
-                    className="text-xs text-blue-300 hover:text-white transition-colors border border-blue-600 rounded px-1.5 py-0.5"
-                    title="Crear múltiples ítems con un patrón"
-                  >⚡ En serie</button>
+                <div>
+                  <label className="text-xs text-gray-500 mb-0.5 block">Hasta</label>
+                  <input type="number" className="input text-xs py-1.5 w-24"
+                    value={serie.hasta} onChange={e => setSerie(s => ({ ...s, hasta: Number(e.target.value) }))} />
                 </div>
               </div>
-
-              {addingCapTo === cap.id && (
-                <div className="px-4 py-3 bg-blue-50 border-b border-blue-100">
-                  <form onSubmit={handleCreateItem} className="grid grid-cols-2 sm:grid-cols-6 gap-2">
-                    <input {...itemForm.register('codigo')} className="input text-xs py-1.5" placeholder="Cód." />
-                    <input {...itemForm.register('descripcion', { required: true })} className="input text-xs py-1.5 sm:col-span-2" placeholder="Descripción *" />
-                    <input {...itemForm.register('unidad')} className="input text-xs py-1.5" placeholder="Unidad" />
-                    <input type="number" step="0.0001" {...itemForm.register('cantidad_contratada', { valueAsNumber: true })} className="input text-xs py-1.5" placeholder="Cantidad" />
-                    <input type="number" step="0.01" {...itemForm.register('valor_unitario', { valueAsNumber: true })} className="input text-xs py-1.5" placeholder="V. unitario" />
-                    <div className="flex gap-1 col-span-2 sm:col-span-1">
-                      <button type="submit" className="btn-primary py-1 px-3 text-xs">Crear</button>
-                      <button type="button" onClick={() => setAddingCapTo(null)} className="btn-secondary py-1 px-2 text-xs">×</button>
-                    </div>
-                  </form>
-                </div>
-              )}
-
-              {serieCapId === cap.id && (
-                <div className="px-4 py-4 bg-indigo-50 border-b border-indigo-100 space-y-3">
-                  <p className="text-xs font-bold text-indigo-700 uppercase tracking-wide">Crear ítems en serie</p>
-
-                  {/* Modo */}
-                  <div className="flex gap-3">
-                    {(['rango', 'lista'] as const).map(m => (
-                      <label key={m} className="flex items-center gap-1.5 text-xs cursor-pointer">
-                        <input type="radio" checked={serie.modo === m}
-                          onChange={() => setSerie(s => ({ ...s, modo: m }))} />
-                        <span className="capitalize">{m === 'rango' ? 'Rango numérico' : 'Lista personalizada'}</span>
-                      </label>
-                    ))}
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    <div className="sm:col-span-2">
-                      <label className="text-xs text-gray-500 mb-0.5 block">Prefijo</label>
-                      <input className="input text-xs py-1.5 w-full" placeholder='ej: "Chimenea Casa "'
-                        value={serie.prefijo} onChange={e => setSerie(s => ({ ...s, prefijo: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="text-xs text-gray-500 mb-0.5 block">Sufijo (opcional)</label>
-                      <input className="input text-xs py-1.5 w-full" placeholder='ej: " Bloque A"'
-                        value={serie.sufijo} onChange={e => setSerie(s => ({ ...s, sufijo: e.target.value }))} />
-                    </div>
-                  </div>
-
-                  {serie.modo === 'rango' ? (
-                    <div className="flex gap-2 items-end">
-                      <div>
-                        <label className="text-xs text-gray-500 mb-0.5 block">Desde</label>
-                        <input type="number" className="input text-xs py-1.5 w-24"
-                          value={serie.desde} onChange={e => setSerie(s => ({ ...s, desde: Number(e.target.value) }))} />
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-500 mb-0.5 block">Hasta</label>
-                        <input type="number" className="input text-xs py-1.5 w-24"
-                          value={serie.hasta} onChange={e => setSerie(s => ({ ...s, hasta: Number(e.target.value) }))} />
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="text-xs text-gray-500 mb-0.5 block">Etiquetas (una por línea)</label>
-                      <textarea className="input text-xs py-1.5 w-full h-24 resize-none font-mono"
-                        placeholder={"101\n102\n103\nApto 4B\n..."}
-                        value={serie.lista} onChange={e => setSerie(s => ({ ...s, lista: e.target.value }))} />
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-xs text-gray-500 mb-0.5 block">Unidad</label>
-                      <input className="input text-xs py-1.5 w-full"
-                        value={serie.unidad} onChange={e => setSerie(s => ({ ...s, unidad: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="text-xs text-gray-500 mb-0.5 block">Valor unitario *</label>
-                      <input type="number" step="0.01" className="input text-xs py-1.5 w-full"
-                        value={serie.valor_unitario || ''} onChange={e => setSerie(s => ({ ...s, valor_unitario: Number(e.target.value) }))} />
-                    </div>
-                  </div>
-
-                  {/* Preview */}
-                  {serieItems().length > 0 && (
-                    <div className="rounded-lg bg-white border border-indigo-200 p-2 max-h-32 overflow-y-auto">
-                      <p className="text-xs font-semibold text-indigo-600 mb-1">{serieItems().length} ítems a crear:</p>
-                      <p className="text-xs text-gray-500 font-mono leading-relaxed">
-                        {serieItems().slice(0, 8).join(' · ')}{serieItems().length > 8 ? ` · … (+${serieItems().length - 8} más)` : ''}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="flex gap-2">
-                    <button onClick={handleCreateSerie} disabled={creandoSerie || !serieItems().length}
-                      className="btn-primary py-1.5 px-4 text-xs disabled:opacity-50">
-                      {creandoSerie ? 'Creando…' : `Crear ${serieItems().length} ítem${serieItems().length !== 1 ? 's' : ''}`}
-                    </button>
-                    <button onClick={() => setSerieCapId(null)} className="btn-secondary py-1.5 px-3 text-xs">Cancelar</button>
-                  </div>
-                </div>
-              )}
-
-              {cap.items.length > 0 && (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="bg-gray-50 border-b border-gray-200">
-                        <th className="px-3 py-2 text-left text-gray-500 font-semibold uppercase tracking-wider">Cód</th>
-                        <th className="px-3 py-2 text-left text-gray-500 font-semibold uppercase tracking-wider">Descripción</th>
-                        <th className="px-3 py-2 text-center text-gray-500 font-semibold uppercase tracking-wider">Und</th>
-                        <th className="px-3 py-2 text-right text-gray-500 font-semibold uppercase tracking-wider">Cant.</th>
-                        <th className="px-3 py-2 text-right text-gray-500 font-semibold uppercase tracking-wider">V. Unit</th>
-                        <th className="px-3 py-2 text-right text-gray-500 font-semibold uppercase tracking-wider">Total</th>
-                        <th className="px-3 py-2 text-center text-gray-500 font-semibold uppercase tracking-wider">Ejec %</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {cap.items.map((item) => (
-                        <tr key={item.id} className="hover:bg-gray-50">
-                          <td className="px-3 py-2 font-mono text-gray-400">{item.codigo || '-'}</td>
-                          <td className="px-3 py-2 text-gray-800">{item.descripcion}</td>
-                          <td className="px-3 py-2 text-center text-gray-500">{item.unidad}</td>
-                          <td className="px-3 py-2 text-right text-gray-700">{Number(item.cantidad_contratada).toLocaleString()}</td>
-                          <td className="px-3 py-2 text-right text-gray-700">{formatCurrency(item.valor_unitario)}</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{formatCurrency(item.valor_total)}</td>
-                          <td className="px-3 py-2">
-                            <div className="flex items-center gap-1.5">
-                              <ProgressBar value={item.pct_ejecutado} className="flex-1" />
-                              <span className={`text-xs font-medium w-10 text-right ${item.pct_ejecutado >= 100 ? 'text-green-600' : 'text-gray-600'}`}>
-                                {item.pct_ejecutado.toFixed(0)}%
-                              </span>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-              {cap.items.length === 0 && (
-                <p className="text-center text-xs text-gray-400 py-4">Sin ítems — agrega uno con el botón + Ítem</p>
-              )}
+            ) : (
+              <div>
+                <label className="text-xs text-gray-500 mb-0.5 block">Etiquetas (una por línea)</label>
+                <textarea className="input text-xs py-1.5 w-full h-24 resize-none font-mono"
+                  placeholder={"101\n102\n103\nApto 4B\n..."}
+                  value={serie.lista} onChange={e => setSerie(s => ({ ...s, lista: e.target.value }))} />
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-gray-500 mb-0.5 block">Unidad</label>
+                <input className="input text-xs py-1.5 w-full"
+                  value={serie.unidad} onChange={e => setSerie(s => ({ ...s, unidad: e.target.value }))} />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-0.5 block">Valor unitario *</label>
+                <input type="number" step="0.01" className="input text-xs py-1.5 w-full"
+                  value={serie.valor_unitario || ''} onChange={e => setSerie(s => ({ ...s, valor_unitario: Number(e.target.value) }))} />
+              </div>
             </div>
-          ))}
-        </div>
-      )}
+            {serieItems().length > 0 && (
+              <div className="rounded-lg bg-white border border-indigo-200 p-2 max-h-32 overflow-y-auto">
+                <p className="text-xs font-semibold text-indigo-600 mb-1">{serieItems().length} ítems a crear:</p>
+                <p className="text-xs text-gray-500 font-mono leading-relaxed">
+                  {serieItems().slice(0, 8).join(' · ')}{serieItems().length > 8 ? ` · … (+${serieItems().length - 8} más)` : ''}
+                </p>
+              </div>
+            )}
+            <div className="flex gap-2">
+              <button onClick={handleCreateSerie} disabled={creandoSerie || !serieItems().length}
+                className="btn-primary py-1.5 px-4 text-xs disabled:opacity-50">
+                {creandoSerie ? 'Creando…' : `Crear ${serieItems().length} ítem${serieItems().length !== 1 ? 's' : ''}`}
+              </button>
+              <button onClick={() => setSerieCapId(null)} className="btn-secondary py-1.5 px-3 text-xs">Cancelar</button>
+            </div>
+          </div>
+        ) : null
+
+        const AddItemForm = ({ capId }: { capId: string }) => addingCapTo === capId ? (
+          <div className="px-4 py-3 bg-blue-50 border-b border-blue-100">
+            <form onSubmit={handleCreateItem} className="grid grid-cols-2 sm:grid-cols-6 gap-2">
+              <input {...itemForm.register('codigo')} className="input text-xs py-1.5" placeholder="Cód." />
+              <input {...itemForm.register('descripcion', { required: true })} className="input text-xs py-1.5 sm:col-span-2" placeholder="Descripción *" />
+              <input {...itemForm.register('unidad')} className="input text-xs py-1.5" placeholder="Unidad" />
+              <input type="number" step="0.0001" {...itemForm.register('cantidad_contratada', { valueAsNumber: true })} className="input text-xs py-1.5" placeholder="Cantidad" />
+              <input type="number" step="0.01" {...itemForm.register('valor_unitario', { valueAsNumber: true })} className="input text-xs py-1.5" placeholder="V. unitario" />
+              <div className="flex gap-1 col-span-2 sm:col-span-1">
+                <button type="submit" className="btn-primary py-1 px-3 text-xs">Crear</button>
+                <button type="button" onClick={() => setAddingCapTo(null)} className="btn-secondary py-1 px-2 text-xs">×</button>
+              </div>
+            </form>
+          </div>
+        ) : null
+
+        return (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h2>Capítulos e ítems</h2>
+              <button onClick={() => setShowCapForm(true)} className="btn-primary text-sm py-1.5">+ Capítulo</button>
+            </div>
+
+            {showCapForm && (
+              <div className="card border-blue-200 bg-blue-50/30">
+                <h2 className="text-sm font-semibold text-gray-700 mb-3">Nuevo capítulo</h2>
+                <form onSubmit={handleCreateCapitulo} className="flex gap-3 flex-wrap">
+                  <input {...capForm.register('codigo')} className="input w-28" placeholder="Cód." />
+                  <input {...capForm.register('nombre', { required: true })} className="input flex-1" placeholder="Nombre del capítulo *" />
+                  <button type="submit" className="btn-primary">Crear</button>
+                  <button type="button" onClick={() => setShowCapForm(false)} className="btn-secondary">Cancelar</button>
+                </form>
+              </div>
+            )}
+
+            {capitulos.length === 0 && (
+              <div className="card text-center py-12 text-gray-400">
+                <p className="mb-3">No hay capítulos aún</p>
+                <button onClick={() => setShowCapForm(true)} className="btn-primary">Agregar primer capítulo</button>
+              </div>
+            )}
+
+            {capitulos.map((cap) => {
+              const capTotal = [...cap.items, ...cap.subcapitulos.flatMap(s => s.items)]
+                .reduce((s, it) => s + Number(it.valor_total), 0)
+              const allEmpty = cap.items.length === 0 && cap.subcapitulos.every(s => s.items.length === 0)
+
+              return (
+                <div key={cap.id} className="card !p-0 overflow-hidden">
+                  {/* Chapter header */}
+                  <div className="bg-blue-950 text-white px-4 py-2.5 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {cap.codigo && <span className="font-mono text-xs text-blue-300">{cap.codigo}</span>}
+                      <span className="font-semibold text-sm">{cap.nombre}</span>
+                      {capTotal > 0 && (
+                        <span className="text-xs text-blue-300 font-mono">{formatCurrency(capTotal)}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => { setAddingCapTo(cap.id); setSerieCapId(null); itemForm.reset({ unidad: 'UN', cantidad_contratada: 1, valor_unitario: 0 }) }}
+                        className="text-xs text-blue-300 hover:text-white transition-colors"
+                      >+ Ítem</button>
+                      <button
+                        onClick={() => { setSerieCapId(cap.id); setAddingCapTo(null) }}
+                        className="text-xs text-blue-300 hover:text-white transition-colors border border-blue-600 rounded px-1.5 py-0.5"
+                        title="Crear múltiples ítems con un patrón"
+                      >⚡ En serie</button>
+                      <button
+                        onClick={() => handleDeleteCapitulo(cap.id)}
+                        className="text-xs text-red-400 hover:text-red-300 transition-colors ml-1"
+                        title="Eliminar capítulo"
+                      >🗑</button>
+                    </div>
+                  </div>
+
+                  <AddItemForm capId={cap.id} />
+                  <SerieForm capId={cap.id} />
+
+                  {/* Direct items */}
+                  <ItemsTable items={cap.items} capId={cap.id} />
+
+                  {/* Subcapítulos */}
+                  {cap.subcapitulos.map(sub => (
+                    <div key={sub.id}>
+                      <div className="bg-blue-900 text-white px-6 py-2 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {sub.codigo && <span className="font-mono text-xs text-blue-300">{sub.codigo}</span>}
+                          <span className="text-sm text-blue-100">{sub.nombre}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => { setAddingCapTo(sub.id); setSerieCapId(null); itemForm.reset({ unidad: 'UN', cantidad_contratada: 1, valor_unitario: 0 }) }}
+                            className="text-xs text-blue-300 hover:text-white transition-colors"
+                          >+ Ítem</button>
+                          <button
+                            onClick={() => { setSerieCapId(sub.id); setAddingCapTo(null) }}
+                            className="text-xs text-blue-300 hover:text-white transition-colors border border-blue-700 rounded px-1.5 py-0.5"
+                          >⚡ En serie</button>
+                          <button
+                            onClick={() => handleDeleteCapitulo(sub.id)}
+                            className="text-xs text-red-400 hover:text-red-300 transition-colors ml-1"
+                            title="Eliminar subcapítulo"
+                          >🗑</button>
+                        </div>
+                      </div>
+                      <AddItemForm capId={sub.id} />
+                      <SerieForm capId={sub.id} />
+                      <ItemsTable items={sub.items} capId={sub.id} />
+                      {sub.items.length === 0 && (
+                        <p className="text-center text-xs text-gray-400 py-3 pl-4">Sin ítems</p>
+                      )}
+                    </div>
+                  ))}
+
+                  {allEmpty && (
+                    <p className="text-center text-xs text-gray-400 py-4">Sin ítems — agrega uno con el botón + Ítem</p>
+                  )}
+                </div>
+              )
+            })}
+
+            {/* Grand total */}
+            {grandTotal > 0 && (
+              <div className="card flex justify-between items-center py-3">
+                <span className="text-sm font-semibold text-gray-700">Total Presupuesto</span>
+                <span className="text-lg font-bold text-blue-900">{formatCurrency(grandTotal)}</span>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* ── TAB: EJECUCIÓN ───────────────────────────────────────────────── */}
       {activeTab === 'ejecucion' && (

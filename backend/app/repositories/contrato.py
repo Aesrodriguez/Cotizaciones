@@ -88,7 +88,7 @@ class ContratoRepository(BaseRepository[Contrato]):
 
     def get_capitulos(self, contrato_id: UUID) -> List[ContratoCapitulo]:
         """Return top-level chapters with nested items and their ejecuciones."""
-        return (
+        caps = (
             self.db.query(ContratoCapitulo)
             .filter(
                 ContratoCapitulo.contrato_id == contrato_id,
@@ -104,6 +104,12 @@ class ContratoRepository(BaseRepository[Contrato]):
             .order_by(ContratoCapitulo.orden)
             .all()
         )
+        for cap in caps:
+            cap.items = [i for i in cap.items if i.deleted_at is None]
+            cap.subcapitulos = [s for s in cap.subcapitulos if s.deleted_at is None]
+            for sub in cap.subcapitulos:
+                sub.items = [i for i in sub.items if i.deleted_at is None]
+        return caps
 
     def get_capitulo(self, capitulo_id: UUID) -> Optional[ContratoCapitulo]:
         return (

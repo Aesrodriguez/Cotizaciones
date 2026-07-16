@@ -617,6 +617,13 @@ class ContratoItem(Base, UUIDPrimaryKey, TimestampedMixin, SoftDeleteMixin):
     def valor_pendiente(self) -> Decimal:
         return self.valor_total - self.valor_ejecutado
 
+    @property
+    def pct_ejecutado(self) -> float:
+        cantid = Decimal(str(self.cantidad_contratada or 0))
+        if cantid == 0:
+            return 0.0
+        return round(float(self.cantidad_ejecutada / cantid * 100), 2)
+
     def __repr__(self):
         return f"<ContratoItem descripcion={self.descripcion}>"
 

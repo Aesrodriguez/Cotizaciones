@@ -164,6 +164,7 @@ class ItemOut(BaseModel):
     cantidad_pendiente: Decimal
     valor_ejecutado: Decimal
     valor_pendiente: Decimal
+    pct_ejecutado: float = 0.0
     created_at: datetime
 
     model_config = {"from_attributes": True}
