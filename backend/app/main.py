@@ -104,6 +104,7 @@ def create_app() -> FastAPI:
     from app.api.v1.reportes.router import router as reportes_router
     from app.api.v1.planillas.router import router as planillas_router
     from app.api.v1.acps.router import router as acps_router
+    from app.api.v1.configuracion.router import router as configuracion_router
 
     prefix = settings.API_PREFIX
     app.include_router(auth_router, prefix=prefix)
@@ -123,6 +124,7 @@ def create_app() -> FastAPI:
     app.include_router(reportes_router, prefix=prefix)
     app.include_router(planillas_router, prefix=prefix)
     app.include_router(acps_router, prefix=prefix)
+    app.include_router(configuracion_router, prefix=prefix)
 
     async def health():
         return {"status": "ok"}

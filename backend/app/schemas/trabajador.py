@@ -44,6 +44,7 @@ class TrabajadorCreate(BaseModel):
     contacto_emergencia_telefono: Optional[str] = None
     contacto_emergencia_relacion: Optional[str] = None
     familiares: Optional[List[FamiliarItem]] = None
+    tipo_salario: Optional[str] = "OTRO"
 
 
 class TrabajadorUpdate(BaseModel):
@@ -71,6 +72,7 @@ class TrabajadorUpdate(BaseModel):
     contacto_emergencia_telefono: Optional[str] = None
     contacto_emergencia_relacion: Optional[str] = None
     familiares: Optional[List[FamiliarItem]] = None
+    tipo_salario: Optional[str] = None
 
 
 class TrabajadorOut(BaseModel):
@@ -101,6 +103,7 @@ class TrabajadorOut(BaseModel):
     contacto_emergencia_telefono: Optional[str] = None
     contacto_emergencia_relacion: Optional[str] = None
     familiares: Optional[List[FamiliarItem]] = None
+    tipo_salario: Optional[str] = None
     # Resumen financiero (calculado en router)
     total_acordado: Optional[Decimal] = None
     total_pagado: Optional[Decimal] = None

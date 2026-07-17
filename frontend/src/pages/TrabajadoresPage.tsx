@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { trabajadoresAPI, planillasAPI } from '../services/api'
-import type { Trabajador } from '../types'
+import { trabajadoresAPI, planillasAPI, configuracionAPI } from '../services/api'
+import type { SalarioMinimo, Trabajador } from '../types'
 import SkeletonTable from '../components/common/SkeletonTable'
 
 const COP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })
@@ -37,6 +37,7 @@ interface FormState {
   email: string
   salario_base: string
   salario_diario: string
+  tipo_salario: 'MINIMO' | 'OTRO'
   banco: string
   tipo_cuenta: string
   numero_cuenta: string
@@ -55,6 +56,7 @@ const emptyForm = (): FormState => ({
   email: '',
   salario_base: '',
   salario_diario: '',
+  tipo_salario: 'OTRO',
   banco: '',
   tipo_cuenta: '',
   numero_cuenta: '',
@@ -108,11 +110,18 @@ export default function TrabajadoresPage() {
   const openCreate = () => {
     setEditing(null)
     setForm(emptyForm())
+    // Carga el salario mínimo actual para el toggle
+    if (!salarioMinimoActual) {
+      configuracionAPI.getCurrentSalarioMinimo().then(r => setSalarioMinimoActual(r.data)).catch(() => {})
+    }
     setShowModal(true)
   }
 
   const openEdit = (t: Trabajador, e: React.MouseEvent) => {
     e.stopPropagation()
+    if (!salarioMinimoActual) {
+      configuracionAPI.getCurrentSalarioMinimo().then(r => setSalarioMinimoActual(r.data)).catch(() => {})
+    }
     setEditing(t)
     setForm({
       nombres: t.nombres,
@@ -125,6 +134,7 @@ export default function TrabajadoresPage() {
       email: t.email ?? '',
       salario_base: t.salario_base != null ? String(t.salario_base) : '',
       salario_diario: t.salario_diario != null ? String(t.salario_diario) : '',
+      tipo_salario: (t.tipo_salario as 'MINIMO' | 'OTRO') ?? 'OTRO',
       banco: t.banco ?? '',
       tipo_cuenta: t.tipo_cuenta ?? '',
       numero_cuenta: t.numero_cuenta ?? '',
@@ -145,6 +155,7 @@ export default function TrabajadoresPage() {
         ...form,
         salario_base: form.salario_base ? Number(form.salario_base) : null,
         salario_diario: form.salario_diario ? Number(form.salario_diario) : null,
+        tipo_salario: form.tipo_salario,
         fecha_ingreso: form.fecha_ingreso || null,
         fecha_termino: form.fecha_retiro || null,
         // Si tiene fecha de retiro → INACTIVO; si se limpió → vuelve ACTIVO
@@ -179,6 +190,54 @@ export default function TrabajadoresPage() {
   }
 
   const [syncing, setSyncing] = useState(false)
+  // Salario mínimo config
+  const [showSalMin, setShowSalMin] = useState(false)
+  const [salariosMinimos, setSalariosMinimos] = useState<SalarioMinimo[]>([])
+  const [salMinForm, setSalMinForm] = useState({ anio: new Date().getFullYear(), valor: '' })
+  const [savingSalMin, setSavingSalMin] = useState(false)
+  const [salarioMinimoActual, setSalarioMinimoActual] = useState<SalarioMinimo | null>(null)
+
+  const loadSalariosMinimos = async () => {
+    try {
+      const [listRes, curRes] = await Promise.all([
+        configuracionAPI.listSalarioMinimo(),
+        configuracionAPI.getCurrentSalarioMinimo(),
+      ])
+      setSalariosMinimos(listRes.data)
+      setSalarioMinimoActual(curRes.data)
+    } catch { /* silencioso */ }
+  }
+
+  const openSalMin = () => {
+    loadSalariosMinimos()
+    setSalMinForm({ anio: new Date().getFullYear(), valor: '' })
+    setShowSalMin(true)
+  }
+
+  const saveSalMin = async () => {
+    if (!salMinForm.valor || Number(salMinForm.valor) <= 0) { toast.error('Ingresa un valor válido'); return }
+    setSavingSalMin(true)
+    try {
+      await configuracionAPI.upsertSalarioMinimo(salMinForm.anio, Number(salMinForm.valor))
+      toast.success(`Salario mínimo ${salMinForm.anio} guardado`)
+      await loadSalariosMinimos()
+      setSalMinForm(f => ({ ...f, valor: '' }))
+    } catch { toast.error('Error al guardar') }
+    finally { setSavingSalMin(false) }
+  }
+
+  const deleteSalMin = async (anio: number) => {
+    if (!confirm(`¿Eliminar el salario mínimo del año ${anio}?`)) return
+    try {
+      await configuracionAPI.deleteSalarioMinimo(anio)
+      await loadSalariosMinimos()
+    } catch { toast.error('Error al eliminar') }
+  }
+
+  const applyMinimo = (valorMinimo: number) => {
+    const diario = Math.round(valorMinimo / 30)
+    setForm(f => ({ ...f, salario_base: String(valorMinimo), salario_diario: String(diario), tipo_salario: 'MINIMO' }))
+  }
 
   const handleSync = async () => {
     setSyncing(true)
@@ -244,6 +303,17 @@ export default function TrabajadoresPage() {
                 Sincronizar planillas
               </span>
             )}
+          </button>
+          <button
+            className="btn-secondary text-sm"
+            onClick={openSalMin}
+            title="Configurar salario mínimo anual"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-4 h-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+            </svg>
+            Salario mínimo
           </button>
           <button className="btn-primary" onClick={openCreate}>
             <IconAdd /> Nuevo trabajador
@@ -410,6 +480,46 @@ export default function TrabajadoresPage() {
                   <input className="input" type="email" value={form.email} onChange={set('email')} placeholder="trabajador@ejemplo.com" />
                 </div>
               </div>
+              {/* Tipo de salario */}
+              <div>
+                <label className="label">Tipo de salario</label>
+                <div className="flex gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="radio"
+                      name="tipo_salario"
+                      value="MINIMO"
+                      checked={form.tipo_salario === 'MINIMO'}
+                      onChange={() => {
+                        if (salarioMinimoActual) {
+                          applyMinimo(Number(salarioMinimoActual.valor))
+                        } else {
+                          toast.error('No hay salario mínimo configurado. Usa el botón "Salario mínimo" para configurarlo.')
+                          setForm(f => ({ ...f, tipo_salario: 'MINIMO' }))
+                        }
+                      }}
+                      className="accent-blue-600"
+                    />
+                    <span className="text-sm text-gray-700">
+                      Salario mínimo
+                      {salarioMinimoActual && (
+                        <span className="ml-1 text-gray-400 font-mono text-xs">({fmt(Number(salarioMinimoActual.valor))} / {new Date().getFullYear()})</span>
+                      )}
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="radio"
+                      name="tipo_salario"
+                      value="OTRO"
+                      checked={form.tipo_salario === 'OTRO'}
+                      onChange={() => setForm(f => ({ ...f, tipo_salario: 'OTRO' }))}
+                      className="accent-blue-600"
+                    />
+                    <span className="text-sm text-gray-700">Otro valor</span>
+                  </label>
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="label">Salario mensual</label>
@@ -419,7 +529,7 @@ export default function TrabajadoresPage() {
                     value={form.salario_base}
                     onChange={e => {
                       const v = e.target.value
-                      setForm(f => ({ ...f, salario_base: v, salario_diario: v ? String(Math.round(Number(v) / 30)) : '' }))
+                      setForm(f => ({ ...f, salario_base: v, salario_diario: v ? String(Math.round(Number(v) / 30)) : '', tipo_salario: 'OTRO' }))
                     }}
                     placeholder="0"
                   />
@@ -433,7 +543,7 @@ export default function TrabajadoresPage() {
                     value={form.salario_diario}
                     onChange={e => {
                       const v = e.target.value
-                      setForm(f => ({ ...f, salario_diario: v, salario_base: v ? String(Math.round(Number(v) * 30)) : '' }))
+                      setForm(f => ({ ...f, salario_diario: v, salario_base: v ? String(Math.round(Number(v) * 30)) : '', tipo_salario: 'OTRO' }))
                     }}
                     placeholder="0"
                   />
@@ -474,6 +584,83 @@ export default function TrabajadoresPage() {
               <button className="btn-primary" onClick={handleSave} disabled={saving}>
                 {saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear trabajador'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Salario mínimo ─────────────────────────────────────────── */}
+      {showSalMin && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowSalMin(false)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+              <h2 className="text-lg font-bold text-gray-900">Salario mínimo por año</h2>
+              <button onClick={() => setShowSalMin(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
+            </div>
+            <div className="p-6 space-y-5">
+              {/* Agregar / actualizar */}
+              <div className="space-y-3">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Registrar valor</p>
+                <div className="flex gap-2">
+                  <div className="w-24">
+                    <label className="label">Año</label>
+                    <input
+                      className="input"
+                      type="number"
+                      value={salMinForm.anio}
+                      onChange={e => setSalMinForm(f => ({ ...f, anio: Number(e.target.value) }))}
+                      min={2000}
+                      max={2100}
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="label">Valor mensual (COP)</label>
+                    <input
+                      className="input"
+                      type="number"
+                      value={salMinForm.valor}
+                      onChange={e => setSalMinForm(f => ({ ...f, valor: e.target.value }))}
+                      placeholder="Ej: 1300000"
+                    />
+                    {salMinForm.valor && (
+                      <p className="text-xs text-gray-400 mt-0.5 font-mono">{fmt(Number(salMinForm.valor))} / mes · {fmt(Math.round(Number(salMinForm.valor) / 30))} / día</p>
+                    )}
+                  </div>
+                  <div className="flex items-end">
+                    <button className="btn-primary" onClick={saveSalMin} disabled={savingSalMin}>
+                      {savingSalMin ? '…' : 'Guardar'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Historial */}
+              {salariosMinimos.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Historial</p>
+                  <div className="divide-y divide-gray-50 rounded-lg border border-gray-100 overflow-hidden">
+                    {salariosMinimos.map(s => (
+                      <div key={s.id} className="flex items-center justify-between px-4 py-2.5">
+                        <div>
+                          <span className="font-semibold text-gray-900 text-sm">{s.anio}</span>
+                          <span className="ml-3 font-mono text-sm text-blue-700">{fmt(Number(s.valor))}</span>
+                          <span className="ml-2 text-xs text-gray-400">/ mes · {fmt(Math.round(Number(s.valor) / 30))} / día</span>
+                        </div>
+                        <button
+                          className="text-xs text-red-400 hover:text-red-600 px-2"
+                          onClick={() => deleteSalMin(s.anio)}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {salariosMinimos.length === 0 && (
+                <p className="text-sm text-gray-400 text-center py-4">Sin registros. Agrega el salario mínimo del año actual.</p>
+              )}
             </div>
           </div>
         </div>

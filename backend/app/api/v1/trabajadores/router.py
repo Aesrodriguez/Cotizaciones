@@ -122,6 +122,7 @@ def _trab_out(t: Trabajador, resumen: dict) -> TrabajadorOut:
         contacto_emergencia_telefono=getattr(t, 'contacto_emergencia_telefono', None),
         contacto_emergencia_relacion=getattr(t, 'contacto_emergencia_relacion', None),
         familiares=_parse_familiares(t),
+        tipo_salario=getattr(t, 'tipo_salario', 'OTRO') or 'OTRO',
         total_acordado=Decimal(str(resumen["total_acordado"])),
         total_pagado=Decimal(str(resumen["total_pagado"])),
         saldo=Decimal(str(resumen["saldo"])),
@@ -298,6 +299,7 @@ def create_trabajador(
         contacto_emergencia_telefono=body.contacto_emergencia_telefono,
         contacto_emergencia_relacion=body.contacto_emergencia_relacion,
         familiares_json=json.dumps([f.model_dump() for f in body.familiares], ensure_ascii=False) if body.familiares else None,
+        tipo_salario=body.tipo_salario or 'OTRO',
     )
     db.add(t)
     db.commit()

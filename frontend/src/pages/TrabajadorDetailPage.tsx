@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { trabajadoresAPI } from '../services/api'
-import type { FamiliarItem, SoportePago, TrabajadorAsignacion, TrabajadorDetalle, TrabajadorPago } from '../types'
+import { trabajadoresAPI, configuracionAPI } from '../services/api'
+import type { FamiliarItem, SalarioMinimo, SoportePago, TrabajadorAsignacion, TrabajadorDetalle, TrabajadorPago } from '../types'
 
 const COP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })
 const fmt = (v?: number | null) => v != null ? COP.format(v) : '—'
@@ -17,8 +17,8 @@ interface ContratoOpt { id: string; numero: string; titulo: string }
 interface EditForm {
   nombres: string; apellidos: string; cedula: string; cargo: string
   especialidad: string; tipo: string; telefono: string; email: string
-  salario_base: string; salario_diario: string; fecha_ingreso: string
-  fecha_retiro: string; banco: string; tipo_cuenta: string
+  salario_base: string; salario_diario: string; tipo_salario: 'MINIMO' | 'OTRO'
+  fecha_ingreso: string; fecha_retiro: string; banco: string; tipo_cuenta: string
   numero_cuenta: string; ciudad: string; direccion: string
   contacto_emergencia_nombre: string; contacto_emergencia_telefono: string
   contacto_emergencia_relacion: string
@@ -34,7 +34,8 @@ export default function TrabajadorDetailPage() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<Tab>('info')
   const [showEdit, setShowEdit] = useState(false)
-  const [editForm, setEditForm] = useState<EditForm>({ nombres: '', apellidos: '', cedula: '', cargo: '', especialidad: '', tipo: 'Empleado', telefono: '', email: '', salario_base: '', salario_diario: '', fecha_ingreso: '', fecha_retiro: '', banco: '', tipo_cuenta: '', numero_cuenta: '', ciudad: '', direccion: '', contacto_emergencia_nombre: '', contacto_emergencia_telefono: '', contacto_emergencia_relacion: '' })
+  const [editForm, setEditForm] = useState<EditForm>({ nombres: '', apellidos: '', cedula: '', cargo: '', especialidad: '', tipo: 'Empleado', telefono: '', email: '', salario_base: '', salario_diario: '', tipo_salario: 'OTRO', fecha_ingreso: '', fecha_retiro: '', banco: '', tipo_cuenta: '', numero_cuenta: '', ciudad: '', direccion: '', contacto_emergencia_nombre: '', contacto_emergencia_telefono: '', contacto_emergencia_relacion: '' })
+  const [salarioMinimoActual, setSalarioMinimoActual] = useState<SalarioMinimo | null>(null)
   const [savingEdit, setSavingEdit] = useState(false)
   // Retiro / nuevo ingreso
   const [showRetiro, setShowRetiro] = useState(false)
@@ -111,6 +112,7 @@ export default function TrabajadorDetailPage() {
       email: t.email ?? '',
       salario_base: t.salario_base != null ? String(t.salario_base) : '',
       salario_diario: t.salario_diario != null ? String(t.salario_diario) : '',
+      tipo_salario: (t.tipo_salario as 'MINIMO' | 'OTRO') ?? 'OTRO',
       fecha_ingreso: t.fecha_ingreso ?? '',
       fecha_retiro: t.fecha_termino ?? '',
       banco: t.banco ?? '',
@@ -123,6 +125,9 @@ export default function TrabajadorDetailPage() {
       contacto_emergencia_relacion: t.contacto_emergencia_relacion ?? '',
     })
     setFamiliares(t.familiares ?? [])
+    if (!salarioMinimoActual) {
+      configuracionAPI.getCurrentSalarioMinimo().then(r => setSalarioMinimoActual(r.data)).catch(() => {})
+    }
     setShowEdit(true)
   }
 
@@ -137,6 +142,7 @@ export default function TrabajadorDetailPage() {
         ...editForm,
         salario_base: editForm.salario_base ? Number(editForm.salario_base) : null,
         salario_diario: editForm.salario_diario ? Number(editForm.salario_diario) : null,
+        tipo_salario: editForm.tipo_salario,
         fecha_ingreso: editForm.fecha_ingreso || null,
         fecha_termino: editForm.fecha_retiro || null,
         estado: editForm.fecha_retiro ? 'INACTIVO' : 'ACTIVO',
@@ -1022,6 +1028,48 @@ export default function TrabajadorDetailPage() {
                   <input className="input" value={editForm.direccion} onChange={setF('direccion')} placeholder="Calle 1 # 2-3" />
                 </div>
               </div>
+              {/* Tipo de salario */}
+              <div>
+                <label className="label">Tipo de salario</label>
+                <div className="flex gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="radio"
+                      name="edit_tipo_salario"
+                      value="MINIMO"
+                      checked={editForm.tipo_salario === 'MINIMO'}
+                      onChange={() => {
+                        if (salarioMinimoActual) {
+                          const v = String(Number(salarioMinimoActual.valor))
+                          const d = String(Math.round(Number(salarioMinimoActual.valor) / 30))
+                          setEditForm(f => ({ ...f, tipo_salario: 'MINIMO', salario_base: v, salario_diario: d }))
+                        } else {
+                          toast.error('No hay salario mínimo configurado.')
+                          setEditForm(f => ({ ...f, tipo_salario: 'MINIMO' }))
+                        }
+                      }}
+                      className="accent-blue-600"
+                    />
+                    <span className="text-sm text-gray-700">
+                      Salario mínimo
+                      {salarioMinimoActual && (
+                        <span className="ml-1 text-gray-400 font-mono text-xs">({fmt(Number(salarioMinimoActual.valor))} / {new Date().getFullYear()})</span>
+                      )}
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="radio"
+                      name="edit_tipo_salario"
+                      value="OTRO"
+                      checked={editForm.tipo_salario === 'OTRO'}
+                      onChange={() => setEditForm(f => ({ ...f, tipo_salario: 'OTRO' }))}
+                      className="accent-blue-600"
+                    />
+                    <span className="text-sm text-gray-700">Otro valor</span>
+                  </label>
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="label">Salario mensual</label>
@@ -1032,7 +1080,7 @@ export default function TrabajadorDetailPage() {
                     onChange={e => {
                       const v = e.target.value
                       const diario = v ? String(Math.round(Number(v) / 30)) : ''
-                      setEditForm(f => ({ ...f, salario_base: v, salario_diario: diario }))
+                      setEditForm(f => ({ ...f, salario_base: v, salario_diario: diario, tipo_salario: 'OTRO' }))
                     }}
                     placeholder="0"
                   />
@@ -1047,7 +1095,7 @@ export default function TrabajadorDetailPage() {
                     onChange={e => {
                       const v = e.target.value
                       const mensual = v ? String(Math.round(Number(v) * 30)) : ''
-                      setEditForm(f => ({ ...f, salario_diario: v, salario_base: mensual }))
+                      setEditForm(f => ({ ...f, salario_diario: v, salario_base: mensual, tipo_salario: 'OTRO' }))
                     }}
                     placeholder="0"
                   />

@@ -928,4 +928,12 @@ export const acpAPI = {
   delete: (id: string) => api.delete(`/acps/${id}`),
 }
 
+export const configuracionAPI = {
+  listSalarioMinimo: () => api.get<import('../types').SalarioMinimo[]>('/configuracion/salario-minimo', _noToast),
+  getCurrentSalarioMinimo: () => api.get<import('../types').SalarioMinimo | null>('/configuracion/salario-minimo/current', _noToast),
+  upsertSalarioMinimo: (anio: number, valor: number) =>
+    api.post<import('../types').SalarioMinimo>('/configuracion/salario-minimo', { anio, valor }),
+  deleteSalarioMinimo: (anio: number) => api.delete(`/configuracion/salario-minimo/${anio}`),
+}
+
 export default api

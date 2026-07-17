@@ -256,6 +256,15 @@ export interface ContratoDashboard {
   dias_restantes?: number
 }
 
+// ── Configuración ──────────────────────────────────────────────────────────
+
+export interface SalarioMinimo {
+  id: string
+  anio: number
+  valor: number
+  updated_at: string
+}
+
 // ── Trabajadores ───────────────────────────────────────────────────────────
 
 export interface FamiliarItem {
@@ -293,6 +302,7 @@ export interface Trabajador {
   contacto_emergencia_telefono?: string
   contacto_emergencia_relacion?: string
   familiares?: FamiliarItem[]
+  tipo_salario?: 'MINIMO' | 'OTRO'
   total_acordado?: number
   total_pagado?: number
   saldo?: number

@@ -309,6 +309,20 @@ class EstadoTrabajador(str, Enum):
     LICENCIA = "LICENCIA"
 
 
+class SalarioMinimo(Base):
+    """Salario mínimo legal por año."""
+    __tablename__ = "salario_minimo"
+
+    id         = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    anio       = Column(Integer, unique=True, nullable=False)
+    valor      = Column(Numeric(15, 2), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    def __repr__(self):
+        return f"<SalarioMinimo anio={self.anio} valor={self.valor}>"
+
+
 class Trabajador(Base, UUIDPrimaryKey, TimestampedMixin, SoftDeleteMixin):
     """Workers/Employees table."""
     __tablename__ = "trabajadores"
@@ -344,6 +358,8 @@ class Trabajador(Base, UUIDPrimaryKey, TimestampedMixin, SoftDeleteMixin):
     contacto_emergencia_relacion = Column(VARCHAR(50),  nullable=True)
     # Familiares: JSON array [{nombre, relacion, fecha_nacimiento}]
     familiares_json = Column(Text, nullable=True)
+    # Tipo de salario: MINIMO | OTRO
+    tipo_salario = Column(VARCHAR(10), nullable=True, server_default="OTRO")
 
     # Relationships
     pagos = relationship("TrabajadorPago", back_populates="trabajador", cascade="all, delete-orphan")
