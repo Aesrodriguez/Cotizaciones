@@ -8,11 +8,26 @@ const fmt = (n: number) =>
 
 const fmtPct = (n: number) => n > 0 ? `${n.toFixed(3)}%` : '—'
 
+const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+               'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+
 const CAT_COLOR: Record<string, { bg: string; text: string }> = {
   AFP: { bg: 'rgba(96,165,250,0.12)',  text: '#60a5fa' },
   ARL: { bg: 'rgba(239,68,68,0.12)',   text: '#f87171' },
   CCF: { bg: 'rgba(34,197,94,0.12)',   text: '#4ade80' },
   EPS: { bg: 'rgba(167,139,250,0.12)', text: '#a78bfa' },
+}
+
+function parsePeriodo(p: Planilla): { year: number; month: number } | null {
+  const raw = p.periodo_pension ?? p.periodo_salud
+  if (!raw) return null
+  const clean = raw.replace('-', '').replace('/', '')
+  if (clean.length >= 6) {
+    const year = parseInt(clean.slice(0, 4))
+    const month = parseInt(clean.slice(4, 6))
+    if (!isNaN(year) && !isNaN(month) && month >= 1 && month <= 12) return { year, month }
+  }
+  return null
 }
 
 // ── Upload zone ───────────────────────────────────────────────────────────────
@@ -69,7 +84,7 @@ function UploadZone({ onUploaded }: { onUploaded: () => void }) {
         border: `2px dashed ${dragging ? 'var(--lime)' : 'var(--border)'}`,
         background: dragging ? 'var(--lime-dim)' : 'var(--surface)',
         cursor: processing ? 'default' : 'pointer',
-        padding: queue.length ? '16px' : '48px 24px',
+        padding: queue.length ? '16px' : '32px 24px',
       }}
     >
       <input ref={inputRef} type="file" accept=".pdf,.txt" multiple className="hidden"
@@ -108,18 +123,18 @@ function UploadZone({ onUploaded }: { onUploaded: () => void }) {
           ))}
         </div>
       ) : (
-        <div className="flex flex-col items-center gap-3">
+        <div className="flex items-center gap-4">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}
-            className="w-10 h-10" style={{ color: 'var(--text-muted)' }}>
+            className="w-7 h-7 flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
             <path strokeLinecap="round" strokeLinejoin="round"
               d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
           </svg>
-          <div className="text-center">
+          <div>
             <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
-              Arrastra archivos aquí o haz clic para seleccionar
+              Arrastra archivos aquí o haz clic
             </p>
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-              Múltiples archivos · Planillas PILA · PDF o TXT
+              PDF o TXT · múltiples archivos · Planillas PILA
             </p>
           </div>
         </div>
@@ -128,7 +143,7 @@ function UploadZone({ onUploaded }: { onUploaded: () => void }) {
   )
 }
 
-// ── Lista de planillas ────────────────────────────────────────────────────────
+// ── Tarjeta de planilla ───────────────────────────────────────────────────────
 
 function PlanillaCard({
   p, selected, onClick, onDelete,
@@ -136,47 +151,46 @@ function PlanillaCard({
   return (
     <div
       onClick={onClick}
-      className="rounded-xl p-4 cursor-pointer transition-all"
+      className="rounded-xl px-3 py-2.5 cursor-pointer transition-all"
       style={{
         background: selected ? 'var(--lime-dim)' : 'var(--card)',
         border: `1px solid ${selected ? 'var(--lime)' : 'var(--border)'}`,
       }}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-sm font-bold font-mono truncate" style={{ color: selected ? 'var(--lime-text)' : 'var(--text)' }}>
-            {p.periodo_pension ?? p.periodo_salud ?? '—'}
-          </p>
-          <p className="text-xs mt-0.5 font-mono" style={{ color: 'var(--text-muted)' }}>#{p.numero_planilla}</p>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-xs font-mono px-1.5 py-0.5 rounded flex-shrink-0"
+            style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+            #{p.numero_planilla}
+          </span>
+          {p.banco && (
+            <span className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{p.banco}</span>
+          )}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-shrink-0">
           {p.archivo_url && (
             <a href={p.archivo_url} target="_blank" rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
               className="opacity-50 hover:opacity-100 transition-opacity"
               title="Ver en Google Drive">
-              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor" style={{ color: '#4ade80' }}>
+              <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="currentColor" style={{ color: '#4ade80' }}>
                 <path d="M12.012 1.559L7.008 10.5h10.007L12.012 1.559zM6.004 12.5l-4.5 7.78h8.004L6.004 12.5zm10.004 0L10.504 20.28H22L16.008 12.5z"/>
               </svg>
             </a>
           )}
           <button
             onClick={(e) => { e.stopPropagation(); onDelete() }}
-            className="opacity-40 hover:opacity-100 text-xs px-1.5 py-0.5 rounded transition-opacity"
+            className="opacity-30 hover:opacity-100 text-xs px-1 py-0.5 rounded transition-opacity"
             style={{ color: '#f87171' }}>✕</button>
         </div>
       </div>
-      <div className="mt-2 flex items-end justify-between">
-        <div>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            {p.total_afiliados} afiliado{p.total_afiliados !== 1 ? 's' : ''}
-          </p>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{p.banco ?? ''}</p>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{p.fecha_pago ?? ''}</p>
-        </div>
-        <p className="text-base font-bold font-mono" style={{ color: selected ? 'var(--lime-text)' : 'var(--lime)' }}>
+      <div className="flex items-center justify-between mt-1.5">
+        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          {p.total_afiliados} afil.{p.fecha_pago ? ` · ${p.fecha_pago}` : ''}
+        </span>
+        <span className="text-sm font-bold font-mono" style={{ color: selected ? 'var(--lime-text)' : 'var(--lime)' }}>
           {fmt(p.valor_total)}
-        </p>
+        </span>
       </div>
     </div>
   )
@@ -209,7 +223,7 @@ function PlanillaDetail({ id }: { id: number }) {
 
   return (
     <div className="space-y-4">
-      {/* Header info */}
+      {/* Header */}
       <div className="rounded-xl p-4 space-y-3" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
@@ -344,7 +358,6 @@ function PlanillaDetail({ id }: { id: number }) {
             return (
               <div key={cat} className="rounded-xl overflow-hidden"
                 style={{ border: '1px solid var(--border)' }}>
-                {/* Subtotal header */}
                 <div className="flex items-center justify-between px-4 py-2.5"
                   style={{ background: c.bg, borderBottom: detail.length ? '1px solid var(--border)' : undefined }}>
                   <div className="flex items-center gap-2">
@@ -365,7 +378,6 @@ function PlanillaDetail({ id }: { id: number }) {
                     </span>
                   )}
                 </div>
-                {/* Detail rows */}
                 {detail.map((e, i) => (
                   <div key={i} className="flex items-center justify-between px-4 py-2"
                     style={{ borderBottom: i < detail.length - 1 ? '1px solid var(--border)' : undefined, background: 'var(--card)' }}>
@@ -404,11 +416,26 @@ export default function PlanillasPage() {
   const [planillas, setPlanillas] = useState<Planilla[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<number | null>(null)
+  const [openYears, setOpenYears] = useState<Set<number>>(new Set())
+  const [openMonths, setOpenMonths] = useState<Set<string>>(new Set())
 
   const reload = () => {
     setLoading(true)
     planillasAPI.list()
-      .then(r => { setPlanillas(r.data.data); if (!selected && r.data.data.length) setSelected(r.data.data[0].id) })
+      .then(r => {
+        const data = r.data.data
+        setPlanillas(data)
+        if (!selected && data.length) setSelected(data[0].id)
+
+        // Auto-open the most recent year + month
+        const parsed = data.map(p => parsePeriodo(p)).filter(Boolean) as { year: number; month: number }[]
+        if (parsed.length) {
+          const maxYear = Math.max(...parsed.map(p => p.year))
+          const maxMonth = Math.max(...parsed.filter(p => p.year === maxYear).map(p => p.month))
+          setOpenYears(new Set([maxYear]))
+          setOpenMonths(new Set([`${maxYear}-${maxMonth}`]))
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }
@@ -425,19 +452,170 @@ export default function PlanillasPage() {
     } catch { toast.error('Error al eliminar') }
   }
 
+  const toggleYear = (year: number) => {
+    setOpenYears(prev => {
+      const next = new Set(prev)
+      next.has(year) ? next.delete(year) : next.add(year)
+      return next
+    })
+  }
+
+  const toggleMonth = (key: string) => {
+    setOpenMonths(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+
+  // Group planillas by year → month
+  type MonthMap = Map<number, Planilla[]>
+  type YearMap = Map<number, MonthMap>
+
+  const grouped: YearMap = new Map()
+  const ungrouped: Planilla[] = []
+
+  for (const p of planillas) {
+    const parsed = parsePeriodo(p)
+    if (!parsed) { ungrouped.push(p); continue }
+    const { year, month } = parsed
+    if (!grouped.has(year)) grouped.set(year, new Map())
+    const monthMap = grouped.get(year)!
+    if (!monthMap.has(month)) monthMap.set(month, [])
+    monthMap.get(month)!.push(p)
+  }
+
+  // Sort years desc, months desc within each year
+  const sortedYears = [...grouped.keys()].sort((a, b) => b - a)
+  for (const [, monthMap] of grouped) {
+    for (const [, ps] of monthMap) {
+      ps.sort((a, b) => (b.numero_planilla > a.numero_planilla ? 1 : -1))
+    }
+  }
+
+  const totalValor = planillas.reduce((s, p) => s + p.valor_total, 0)
+
+  const Lista = () => (
+    <div className="space-y-2">
+      {sortedYears.map(year => {
+        const monthMap = grouped.get(year)!
+        const sortedMonths = [...monthMap.keys()].sort((a, b) => b - a)
+        const yearOpen = openYears.has(year)
+        const yearTotal = [...monthMap.values()].flat().reduce((s, p) => s + p.valor_total, 0)
+        const yearCount = [...monthMap.values()].flat().length
+
+        return (
+          <div key={year} className="rounded-xl overflow-hidden"
+            style={{ border: '1px solid var(--border)' }}>
+            {/* Year header */}
+            <button
+              onClick={() => toggleYear(year)}
+              className="w-full flex items-center justify-between px-4 py-3 transition-all"
+              style={{ background: 'var(--surface)' }}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm" style={{ color: 'var(--text-muted)', transition: 'transform 0.15s', display: 'inline-block', transform: yearOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
+                <span className="text-base font-bold font-mono" style={{ color: 'var(--text)' }}>{year}</span>
+                <span className="text-xs px-2 py-0.5 rounded-full font-mono"
+                  style={{ background: 'var(--card)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                  {yearCount} planilla{yearCount !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <span className="text-sm font-bold font-mono" style={{ color: 'var(--lime)' }}>
+                {fmt(yearTotal)}
+              </span>
+            </button>
+
+            {yearOpen && (
+              <div style={{ borderTop: '1px solid var(--border)' }}>
+                {sortedMonths.map(month => {
+                  const ps = monthMap.get(month)!
+                  const key = `${year}-${month}`
+                  const monthOpen = openMonths.has(key)
+                  const monthTotal = ps.reduce((s, p) => s + p.valor_total, 0)
+
+                  return (
+                    <div key={month} style={{ borderBottom: '1px solid var(--border)' }}>
+                      {/* Month header */}
+                      <button
+                        onClick={() => toggleMonth(key)}
+                        className="w-full flex items-center justify-between px-4 py-2.5 transition-all"
+                        style={{ background: 'var(--card)' }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs" style={{ color: 'var(--text-muted)', transition: 'transform 0.15s', display: 'inline-block', transform: monthOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
+                          <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
+                            {MESES[month - 1]}
+                          </span>
+                          <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                            {ps.length} planilla{ps.length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        <span className="text-sm font-semibold font-mono" style={{ color: 'var(--text-muted)' }}>
+                          {fmt(monthTotal)}
+                        </span>
+                      </button>
+
+                      {monthOpen && (
+                        <div className="px-3 pb-3 space-y-1.5 pt-1"
+                          style={{ background: 'var(--bg)' }}>
+                          {ps.map(p => (
+                            <PlanillaCard key={p.id} p={p} selected={selected === p.id}
+                              onClick={() => setSelected(p.id)}
+                              onDelete={() => handleDelete(p.id)} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+      {/* Sin período detectado */}
+      {ungrouped.length > 0 && (
+        <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+          <div className="px-4 py-3 flex items-center gap-2" style={{ background: 'var(--surface)' }}>
+            <span className="text-sm font-semibold" style={{ color: 'var(--text-muted)' }}>Sin período</span>
+            <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{ungrouped.length}</span>
+          </div>
+          <div className="px-3 pb-3 space-y-1.5 pt-1" style={{ background: 'var(--bg)' }}>
+            {ungrouped.map(p => (
+              <PlanillaCard key={p.id} p={p} selected={selected === p.id}
+                onClick={() => setSelected(p.id)}
+                onDelete={() => handleDelete(p.id)} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+
   return (
     <div className="max-w-7xl mx-auto space-y-5">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-bold" style={{ color: 'var(--text)' }}>Planillas PILA</h1>
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
             Aportes en Línea · Seguridad social de trabajadores
           </p>
         </div>
-        <div className="text-xs px-3 py-1.5 rounded-lg font-mono"
-          style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
-          {planillas.length} planilla{planillas.length !== 1 ? 's' : ''}
-        </div>
+        {planillas.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs px-3 py-1.5 rounded-lg font-mono"
+              style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+              {planillas.length} planilla{planillas.length !== 1 ? 's' : ''}
+            </span>
+            <span className="text-xs px-3 py-1.5 rounded-lg font-mono font-semibold"
+              style={{ background: 'var(--lime-dim)', color: 'var(--lime-text)', border: '1px solid var(--lime-border)' }}>
+              {fmt(totalValor)}
+            </span>
+          </div>
+        )}
       </div>
 
       <UploadZone onUploaded={reload} />
@@ -450,20 +628,18 @@ export default function PlanillasPage() {
           <p className="text-sm">Sube tu primera planilla de Aportes en Línea</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
-          {/* Lista */}
-          <div className="space-y-2">
-            {planillas.map(p => (
-              <PlanillaCard key={p.id} p={p} selected={selected === p.id}
-                onClick={() => setSelected(p.id)}
-                onDelete={() => handleDelete(p.id)} />
-            ))}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 items-start">
+          {/* Lista agrupada */}
+          <div className="lg:col-span-2">
+            <Lista />
           </div>
           {/* Detalle */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-3">
             {selected
               ? <PlanillaDetail id={selected} />
-              : <p className="text-sm text-center py-16" style={{ color: 'var(--text-muted)' }}>Selecciona una planilla</p>
+              : <div className="text-center py-20 rounded-xl" style={{ border: '2px dashed var(--border)', color: 'var(--text-muted)' }}>
+                  <p className="text-sm">Selecciona una planilla para ver el detalle</p>
+                </div>
             }
           </div>
         </div>
