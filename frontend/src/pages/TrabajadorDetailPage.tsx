@@ -13,12 +13,24 @@ type Tab = 'info' | 'asignaciones' | 'pagos' | 'corte' | 'soportes'
 interface ContratoItem { id: string; descripcion: string; unidad: string; cantidad_contratada: number; valor_unitario: number }
 interface ContratoOpt { id: string; numero: string; titulo: string }
 
+interface EditForm {
+  nombres: string; apellidos: string; cedula: string; cargo: string
+  especialidad: string; tipo: string; telefono: string; email: string
+  salario_base: string; fecha_ingreso: string; banco: string
+  tipo_cuenta: string; numero_cuenta: string; ciudad: string; direccion: string
+}
+
+const TIPOS_TRAB = ['Empleado', 'Subcontratista']
+
 export default function TrabajadorDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [data, setData] = useState<TrabajadorDetalle | null>(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<Tab>('info')
+  const [showEdit, setShowEdit] = useState(false)
+  const [editForm, setEditForm] = useState<EditForm>({ nombres: '', apellidos: '', cedula: '', cargo: '', especialidad: '', tipo: 'Empleado', telefono: '', email: '', salario_base: '', fecha_ingreso: '', banco: '', tipo_cuenta: '', numero_cuenta: '', ciudad: '', direccion: '' })
+  const [savingEdit, setSavingEdit] = useState(false)
 
   // Contratos/items
   const [contratos, setContratos] = useState<ContratoOpt[]>([])
@@ -71,6 +83,54 @@ export default function TrabajadorDetailPage() {
     if (!id) return
     trabajadoresAPI.getSoportes(id).then(r => setSoportes(r.data)).catch(() => {})
   }
+
+  const openEdit = () => {
+    if (!data?.trabajador) return
+    const t = data.trabajador
+    setEditForm({
+      nombres: t.nombres,
+      apellidos: t.apellidos,
+      cedula: t.cedula ?? '',
+      cargo: t.cargo ?? '',
+      especialidad: t.especialidad ?? '',
+      tipo: t.tipo ?? 'Empleado',
+      telefono: t.telefono ?? '',
+      email: t.email ?? '',
+      salario_base: t.salario_base != null ? String(t.salario_base) : '',
+      fecha_ingreso: t.fecha_ingreso ?? '',
+      banco: t.banco ?? '',
+      tipo_cuenta: t.tipo_cuenta ?? '',
+      numero_cuenta: t.numero_cuenta ?? '',
+      ciudad: t.ciudad ?? '',
+      direccion: t.direccion ?? '',
+    })
+    setShowEdit(true)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!id || !editForm.nombres.trim() || !editForm.apellidos.trim()) {
+      toast.error('Nombre y apellido son requeridos')
+      return
+    }
+    setSavingEdit(true)
+    try {
+      await trabajadoresAPI.update(id, {
+        ...editForm,
+        salario_base: editForm.salario_base ? Number(editForm.salario_base) : null,
+        fecha_ingreso: editForm.fecha_ingreso || null,
+      })
+      toast.success('Trabajador actualizado')
+      setShowEdit(false)
+      load()
+    } catch (err: unknown) {
+      toast.error((err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Error al guardar')
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  const setF = (k: keyof EditForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setEditForm(f => ({ ...f, [k]: e.target.value }))
 
   // Carga lazy de contratos — solo cuando se abre el modal de asignación
   const ensureContratos = async () => {
@@ -312,7 +372,7 @@ export default function TrabajadorDetailPage() {
   return (
     <div className="space-y-5">
       {/* Back + Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/trabajadores')} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
@@ -324,6 +384,12 @@ export default function TrabajadorDetailPage() {
             <p className="text-sm text-gray-500">{t.codigo} · {t.cargo || 'Sin cargo'} · {t.tipo || 'Empleado'}</p>
           </div>
         </div>
+        <button className="btn-primary" onClick={openEdit}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-4 h-4">
+            <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
+          </svg>
+          Editar información
+        </button>
       </div>
 
       {/* Resumen KPIs */}
@@ -768,6 +834,105 @@ export default function TrabajadorDetailPage() {
               <button className="btn-secondary" onClick={() => setShowAsig(false)}>Cancelar</button>
               <button className="btn-primary" onClick={saveAsig} disabled={savingAsig}>
                 {savingAsig ? 'Guardando…' : editAsig ? 'Guardar cambios' : 'Crear asignación'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Editar trabajador ──────────────────────────────────────── */}
+      {showEdit && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowEdit(false)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+              <h2 className="text-lg font-bold text-gray-900">Editar trabajador</h2>
+              <button onClick={() => setShowEdit(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Nombres *</label>
+                  <input className="input" value={editForm.nombres} onChange={setF('nombres')} placeholder="Nombres" />
+                </div>
+                <div>
+                  <label className="label">Apellidos *</label>
+                  <input className="input" value={editForm.apellidos} onChange={setF('apellidos')} placeholder="Apellidos" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Cédula</label>
+                  <input className="input" value={editForm.cedula} onChange={setF('cedula')} placeholder="123456789" />
+                </div>
+                <div>
+                  <label className="label">Tipo</label>
+                  <select className="input" value={editForm.tipo} onChange={setF('tipo')}>
+                    {TIPOS_TRAB.map(tp => <option key={tp}>{tp}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Cargo</label>
+                  <input className="input" value={editForm.cargo} onChange={setF('cargo')} placeholder="Ej: Maestro de obras" />
+                </div>
+                <div>
+                  <label className="label">Especialidad</label>
+                  <input className="input" value={editForm.especialidad} onChange={setF('especialidad')} placeholder="Ej: Mampostería" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Teléfono</label>
+                  <input className="input" value={editForm.telefono} onChange={setF('telefono')} placeholder="+57 300 000 0000" />
+                </div>
+                <div>
+                  <label className="label">Email</label>
+                  <input className="input" type="email" value={editForm.email} onChange={setF('email')} placeholder="trabajador@ejemplo.com" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Ciudad</label>
+                  <input className="input" value={editForm.ciudad} onChange={setF('ciudad')} placeholder="Bogotá" />
+                </div>
+                <div>
+                  <label className="label">Dirección</label>
+                  <input className="input" value={editForm.direccion} onChange={setF('direccion')} placeholder="Calle 1 # 2-3" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Salario base</label>
+                  <input className="input" type="number" value={editForm.salario_base} onChange={setF('salario_base')} placeholder="0" />
+                </div>
+                <div>
+                  <label className="label">Fecha ingreso</label>
+                  <input className="input" type="date" value={editForm.fecha_ingreso} onChange={setF('fecha_ingreso')} />
+                </div>
+              </div>
+              <div className="border-t border-gray-100 pt-4">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Datos bancarios</p>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="label">Banco</label>
+                    <input className="input" value={editForm.banco} onChange={setF('banco')} placeholder="Bancolombia" />
+                  </div>
+                  <div>
+                    <label className="label">Tipo cuenta</label>
+                    <input className="input" value={editForm.tipo_cuenta} onChange={setF('tipo_cuenta')} placeholder="Ahorros" />
+                  </div>
+                  <div>
+                    <label className="label">Número cuenta</label>
+                    <input className="input" value={editForm.numero_cuenta} onChange={setF('numero_cuenta')} placeholder="123456789" />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+              <button className="btn-secondary" onClick={() => setShowEdit(false)}>Cancelar</button>
+              <button className="btn-primary" onClick={handleSaveEdit} disabled={savingEdit}>
+                {savingEdit ? 'Guardando…' : 'Guardar cambios'}
               </button>
             </div>
           </div>
