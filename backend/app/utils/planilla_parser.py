@@ -1,9 +1,20 @@
 """Parser de Planillas de Aportes en Línea (PILA) en formato PDF y TXT."""
 import io
 import re
+import unicodedata
 from typing import Any, Optional
 
 import pdfplumber
+
+# Clase de caracteres para nombres: A-Z, a-z y el bloque Latin-1 Supplement
+# (U+00C0–U+00FF cubre Á É Í Ó Ú Ñ Ü y sus minúsculas, etc.)
+_LETRA = r'[A-Za-zÀ-ÿ]'
+_LETRAS = r'[A-Za-zÀ-ÿ]'
+
+
+def _nfc(s: str) -> str:
+    """Normaliza Unicode a NFC para que Ñ compuesta != N + tilde combinatoria."""
+    return unicodedata.normalize('NFC', s)
 
 
 def _money(s: Any) -> int:
@@ -50,7 +61,7 @@ def _parse_employee_row(row: list) -> Optional[dict]:
 
     # Nombre: palabras en mayúsculas después de la cédula
     after = text[cedula_m.end():]
-    nombre_m = re.match(r'\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s]{3,40})', after)
+    nombre_m = re.match(r'\s+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s]{3,40})', after)
     nombre = ' '.join(nombre_m.group(1).split()) if nombre_m else ''
 
     # Tipo doc
@@ -122,6 +133,7 @@ def _parse_employees_from_text(text: str) -> list:
       NUM TipoDoc CEDULA NOMBRE COD_AFP DIAS $IBC $APORTE EPS DIAS $IBC $APORTE CCF DIAS $IBC $APORTE ARL DIAS $IBC TARIFA% $APORTE DIAS $0 $0 Si/No $TOTAL
     La segunda sub-línea puede contener el segundo apellido.
     """
+    text = _nfc(text)
     employees = []
     lines = text.split('\n')
 
@@ -137,16 +149,16 @@ def _parse_employees_from_text(text: str) -> list:
             cedula   = m.group(3)
             rest     = m.group(4)
 
-            # Nombre: palabras mayúsculas al inicio, hasta el primer código numérico/alfanumérico
+            # Nombre: palabras al inicio hasta el primer código numérico/alfanumérico
             name_m = re.match(
-                r'^([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s]+?)(?:\s+\d{4,5}\s|\s+\d{2}-\d{2}\s|\s+\$|\s{3,})',
+                r'^([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s]+?)(?:\s+\d{4,5}\s|\s+\d{2}-\d{2}\s|\s+\$|\s{3,})',
                 rest
             )
             first_name = name_m.group(1).strip() if name_m else ''
 
             # Segunda sub-línea puede tener el segundo apellido (ej: "ALVARO 1 7")
             next_line = lines[i + 1].strip() if i + 1 < len(lines) else ''
-            cont_m = re.match(r'^([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ]+)(?:\s+\d|\s*$)', next_line)
+            cont_m = re.match(r'^([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ]+)(?:\s+\d|\s*$)', next_line)
             if cont_m and not re.match(r'^\d', next_line) and \
                not re.search(r'Centro|Ciudad|Total|SUCURSAL', next_line, re.IGNORECASE):
                 nombre = f"{first_name} {cont_m.group(1)}".strip()
@@ -250,9 +262,9 @@ def _parse_entidades(text: str) -> list:
         # Detalle de entidad: COLPENSIONES 25-14 900,336,004 7 2 $560,400 $0 $0 $560,400
         if current_cat:
             # Nombre de entidad: palabras en mayúsculas al inicio
-            name_m = re.match(r'^([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s\-\.]+?)\s{2,}', line)
+            name_m = re.match(r'^([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s\-\.]+?)\s{2,}', line)
             if not name_m:
-                name_m = re.match(r'^([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s\-\.]{3,})', line)
+                name_m = re.match(r'^([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s\-\.]{3,})', line)
 
             money_vals = re.findall(r'\$([\d,]+)', line)
             non_money = re.sub(r'\$[\d,]+', '', line).strip()
@@ -317,12 +329,12 @@ def parse_planilla_pdf(pdf_bytes: bytes) -> dict:
             result['warnings'].append('PDF sin páginas')
             return result
 
-        p1_text = pdf.pages[0].extract_text(x_tolerance=2, y_tolerance=2) or ''
+        p1_text = _nfc(pdf.pages[0].extract_text(x_tolerance=2, y_tolerance=2) or '')
 
         # ── NIT + Razón Social ─────────────────────────────────────────────
         # Línea tipo: "901690581 4 TRIPLE A CONSTRUCCIONES SAS B - MENOS DE 200..."
         nit_m = re.search(
-            r'\b(\d{7,12})\s+\d\s+([A-ZÁÉÍÓÚÑ][\w\sÁÉÍÓÚÑáéíóúñ&\.\,\-]+?)'
+            r'\b(\d{7,12})\s+\d\s+([A-Za-zÀ-ÿ][\w\sÀ-ÿ&\.\,\-]+?)'
             r'(?:\s{2,}|\s+[BM]\s*[-–]|\s+MICRO|\s+GRANDE|\s+PEQUEÑA)',
             p1_text,
         )
@@ -364,7 +376,7 @@ def parse_planilla_pdf(pdf_bytes: bytes) -> dict:
             result['fecha_pago'] = dates[0]
 
         # ── Banco ─────────────────────────────────────────────────────────
-        banco_m = re.search(r'(BANCO\s+[A-ZÁÉÍÓÚÑ]+(?:\s+[A-ZÁÉÍÓÚÑ]+)?)', p1_text)
+        banco_m = re.search(r'(BANCO\s+[A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)?)', p1_text)
         if banco_m:
             result['banco'] = banco_m.group(1).strip()
 
@@ -508,6 +520,7 @@ def parse_planilla_txt(txt_content: str) -> dict:
     ccf_rows: list = []
     rec12: Optional[list] = None
 
+    txt_content = _nfc(txt_content)
     for raw_line in txt_content.splitlines():
         line = raw_line.strip()
         if not line:
