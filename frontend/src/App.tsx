@@ -33,6 +33,7 @@ const RetencionesPeriodoPage = lazy(() => import('./pages/RetencionesPeriodoPage
 const FlujoCajaPage = lazy(() => import('./pages/FlujoCajaPage'))
 const ObraDetailPage = lazy(() => import('./pages/ObraDetailPage'))
 const PlanillasPage = lazy(() => import('./pages/PlanillasPage'))
+const RegistroTrabajadorPage = lazy(() => import('./pages/RegistroTrabajadorPage'))
 
 function PageLoader() {
   return (
@@ -68,6 +69,7 @@ export default function App() {
     <>
       <Suspense fallback={<PageLoader />}>
         <Routes>
+          <Route path="/inscripcion" element={<RegistroTrabajadorPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />

@@ -45,6 +45,16 @@ class TrabajadorCreate(BaseModel):
     contacto_emergencia_relacion: Optional[str] = None
     familiares: Optional[List[FamiliarItem]] = None
     tipo_salario: Optional[str] = "OTRO"
+    tipo_documento: Optional[str] = None
+    fecha_nacimiento: Optional[date] = None
+    genero: Optional[str] = None
+    estado_civil: Optional[str] = None
+    nivel_educativo: Optional[str] = None
+    eps: Optional[str] = None
+    fondo_pension: Optional[str] = None
+    arl: Optional[str] = None
+    caja_compensacion: Optional[str] = None
+    numero_hijos: Optional[int] = None
 
 
 class TrabajadorUpdate(BaseModel):
@@ -73,6 +83,16 @@ class TrabajadorUpdate(BaseModel):
     contacto_emergencia_relacion: Optional[str] = None
     familiares: Optional[List[FamiliarItem]] = None
     tipo_salario: Optional[str] = None
+    tipo_documento: Optional[str] = None
+    fecha_nacimiento: Optional[date] = None
+    genero: Optional[str] = None
+    estado_civil: Optional[str] = None
+    nivel_educativo: Optional[str] = None
+    eps: Optional[str] = None
+    fondo_pension: Optional[str] = None
+    arl: Optional[str] = None
+    caja_compensacion: Optional[str] = None
+    numero_hijos: Optional[int] = None
 
 
 class TrabajadorOut(BaseModel):
@@ -104,6 +124,16 @@ class TrabajadorOut(BaseModel):
     contacto_emergencia_relacion: Optional[str] = None
     familiares: Optional[List[FamiliarItem]] = None
     tipo_salario: Optional[str] = None
+    tipo_documento: Optional[str] = None
+    fecha_nacimiento: Optional[date] = None
+    genero: Optional[str] = None
+    estado_civil: Optional[str] = None
+    nivel_educativo: Optional[str] = None
+    eps: Optional[str] = None
+    fondo_pension: Optional[str] = None
+    arl: Optional[str] = None
+    caja_compensacion: Optional[str] = None
+    numero_hijos: Optional[int] = None
     # Resumen financiero (calculado en router)
     total_acordado: Optional[Decimal] = None
     total_pagado: Optional[Decimal] = None

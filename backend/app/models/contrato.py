@@ -360,6 +360,18 @@ class Trabajador(Base, UUIDPrimaryKey, TimestampedMixin, SoftDeleteMixin):
     familiares_json = Column(Text, nullable=True)
     # Tipo de salario: MINIMO | OTRO
     tipo_salario = Column(VARCHAR(10), nullable=True, server_default="OTRO")
+    # Datos personales adicionales
+    tipo_documento   = Column(VARCHAR(20),  nullable=True)
+    fecha_nacimiento = Column(Date,         nullable=True)
+    genero           = Column(VARCHAR(10),  nullable=True)
+    estado_civil     = Column(VARCHAR(30),  nullable=True)
+    nivel_educativo  = Column(VARCHAR(30),  nullable=True)
+    # Seguridad social
+    eps              = Column(VARCHAR(100), nullable=True)
+    fondo_pension    = Column(VARCHAR(100), nullable=True)
+    arl              = Column(VARCHAR(100), nullable=True)
+    caja_compensacion = Column(VARCHAR(100), nullable=True)
+    numero_hijos     = Column(Integer,      nullable=True)
 
     # Relationships
     pagos = relationship("TrabajadorPago", back_populates="trabajador", cascade="all, delete-orphan")

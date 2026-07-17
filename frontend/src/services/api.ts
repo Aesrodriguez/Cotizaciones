@@ -928,6 +928,11 @@ export const acpAPI = {
   delete: (id: string) => api.delete(`/acps/${id}`),
 }
 
+export const publicAPI = {
+  registrarTrabajador: (data: object) =>
+    api.post<{ ok: boolean; codigo: string; mensaje: string }>('/public/registro-trabajador', data),
+}
+
 export const configuracionAPI = {
   listSalarioMinimo: () => api.get<import('../types').SalarioMinimo[]>('/configuracion/salario-minimo', _noToast),
   getCurrentSalarioMinimo: () => api.get<import('../types').SalarioMinimo | null>('/configuracion/salario-minimo/current', _noToast),

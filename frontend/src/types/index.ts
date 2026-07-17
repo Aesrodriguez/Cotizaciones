@@ -303,6 +303,16 @@ export interface Trabajador {
   contacto_emergencia_relacion?: string
   familiares?: FamiliarItem[]
   tipo_salario?: 'MINIMO' | 'OTRO'
+  tipo_documento?: string
+  fecha_nacimiento?: string
+  genero?: string
+  estado_civil?: string
+  nivel_educativo?: string
+  eps?: string
+  fondo_pension?: string
+  arl?: string
+  caja_compensacion?: string
+  numero_hijos?: number
   total_acordado?: number
   total_pagado?: number
   saldo?: number

@@ -15,16 +15,23 @@ interface ContratoItem { id: string; descripcion: string; unidad: string; cantid
 interface ContratoOpt { id: string; numero: string; titulo: string }
 
 interface EditForm {
-  nombres: string; apellidos: string; cedula: string; cargo: string
-  especialidad: string; tipo: string; telefono: string; email: string
+  nombres: string; apellidos: string; tipo_documento: string; cedula: string
+  fecha_nacimiento: string; genero: string; estado_civil: string; nivel_educativo: string
+  cargo: string; especialidad: string; tipo: string; telefono: string; email: string
+  ciudad: string; direccion: string; numero_hijos: string
+  eps: string; fondo_pension: string; arl: string; caja_compensacion: string
   salario_base: string; salario_diario: string; tipo_salario: 'MINIMO' | 'OTRO'
   fecha_ingreso: string; fecha_retiro: string; banco: string; tipo_cuenta: string
-  numero_cuenta: string; ciudad: string; direccion: string
+  numero_cuenta: string
   contacto_emergencia_nombre: string; contacto_emergencia_telefono: string
   contacto_emergencia_relacion: string
 }
 
 const TIPOS_TRAB = ['Empleado', 'Subcontratista']
+const TIPOS_DOC = ['CC', 'CE', 'Pasaporte', 'TI', 'PEP']
+const GENEROS = ['Masculino', 'Femenino', 'Otro']
+const ESTADOS_CIVILES = ['Soltero/a', 'Casado/a', 'Unión libre', 'Divorciado/a', 'Viudo/a']
+const NIVELES_EDU = ['Primaria', 'Bachillerato', 'Técnico', 'Tecnólogo', 'Profesional', 'Posgrado']
 const RELACIONES = ['Cónyuge', 'Padre/Madre', 'Hijo/Hija', 'Hermano/Hermana', 'Otro']
 
 export default function TrabajadorDetailPage() {
@@ -34,7 +41,7 @@ export default function TrabajadorDetailPage() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<Tab>('info')
   const [showEdit, setShowEdit] = useState(false)
-  const [editForm, setEditForm] = useState<EditForm>({ nombres: '', apellidos: '', cedula: '', cargo: '', especialidad: '', tipo: 'Empleado', telefono: '', email: '', salario_base: '', salario_diario: '', tipo_salario: 'OTRO', fecha_ingreso: '', fecha_retiro: '', banco: '', tipo_cuenta: '', numero_cuenta: '', ciudad: '', direccion: '', contacto_emergencia_nombre: '', contacto_emergencia_telefono: '', contacto_emergencia_relacion: '' })
+  const [editForm, setEditForm] = useState<EditForm>({ nombres: '', apellidos: '', tipo_documento: 'CC', cedula: '', fecha_nacimiento: '', genero: '', estado_civil: '', nivel_educativo: '', cargo: '', especialidad: '', tipo: 'Empleado', telefono: '', email: '', ciudad: '', direccion: '', numero_hijos: '', eps: '', fondo_pension: '', arl: '', caja_compensacion: '', salario_base: '', salario_diario: '', tipo_salario: 'OTRO', fecha_ingreso: '', fecha_retiro: '', banco: '', tipo_cuenta: '', numero_cuenta: '', contacto_emergencia_nombre: '', contacto_emergencia_telefono: '', contacto_emergencia_relacion: '' })
   const [salarioMinimoActual, setSalarioMinimoActual] = useState<SalarioMinimo | null>(null)
   const [savingEdit, setSavingEdit] = useState(false)
   // Retiro / nuevo ingreso
@@ -104,12 +111,24 @@ export default function TrabajadorDetailPage() {
     setEditForm({
       nombres: t.nombres,
       apellidos: t.apellidos,
+      tipo_documento: t.tipo_documento ?? 'CC',
       cedula: t.cedula ?? '',
+      fecha_nacimiento: t.fecha_nacimiento ?? '',
+      genero: t.genero ?? '',
+      estado_civil: t.estado_civil ?? '',
+      nivel_educativo: t.nivel_educativo ?? '',
       cargo: t.cargo ?? '',
       especialidad: t.especialidad ?? '',
       tipo: t.tipo ?? 'Empleado',
       telefono: t.telefono ?? '',
       email: t.email ?? '',
+      ciudad: t.ciudad ?? '',
+      direccion: t.direccion ?? '',
+      numero_hijos: t.numero_hijos != null ? String(t.numero_hijos) : '',
+      eps: t.eps ?? '',
+      fondo_pension: t.fondo_pension ?? '',
+      arl: t.arl ?? '',
+      caja_compensacion: t.caja_compensacion ?? '',
       salario_base: t.salario_base != null ? String(t.salario_base) : '',
       salario_diario: t.salario_diario != null ? String(t.salario_diario) : '',
       tipo_salario: (t.tipo_salario as 'MINIMO' | 'OTRO') ?? 'OTRO',
@@ -118,8 +137,6 @@ export default function TrabajadorDetailPage() {
       banco: t.banco ?? '',
       tipo_cuenta: t.tipo_cuenta ?? '',
       numero_cuenta: t.numero_cuenta ?? '',
-      ciudad: t.ciudad ?? '',
-      direccion: t.direccion ?? '',
       contacto_emergencia_nombre: t.contacto_emergencia_nombre ?? '',
       contacto_emergencia_telefono: t.contacto_emergencia_telefono ?? '',
       contacto_emergencia_relacion: t.contacto_emergencia_relacion ?? '',
@@ -140,9 +157,11 @@ export default function TrabajadorDetailPage() {
     try {
       await trabajadoresAPI.update(id, {
         ...editForm,
+        numero_hijos: editForm.numero_hijos ? Number(editForm.numero_hijos) : null,
         salario_base: editForm.salario_base ? Number(editForm.salario_base) : null,
         salario_diario: editForm.salario_diario ? Number(editForm.salario_diario) : null,
         tipo_salario: editForm.tipo_salario,
+        fecha_nacimiento: editForm.fecha_nacimiento || null,
         fecha_ingreso: editForm.fecha_ingreso || null,
         fecha_termino: editForm.fecha_retiro || null,
         estado: editForm.fecha_retiro ? 'INACTIVO' : 'ACTIVO',
@@ -517,13 +536,35 @@ export default function TrabajadorDetailPage() {
               <h2 className="text-base font-semibold text-gray-800 mb-1">Datos personales</h2>
               {[
                 { label: 'Nombre completo', value: `${t.nombres} ${t.apellidos}` },
-                { label: 'Cédula', value: t.cedula },
+                { label: 'Tipo documento', value: t.tipo_documento },
+                { label: 'Cédula / Documento', value: t.cedula },
+                { label: 'Fecha nacimiento', value: fmtDate(t.fecha_nacimiento) },
+                { label: 'Género', value: t.genero },
+                { label: 'Estado civil', value: t.estado_civil },
+                { label: 'Nivel educativo', value: t.nivel_educativo },
                 { label: 'Teléfono', value: t.telefono },
                 { label: 'Email', value: t.email },
                 { label: 'Ciudad', value: t.ciudad },
                 { label: 'Dirección', value: t.direccion },
+                { label: 'N.º de hijos', value: t.numero_hijos != null ? String(t.numero_hijos) : null },
               ].map(row => (
-                <div key={row.label} className="flex justify-between text-sm border-b border-gray-50 pb-2">
+                <div key={row.label} className="flex justify-between text-sm border-b border-gray-50 pb-2 last:border-0">
+                  <span className="text-gray-400">{row.label}</span>
+                  <span className="text-gray-900 font-medium">{row.value || '—'}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Seguridad social */}
+            <div className="card space-y-3">
+              <h2 className="text-base font-semibold text-gray-800 mb-1">Seguridad social</h2>
+              {[
+                { label: 'EPS', value: t.eps },
+                { label: 'Fondo de pensión', value: t.fondo_pension },
+                { label: 'ARL', value: t.arl },
+                { label: 'Caja de compensación', value: t.caja_compensacion },
+              ].map(row => (
+                <div key={row.label} className="flex justify-between text-sm border-b border-gray-50 pb-2 last:border-0">
                   <span className="text-gray-400">{row.label}</span>
                   <span className="text-gray-900 font-medium">{row.value || '—'}</span>
                 </div>
@@ -988,14 +1029,55 @@ export default function TrabajadorDetailPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Cédula</label>
-                  <input className="input" value={editForm.cedula} onChange={setF('cedula')} placeholder="123456789" />
+                  <label className="label">Tipo de documento</label>
+                  <select className="input" value={editForm.tipo_documento} onChange={setF('tipo_documento')}>
+                    {TIPOS_DOC.map(d => <option key={d}>{d}</option>)}
+                  </select>
                 </div>
                 <div>
-                  <label className="label">Tipo</label>
+                  <label className="label">Número de documento</label>
+                  <input className="input" value={editForm.cedula} onChange={setF('cedula')} placeholder="123456789" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Fecha de nacimiento</label>
+                  <input className="input" type="date" value={editForm.fecha_nacimiento} onChange={setF('fecha_nacimiento')} />
+                </div>
+                <div>
+                  <label className="label">Género</label>
+                  <select className="input" value={editForm.genero} onChange={setF('genero')}>
+                    <option value="">—</option>
+                    {GENEROS.map(g => <option key={g}>{g}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Estado civil</label>
+                  <select className="input" value={editForm.estado_civil} onChange={setF('estado_civil')}>
+                    <option value="">—</option>
+                    {ESTADOS_CIVILES.map(e => <option key={e}>{e}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Nivel educativo</label>
+                  <select className="input" value={editForm.nivel_educativo} onChange={setF('nivel_educativo')}>
+                    <option value="">—</option>
+                    {NIVELES_EDU.map(n => <option key={n}>{n}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Tipo de vinculación</label>
                   <select className="input" value={editForm.tipo} onChange={setF('tipo')}>
                     {TIPOS_TRAB.map(tp => <option key={tp}>{tp}</option>)}
                   </select>
+                </div>
+                <div>
+                  <label className="label">N.º de hijos</label>
+                  <input className="input" type="number" min={0} value={editForm.numero_hijos} onChange={setF('numero_hijos')} placeholder="0" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -1026,6 +1108,29 @@ export default function TrabajadorDetailPage() {
                 <div>
                   <label className="label">Dirección</label>
                   <input className="input" value={editForm.direccion} onChange={setF('direccion')} placeholder="Calle 1 # 2-3" />
+                </div>
+              </div>
+              <div className="border-t border-gray-100 pt-4">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Seguridad social</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="label">EPS</label>
+                    <input className="input" value={editForm.eps} onChange={setF('eps')} placeholder="Sura, Sanitas, Nueva EPS…" />
+                  </div>
+                  <div>
+                    <label className="label">Fondo de pensión</label>
+                    <input className="input" value={editForm.fondo_pension} onChange={setF('fondo_pension')} placeholder="Porvenir, Protección…" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 mt-3">
+                  <div>
+                    <label className="label">ARL</label>
+                    <input className="input" value={editForm.arl} onChange={setF('arl')} placeholder="Sura, Bolívar, Colmena…" />
+                  </div>
+                  <div>
+                    <label className="label">Caja de compensación</label>
+                    <input className="input" value={editForm.caja_compensacion} onChange={setF('caja_compensacion')} placeholder="Compensar, Cafam…" />
+                  </div>
                 </div>
               </div>
               {/* Tipo de salario */}
