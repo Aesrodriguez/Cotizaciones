@@ -827,7 +827,7 @@ export const planillasAPI = {
   upload: (file: File) => {
     const fd = new FormData()
     fd.append('file', file)
-    return api.post<{ id: number; numero_planilla: string; periodo: string; valor_total: number; total_afiliados: number; warnings: string[] }>('/planillas/upload', fd)
+    return api.post<{ id: number; numero_planilla: string; periodo: string; valor_total: number; total_afiliados: number; trabajadores_creados: number; warnings: string[] }>('/planillas/upload', fd)
   },
   list: (params?: object) => api.get<{ data: Planilla[]; total: number; page: number; pages: number }>('/planillas/', { params, ..._noToast }),
   get: (id: number) => api.get<PlanillaDetalle>(`/planillas/${id}`, _noToast),

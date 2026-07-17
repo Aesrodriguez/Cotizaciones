@@ -55,6 +55,8 @@ function UploadZone({ onUploaded }: { onUploaded: () => void }) {
         const d = res.data
         const info = `${d.numero_planilla} · ${d.total_afiliados} afil. · ${fmt(d.valor_total)}`
         setQueue(q => q.map((item, i) => i === idx ? { ...item, state: 'done', msg: info } : item))
+        if (d.trabajadores_creados > 0)
+          toast.success(`${d.trabajadores_creados} trabajador${d.trabajadores_creados > 1 ? 'es' : ''} nuevo${d.trabajadores_creados > 1 ? 's' : ''} registrado${d.trabajadores_creados > 1 ? 's' : ''}`, { duration: 5000 })
         if (d.warnings?.length) toast(d.warnings.join('\n'), { icon: '⚠️', duration: 6000 })
       } catch (err: unknown) {
         const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Error'

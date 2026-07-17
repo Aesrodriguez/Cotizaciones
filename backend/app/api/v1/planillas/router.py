@@ -9,6 +9,76 @@ router = APIRouter(prefix='/planillas', tags=['planillas'])
 MAX_FILE_MB = 20
 
 
+def _sync_trabajadores(db, empleados: list) -> int:
+    """Crea en 'trabajadores' los empleados de la planilla que no existan (por cédula)."""
+    if not empleados:
+        return 0
+
+    cedulas = [
+        (emp.get('cedula') or '').strip()
+        for emp in empleados
+        if (emp.get('cedula') or '').strip()
+    ]
+    if not cedulas:
+        return 0
+
+    # Cédulas que ya tienen registro activo
+    existing = {
+        row[0]
+        for row in db.execute(
+            text("SELECT cedula FROM trabajadores WHERE cedula = ANY(:cc) AND deleted_at IS NULL"),
+            {'cc': cedulas},
+        ).fetchall()
+    }
+
+    # Número de secuencia para códigos TRB-XXXX
+    max_row = db.execute(
+        text("SELECT codigo FROM trabajadores WHERE codigo LIKE 'TRB-%' ORDER BY codigo DESC LIMIT 1")
+    ).fetchone()
+    try:
+        next_num = int(max_row[0].split('-')[-1]) + 1 if max_row else 1
+    except (ValueError, IndexError):
+        next_num = 1
+
+    created = 0
+    seen = set(existing)  # evita duplicados dentro del mismo batch
+
+    for emp in empleados:
+        cedula = (emp.get('cedula') or '').strip()
+        nombre = (emp.get('nombre') or '').strip()
+        if not cedula or not nombre or cedula in seen:
+            continue
+        seen.add(cedula)
+
+        # PILA TXT: "APELLIDO1 APELLIDO2 NOMBRE1 NOMBRE2"
+        parts = nombre.split()
+        if len(parts) >= 4:
+            apellidos = ' '.join(parts[:2])
+            nombres = ' '.join(parts[2:])
+        elif len(parts) == 3:
+            apellidos = ' '.join(parts[:2])
+            nombres = parts[2]
+        elif len(parts) == 2:
+            apellidos = parts[0]
+            nombres = parts[1]
+        else:
+            apellidos = nombre
+            nombres = ''
+
+        codigo = f"TRB-{next_num:04d}"
+        next_num += 1
+
+        db.execute(text("""
+            INSERT INTO trabajadores
+                (id, codigo, nombres, apellidos, cedula, estado, created_at, updated_at)
+            VALUES
+                (gen_random_uuid(), :cod, :nom, :ape, :cc, 'ACTIVO', NOW(), NOW())
+        """), {'cod': codigo, 'nom': nombres, 'ape': apellidos, 'cc': cedula})
+        created += 1
+
+    return created
+
+
 # ── Upload y guardar ──────────────────────────────────────────────────────────
 
 @router.post('/upload', status_code=201)
@@ -158,6 +228,9 @@ def upload_planilla(file: UploadFile = File(...), db=Depends(get_db)):
             'sub': ent.get('es_subtotal', False),
         })
 
+    # ── Sincronizar trabajadores ──────────────────────────────────────────────
+    trabajadores_creados = _sync_trabajadores(db, parsed.get('empleados', []))
+
     db.commit()
 
     return {
@@ -167,6 +240,7 @@ def upload_planilla(file: UploadFile = File(...), db=Depends(get_db)):
         'valor_total': parsed.get('valor_total', 0),
         'total_afiliados': parsed.get('total_afiliados', 0),
         'archivo_url': archivo_url,
+        'trabajadores_creados': trabajadores_creados,
         'warnings': parsed.get('warnings', []),
     }
 
