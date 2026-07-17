@@ -412,13 +412,31 @@ export default function TrabajadoresPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Salario base mensual</label>
-                  <input className="input" type="number" value={form.salario_base} onChange={set('salario_base')} placeholder="0" />
+                  <label className="label">Salario mensual</label>
+                  <input
+                    className="input"
+                    type="number"
+                    value={form.salario_base}
+                    onChange={e => {
+                      const v = e.target.value
+                      setForm(f => ({ ...f, salario_base: v, salario_diario: v ? String(Math.round(Number(v) / 30)) : '' }))
+                    }}
+                    placeholder="0"
+                  />
                   {form.salario_base && <p className="text-xs text-gray-400 mt-1 font-mono">{fmt(Number(form.salario_base))}</p>}
                 </div>
                 <div>
-                  <label className="label">Salario / valor diario</label>
-                  <input className="input" type="number" value={form.salario_diario} onChange={set('salario_diario')} placeholder="0" />
+                  <label className="label">Salario diario</label>
+                  <input
+                    className="input"
+                    type="number"
+                    value={form.salario_diario}
+                    onChange={e => {
+                      const v = e.target.value
+                      setForm(f => ({ ...f, salario_diario: v, salario_base: v ? String(Math.round(Number(v) * 30)) : '' }))
+                    }}
+                    placeholder="0"
+                  />
                   {form.salario_diario && <p className="text-xs text-gray-400 mt-1 font-mono">{fmt(Number(form.salario_diario))}</p>}
                 </div>
               </div>

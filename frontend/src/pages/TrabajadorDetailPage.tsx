@@ -1024,13 +1024,33 @@ export default function TrabajadorDetailPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Salario base</label>
-                  <input className="input" type="number" value={editForm.salario_base} onChange={setF('salario_base')} placeholder="0" />
+                  <label className="label">Salario mensual</label>
+                  <input
+                    className="input"
+                    type="number"
+                    value={editForm.salario_base}
+                    onChange={e => {
+                      const v = e.target.value
+                      const diario = v ? String(Math.round(Number(v) / 30)) : ''
+                      setEditForm(f => ({ ...f, salario_base: v, salario_diario: diario }))
+                    }}
+                    placeholder="0"
+                  />
                   {editForm.salario_base && <p className="text-xs text-gray-400 mt-0.5">{fmt(Number(editForm.salario_base))}</p>}
                 </div>
                 <div>
                   <label className="label">Salario diario</label>
-                  <input className="input" type="number" value={editForm.salario_diario} onChange={setF('salario_diario')} placeholder="0" />
+                  <input
+                    className="input"
+                    type="number"
+                    value={editForm.salario_diario}
+                    onChange={e => {
+                      const v = e.target.value
+                      const mensual = v ? String(Math.round(Number(v) * 30)) : ''
+                      setEditForm(f => ({ ...f, salario_diario: v, salario_base: mensual }))
+                    }}
+                    placeholder="0"
+                  />
                   {editForm.salario_diario && <p className="text-xs text-gray-400 mt-0.5">{fmt(Number(editForm.salario_diario))}</p>}
                 </div>
               </div>
