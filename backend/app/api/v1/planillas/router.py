@@ -245,6 +245,36 @@ def upload_planilla(file: UploadFile = File(...), db=Depends(get_db)):
     }
 
 
+# ── Sincronizar trabajadores desde planillas existentes ──────────────────────
+
+@router.post('/sync-trabajadores')
+def sync_trabajadores_from_all_planillas(db=Depends(get_db)):
+    """
+    Lee todos los empleados ya guardados en planilla_empleados y crea en
+    'trabajadores' los que no existan (validando por cédula).
+    """
+    rows = db.execute(text("""
+        SELECT DISTINCT ON (cedula) cedula, nombre
+        FROM planilla_empleados
+        WHERE cedula IS NOT NULL AND cedula <> ''
+          AND nombre IS NOT NULL AND nombre <> ''
+        ORDER BY cedula, id ASC
+    """)).fetchall()
+
+    if not rows:
+        return {'trabajadores_creados': 0, 'total_empleados': 0, 'ya_existian': 0}
+
+    empleados = [{'cedula': r[0], 'nombre': r[1]} for r in rows]
+    created = _sync_trabajadores(db, empleados)
+    db.commit()
+
+    return {
+        'trabajadores_creados': created,
+        'total_empleados': len(empleados),
+        'ya_existian': len(empleados) - created,
+    }
+
+
 # ── Listar ────────────────────────────────────────────────────────────────────
 
 @router.get('/')

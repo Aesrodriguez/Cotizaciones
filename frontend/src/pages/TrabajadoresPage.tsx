@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { trabajadoresAPI } from '../services/api'
+import { trabajadoresAPI, planillasAPI } from '../services/api'
 import type { Trabajador } from '../types'
 import SkeletonTable from '../components/common/SkeletonTable'
 
@@ -168,6 +168,26 @@ export default function TrabajadoresPage() {
     }
   }
 
+  const [syncing, setSyncing] = useState(false)
+
+  const handleSync = async () => {
+    setSyncing(true)
+    try {
+      const res = await planillasAPI.syncTrabajadores()
+      const { trabajadores_creados, total_empleados, ya_existian } = res.data
+      if (trabajadores_creados === 0) {
+        toast.success(`Todos los empleados ya están registrados (${total_empleados} validados)`)
+      } else {
+        toast.success(`${trabajadores_creados} trabajador${trabajadores_creados > 1 ? 'es' : ''} nuevo${trabajadores_creados > 1 ? 's' : ''} creado${trabajadores_creados > 1 ? 's' : ''} · ${ya_existian} ya existían`, { duration: 6000 })
+      }
+      load(page, search, estado)
+    } catch {
+      toast.error('Error al sincronizar')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   const set = (k: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
 
@@ -189,9 +209,31 @@ export default function TrabajadoresPage() {
           <h1 className="text-2xl font-bold text-gray-900">Trabajadores</h1>
           <p className="text-sm text-gray-500 mt-0.5">{total} {total === 1 ? 'trabajador' : 'trabajadores'}</p>
         </div>
-        <button className="btn-primary" onClick={openCreate}>
-          <IconAdd /> Nuevo trabajador
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            className="btn-secondary text-sm"
+            onClick={handleSync}
+            disabled={syncing}
+            title="Crea en trabajadores los empleados de planillas PILA que aún no estén registrados"
+          >
+            {syncing ? (
+              <span className="flex items-center gap-1.5">
+                <span className="animate-spin inline-block w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent" />
+                Validando…
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-4 h-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                </svg>
+                Sincronizar planillas
+              </span>
+            )}
+          </button>
+          <button className="btn-primary" onClick={openCreate}>
+            <IconAdd /> Nuevo trabajador
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
