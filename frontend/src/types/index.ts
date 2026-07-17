@@ -258,6 +258,13 @@ export interface ContratoDashboard {
 
 // ── Trabajadores ───────────────────────────────────────────────────────────
 
+export interface FamiliarItem {
+  nombre: string
+  relacion: string
+  fecha_nacimiento?: string
+  telefono?: string
+}
+
 export interface Trabajador {
   id: string
   codigo: string
@@ -282,6 +289,10 @@ export interface Trabajador {
   banco?: string
   tipo_cuenta?: string
   numero_cuenta?: string
+  contacto_emergencia_nombre?: string
+  contacto_emergencia_telefono?: string
+  contacto_emergencia_relacion?: string
+  familiares?: FamiliarItem[]
   total_acordado?: number
   total_pagado?: number
   saldo?: number

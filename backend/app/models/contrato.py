@@ -338,6 +338,12 @@ class Trabajador(Base, UUIDPrimaryKey, TimestampedMixin, SoftDeleteMixin):
     banco = Column(VARCHAR(100), nullable=True)
     tipo_cuenta = Column(VARCHAR(50), nullable=True)
     numero_cuenta = Column(VARCHAR(50), nullable=True)
+    # Contacto de emergencia
+    contacto_emergencia_nombre   = Column(VARCHAR(100), nullable=True)
+    contacto_emergencia_telefono = Column(VARCHAR(30),  nullable=True)
+    contacto_emergencia_relacion = Column(VARCHAR(50),  nullable=True)
+    # Familiares: JSON array [{nombre, relacion, fecha_nacimiento}]
+    familiares_json = Column(Text, nullable=True)
 
     # Relationships
     pagos = relationship("TrabajadorPago", back_populates="trabajador", cascade="all, delete-orphan")

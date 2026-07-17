@@ -14,6 +14,13 @@ from pydantic import BaseModel
 # Trabajador
 # ---------------------------------------------------------------------------
 
+class FamiliarItem(BaseModel):
+    nombre: str
+    relacion: str
+    fecha_nacimiento: Optional[str] = None
+    telefono: Optional[str] = None
+
+
 class TrabajadorCreate(BaseModel):
     nombres: str
     apellidos: str
@@ -33,6 +40,10 @@ class TrabajadorCreate(BaseModel):
     banco: Optional[str] = None
     tipo_cuenta: Optional[str] = None
     numero_cuenta: Optional[str] = None
+    contacto_emergencia_nombre: Optional[str] = None
+    contacto_emergencia_telefono: Optional[str] = None
+    contacto_emergencia_relacion: Optional[str] = None
+    familiares: Optional[List[FamiliarItem]] = None
 
 
 class TrabajadorUpdate(BaseModel):
@@ -56,6 +67,10 @@ class TrabajadorUpdate(BaseModel):
     banco: Optional[str] = None
     tipo_cuenta: Optional[str] = None
     numero_cuenta: Optional[str] = None
+    contacto_emergencia_nombre: Optional[str] = None
+    contacto_emergencia_telefono: Optional[str] = None
+    contacto_emergencia_relacion: Optional[str] = None
+    familiares: Optional[List[FamiliarItem]] = None
 
 
 class TrabajadorOut(BaseModel):
@@ -82,6 +97,10 @@ class TrabajadorOut(BaseModel):
     banco: Optional[str] = None
     tipo_cuenta: Optional[str] = None
     numero_cuenta: Optional[str] = None
+    contacto_emergencia_nombre: Optional[str] = None
+    contacto_emergencia_telefono: Optional[str] = None
+    contacto_emergencia_relacion: Optional[str] = None
+    familiares: Optional[List[FamiliarItem]] = None
     # Resumen financiero (calculado en router)
     total_acordado: Optional[Decimal] = None
     total_pagado: Optional[Decimal] = None

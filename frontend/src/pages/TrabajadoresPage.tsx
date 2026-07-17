@@ -36,10 +36,12 @@ interface FormState {
   telefono: string
   email: string
   salario_base: string
+  salario_diario: string
   banco: string
   tipo_cuenta: string
   numero_cuenta: string
   fecha_ingreso: string
+  fecha_retiro: string
 }
 
 const emptyForm = (): FormState => ({
@@ -52,10 +54,12 @@ const emptyForm = (): FormState => ({
   telefono: '',
   email: '',
   salario_base: '',
+  salario_diario: '',
   banco: '',
   tipo_cuenta: '',
   numero_cuenta: '',
   fecha_ingreso: '',
+  fecha_retiro: '',
 })
 
 export default function TrabajadoresPage() {
@@ -120,10 +124,12 @@ export default function TrabajadoresPage() {
       telefono: t.telefono ?? '',
       email: t.email ?? '',
       salario_base: t.salario_base != null ? String(t.salario_base) : '',
+      salario_diario: t.salario_diario != null ? String(t.salario_diario) : '',
       banco: t.banco ?? '',
       tipo_cuenta: t.tipo_cuenta ?? '',
       numero_cuenta: t.numero_cuenta ?? '',
       fecha_ingreso: t.fecha_ingreso ?? '',
+      fecha_retiro: t.fecha_termino ?? '',
     })
     setShowModal(true)
   }
@@ -138,7 +144,11 @@ export default function TrabajadoresPage() {
       const payload = {
         ...form,
         salario_base: form.salario_base ? Number(form.salario_base) : null,
+        salario_diario: form.salario_diario ? Number(form.salario_diario) : null,
         fecha_ingreso: form.fecha_ingreso || null,
+        fecha_termino: form.fecha_retiro || null,
+        // Si tiene fecha de retiro → INACTIVO; si se limpió → vuelve ACTIVO
+        estado: form.fecha_retiro ? 'INACTIVO' : 'ACTIVO',
       }
       if (editing) {
         await trabajadoresAPI.update(editing.id, payload)
@@ -191,7 +201,12 @@ export default function TrabajadoresPage() {
   const set = (k: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
 
-  const badgeSaldo = (t: Trabajador) => {
+  const esRetirado = (t: Trabajador) =>
+    t.estado === 'INACTIVO' || !!t.fecha_termino
+
+  const badgeEstado = (t: Trabajador) => {
+    if (esRetirado(t))
+      return <span className="badge bg-gray-100 text-gray-500">Retirado</span>
     if (!t.estado_saldo) return null
     const cls = t.estado_saldo === 'Al día'
       ? 'bg-green-100 text-green-800'
@@ -283,12 +298,20 @@ export default function TrabajadoresPage() {
                   onClick={() => navigate(`/trabajadores/${t.id}`)}
                 >
                   <td className="px-4 py-3">
-                    <p className="font-medium text-gray-900">{t.nombres} {t.apellidos}</p>
-                    <p className="text-xs text-gray-400">{t.codigo} {t.cedula ? `· CC ${t.cedula}` : ''}</p>
+                    <div className="flex items-center gap-2">
+                      <p className={`font-medium ${esRetirado(t) ? 'text-gray-400' : 'text-gray-900'}`}>{t.nombres} {t.apellidos}</p>
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      {t.codigo} {t.cedula ? `· CC ${t.cedula}` : ''}
+                      {t.fecha_termino && <span className="ml-2 text-red-400">· Retiro {t.fecha_termino}</span>}
+                    </p>
                   </td>
                   <td className="px-4 py-3 hidden md:table-cell text-gray-600">
                     <p>{t.cargo || '—'}</p>
-                    <p className="text-xs text-gray-400">{t.tipo || 'Empleado'}</p>
+                    <p className="text-xs text-gray-400">
+                      {t.tipo || 'Empleado'}
+                      {t.salario_base != null && <span className="ml-2 font-mono">{fmt(t.salario_base)}</span>}
+                    </p>
                   </td>
                   <td className="px-4 py-3 text-right hidden lg:table-cell font-mono text-xs text-gray-700">{fmt(t.total_acordado)}</td>
                   <td className="px-4 py-3 text-right hidden lg:table-cell font-mono text-xs text-gray-700">{fmt(t.total_pagado)}</td>
@@ -296,7 +319,7 @@ export default function TrabajadoresPage() {
                     <span className={t.saldo && t.saldo > 0 ? 'text-amber-700 font-semibold' : 'text-gray-700'}>{fmt(t.saldo)}</span>
                   </td>
                   <td className="px-4 py-3 text-center hidden sm:table-cell">
-                    {badgeSaldo(t)}
+                    {badgeEstado(t)}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 justify-end">
@@ -389,12 +412,25 @@ export default function TrabajadoresPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Salario base / Valor acordado</label>
+                  <label className="label">Salario base mensual</label>
                   <input className="input" type="number" value={form.salario_base} onChange={set('salario_base')} placeholder="0" />
+                  {form.salario_base && <p className="text-xs text-gray-400 mt-1 font-mono">{fmt(Number(form.salario_base))}</p>}
                 </div>
+                <div>
+                  <label className="label">Salario / valor diario</label>
+                  <input className="input" type="number" value={form.salario_diario} onChange={set('salario_diario')} placeholder="0" />
+                  {form.salario_diario && <p className="text-xs text-gray-400 mt-1 font-mono">{fmt(Number(form.salario_diario))}</p>}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="label">Fecha ingreso</label>
                   <input className="input" type="date" value={form.fecha_ingreso} onChange={set('fecha_ingreso')} />
+                </div>
+                <div>
+                  <label className="label">Fecha de retiro</label>
+                  <input className="input" type="date" value={form.fecha_retiro} onChange={set('fecha_retiro')} />
+                  {form.fecha_retiro && <p className="text-xs text-amber-600 mt-1">⚠ El trabajador quedará marcado como Retirado</p>}
                 </div>
               </div>
               <div className="border-t border-gray-100 pt-4">

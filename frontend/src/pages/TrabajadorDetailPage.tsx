@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { trabajadoresAPI } from '../services/api'
-import type { SoportePago, TrabajadorAsignacion, TrabajadorDetalle, TrabajadorPago } from '../types'
+import type { FamiliarItem, SoportePago, TrabajadorAsignacion, TrabajadorDetalle, TrabajadorPago } from '../types'
 
 const COP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })
 const fmt = (v?: number | null) => v != null ? COP.format(v) : '—'
 const fmtDate = (s?: string | null) => s ? new Date(s + 'T00:00:00').toLocaleDateString('es-CO') : '—'
+const today = () => new Date().toISOString().slice(0, 10)
 
 type Tab = 'info' | 'asignaciones' | 'pagos' | 'corte' | 'soportes'
 
@@ -16,11 +17,15 @@ interface ContratoOpt { id: string; numero: string; titulo: string }
 interface EditForm {
   nombres: string; apellidos: string; cedula: string; cargo: string
   especialidad: string; tipo: string; telefono: string; email: string
-  salario_base: string; fecha_ingreso: string; banco: string
-  tipo_cuenta: string; numero_cuenta: string; ciudad: string; direccion: string
+  salario_base: string; salario_diario: string; fecha_ingreso: string
+  fecha_retiro: string; banco: string; tipo_cuenta: string
+  numero_cuenta: string; ciudad: string; direccion: string
+  contacto_emergencia_nombre: string; contacto_emergencia_telefono: string
+  contacto_emergencia_relacion: string
 }
 
 const TIPOS_TRAB = ['Empleado', 'Subcontratista']
+const RELACIONES = ['Cónyuge', 'Padre/Madre', 'Hijo/Hija', 'Hermano/Hermana', 'Otro']
 
 export default function TrabajadorDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -29,8 +34,16 @@ export default function TrabajadorDetailPage() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<Tab>('info')
   const [showEdit, setShowEdit] = useState(false)
-  const [editForm, setEditForm] = useState<EditForm>({ nombres: '', apellidos: '', cedula: '', cargo: '', especialidad: '', tipo: 'Empleado', telefono: '', email: '', salario_base: '', fecha_ingreso: '', banco: '', tipo_cuenta: '', numero_cuenta: '', ciudad: '', direccion: '' })
+  const [editForm, setEditForm] = useState<EditForm>({ nombres: '', apellidos: '', cedula: '', cargo: '', especialidad: '', tipo: 'Empleado', telefono: '', email: '', salario_base: '', salario_diario: '', fecha_ingreso: '', fecha_retiro: '', banco: '', tipo_cuenta: '', numero_cuenta: '', ciudad: '', direccion: '', contacto_emergencia_nombre: '', contacto_emergencia_telefono: '', contacto_emergencia_relacion: '' })
   const [savingEdit, setSavingEdit] = useState(false)
+  // Retiro / nuevo ingreso
+  const [showRetiro, setShowRetiro] = useState(false)
+  const [fechaRetiro, setFechaRetiro] = useState(today())
+  const [showNuevoIngreso, setShowNuevoIngreso] = useState(false)
+  const [fechaNuevoIngreso, setFechaNuevoIngreso] = useState(today())
+  const [savingEstado, setSavingEstado] = useState(false)
+  // Familiares
+  const [familiares, setFamiliares] = useState<FamiliarItem[]>([])
 
   // Contratos/items
   const [contratos, setContratos] = useState<ContratoOpt[]>([])
@@ -97,13 +110,19 @@ export default function TrabajadorDetailPage() {
       telefono: t.telefono ?? '',
       email: t.email ?? '',
       salario_base: t.salario_base != null ? String(t.salario_base) : '',
+      salario_diario: t.salario_diario != null ? String(t.salario_diario) : '',
       fecha_ingreso: t.fecha_ingreso ?? '',
+      fecha_retiro: t.fecha_termino ?? '',
       banco: t.banco ?? '',
       tipo_cuenta: t.tipo_cuenta ?? '',
       numero_cuenta: t.numero_cuenta ?? '',
       ciudad: t.ciudad ?? '',
       direccion: t.direccion ?? '',
+      contacto_emergencia_nombre: t.contacto_emergencia_nombre ?? '',
+      contacto_emergencia_telefono: t.contacto_emergencia_telefono ?? '',
+      contacto_emergencia_relacion: t.contacto_emergencia_relacion ?? '',
     })
+    setFamiliares(t.familiares ?? [])
     setShowEdit(true)
   }
 
@@ -117,7 +136,11 @@ export default function TrabajadorDetailPage() {
       await trabajadoresAPI.update(id, {
         ...editForm,
         salario_base: editForm.salario_base ? Number(editForm.salario_base) : null,
+        salario_diario: editForm.salario_diario ? Number(editForm.salario_diario) : null,
         fecha_ingreso: editForm.fecha_ingreso || null,
+        fecha_termino: editForm.fecha_retiro || null,
+        estado: editForm.fecha_retiro ? 'INACTIVO' : 'ACTIVO',
+        familiares: familiares.length > 0 ? familiares : null,
       })
       toast.success('Trabajador actualizado')
       setShowEdit(false)
@@ -127,6 +150,30 @@ export default function TrabajadorDetailPage() {
     } finally {
       setSavingEdit(false)
     }
+  }
+
+  const handleRetiro = async () => {
+    if (!id || !fechaRetiro) { toast.error('Selecciona una fecha de retiro'); return }
+    setSavingEstado(true)
+    try {
+      await trabajadoresAPI.update(id, { fecha_termino: fechaRetiro, estado: 'INACTIVO' })
+      toast.success('Retiro registrado')
+      setShowRetiro(false)
+      load()
+    } catch { toast.error('Error al registrar retiro') }
+    finally { setSavingEstado(false) }
+  }
+
+  const handleNuevoIngreso = async () => {
+    if (!id || !fechaNuevoIngreso) { toast.error('Selecciona una fecha de ingreso'); return }
+    setSavingEstado(true)
+    try {
+      await trabajadoresAPI.update(id, { fecha_termino: null, fecha_ingreso: fechaNuevoIngreso, estado: 'ACTIVO' })
+      toast.success('Nuevo ingreso registrado')
+      setShowNuevoIngreso(false)
+      load()
+    } catch { toast.error('Error al registrar ingreso') }
+    finally { setSavingEstado(false) }
   }
 
   const setF = (k: keyof EditForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -369,8 +416,31 @@ export default function TrabajadorDetailPage() {
     { key: 'soportes', label: `Soportes${soportes.length ? ` (${soportes.length})` : ''}` },
   ]
 
+  const esRetirado = !!t.fecha_termino || t.estado === 'INACTIVO'
+
   return (
     <div className="space-y-5">
+      {/* Banner inactivo */}
+      {esRetirado && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-red-700">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4 flex-shrink-0">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+            </svg>
+            <span className="text-sm font-medium">
+              Trabajador retirado
+              {t.fecha_termino && ` — Fecha de retiro: ${fmtDate(t.fecha_termino)}`}
+            </span>
+          </div>
+          <button
+            className="text-xs font-semibold text-green-700 bg-green-100 hover:bg-green-200 px-3 py-1.5 rounded-lg transition-colors"
+            onClick={() => { setFechaNuevoIngreso(today()); setShowNuevoIngreso(true) }}
+          >
+            Registrar nuevo ingreso
+          </button>
+        </div>
+      )}
+
       {/* Back + Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
@@ -380,16 +450,23 @@ export default function TrabajadorDetailPage() {
             </svg>
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{t.nombres} {t.apellidos}</h1>
+            <h1 className={`text-2xl font-bold ${esRetirado ? 'text-gray-400' : 'text-gray-900'}`}>{t.nombres} {t.apellidos}</h1>
             <p className="text-sm text-gray-500">{t.codigo} · {t.cargo || 'Sin cargo'} · {t.tipo || 'Empleado'}</p>
           </div>
         </div>
-        <button className="btn-primary" onClick={openEdit}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-4 h-4">
-            <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
-          </svg>
-          Editar información
-        </button>
+        <div className="flex gap-2">
+          {!esRetirado && (
+            <button className="btn-secondary text-red-600 border-red-200 hover:bg-red-50" onClick={() => { setFechaRetiro(today()); setShowRetiro(true) }}>
+              Registrar retiro
+            </button>
+          )}
+          <button className="btn-primary" onClick={openEdit}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-4 h-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
+            </svg>
+            Editar información
+          </button>
+        </div>
       </div>
 
       {/* Resumen KPIs */}
@@ -429,22 +506,62 @@ export default function TrabajadorDetailPage() {
       {/* ── Tab: Información ───────────────────────────────────────────────── */}
       {tab === 'info' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div className="card space-y-3">
-            <h2 className="text-base font-semibold text-gray-800 mb-1">Datos personales</h2>
-            {[
-              { label: 'Nombre completo', value: `${t.nombres} ${t.apellidos}` },
-              { label: 'Cédula', value: t.cedula },
-              { label: 'Teléfono', value: t.telefono },
-              { label: 'Email', value: t.email },
-              { label: 'Ciudad', value: t.ciudad },
-              { label: 'Dirección', value: t.direccion },
-            ].map(row => (
-              <div key={row.label} className="flex justify-between text-sm border-b border-gray-50 pb-2">
-                <span className="text-gray-400">{row.label}</span>
-                <span className="text-gray-900 font-medium">{row.value || '—'}</span>
+          <div className="space-y-5">
+            <div className="card space-y-3">
+              <h2 className="text-base font-semibold text-gray-800 mb-1">Datos personales</h2>
+              {[
+                { label: 'Nombre completo', value: `${t.nombres} ${t.apellidos}` },
+                { label: 'Cédula', value: t.cedula },
+                { label: 'Teléfono', value: t.telefono },
+                { label: 'Email', value: t.email },
+                { label: 'Ciudad', value: t.ciudad },
+                { label: 'Dirección', value: t.direccion },
+              ].map(row => (
+                <div key={row.label} className="flex justify-between text-sm border-b border-gray-50 pb-2">
+                  <span className="text-gray-400">{row.label}</span>
+                  <span className="text-gray-900 font-medium">{row.value || '—'}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Contacto de emergencia */}
+            <div className="card space-y-3">
+              <h2 className="text-base font-semibold text-gray-800 mb-1">Contacto de emergencia</h2>
+              {[
+                { label: 'Nombre', value: t.contacto_emergencia_nombre },
+                { label: 'Teléfono', value: t.contacto_emergencia_telefono },
+                { label: 'Relación', value: t.contacto_emergencia_relacion },
+              ].map(row => (
+                <div key={row.label} className="flex justify-between text-sm border-b border-gray-50 pb-2">
+                  <span className="text-gray-400">{row.label}</span>
+                  <span className="text-gray-900 font-medium">{row.value || '—'}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Familiares */}
+            {t.familiares && t.familiares.length > 0 && (
+              <div className="card space-y-3">
+                <h2 className="text-base font-semibold text-gray-800 mb-1">Familiares</h2>
+                {t.familiares.map((f, i) => (
+                  <div key={i} className="text-sm border-b border-gray-50 pb-2 last:border-0 last:pb-0">
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-900">{f.nombre}</span>
+                      <span className="text-gray-400">{f.relacion}</span>
+                    </div>
+                    {(f.fecha_nacimiento || f.telefono) && (
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {f.fecha_nacimiento && `Nac. ${fmtDate(f.fecha_nacimiento)}`}
+                        {f.fecha_nacimiento && f.telefono && ' · '}
+                        {f.telefono}
+                      </p>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
+
           <div className="space-y-5">
             <div className="card space-y-3">
               <h2 className="text-base font-semibold text-gray-800 mb-1">Datos laborales</h2>
@@ -453,12 +570,16 @@ export default function TrabajadorDetailPage() {
                 { label: 'Especialidad', value: t.especialidad },
                 { label: 'Tipo', value: t.tipo },
                 { label: 'Salario base', value: fmt(t.salario_base) },
+                { label: 'Salario diario', value: fmt(t.salario_diario) },
                 { label: 'Fecha ingreso', value: fmtDate(t.fecha_ingreso) },
                 { label: 'Estado', value: t.estado },
+                ...(t.fecha_termino ? [{ label: 'Fecha de retiro', value: fmtDate(t.fecha_termino) }] : []),
               ].map(row => (
                 <div key={row.label} className="flex justify-between text-sm border-b border-gray-50 pb-2">
                   <span className="text-gray-400">{row.label}</span>
-                  <span className="text-gray-900 font-medium">{row.value || '—'}</span>
+                  <span className={`font-medium ${row.label === 'Fecha de retiro' ? 'text-red-600' : row.label === 'Estado' && esRetirado ? 'text-gray-400' : 'text-gray-900'}`}>
+                    {row.value || '—'}
+                  </span>
                 </div>
               ))}
             </div>
@@ -905,10 +1026,25 @@ export default function TrabajadorDetailPage() {
                 <div>
                   <label className="label">Salario base</label>
                   <input className="input" type="number" value={editForm.salario_base} onChange={setF('salario_base')} placeholder="0" />
+                  {editForm.salario_base && <p className="text-xs text-gray-400 mt-0.5">{fmt(Number(editForm.salario_base))}</p>}
                 </div>
+                <div>
+                  <label className="label">Salario diario</label>
+                  <input className="input" type="number" value={editForm.salario_diario} onChange={setF('salario_diario')} placeholder="0" />
+                  {editForm.salario_diario && <p className="text-xs text-gray-400 mt-0.5">{fmt(Number(editForm.salario_diario))}</p>}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="label">Fecha ingreso</label>
                   <input className="input" type="date" value={editForm.fecha_ingreso} onChange={setF('fecha_ingreso')} />
+                </div>
+                <div>
+                  <label className="label">Fecha de retiro</label>
+                  <input className="input" type="date" value={editForm.fecha_retiro} onChange={setF('fecha_retiro')} />
+                  {editForm.fecha_retiro && (
+                    <p className="text-xs text-amber-600 mt-0.5">Se marcará como INACTIVO al guardar</p>
+                  )}
                 </div>
               </div>
               <div className="border-t border-gray-100 pt-4">
@@ -928,11 +1064,126 @@ export default function TrabajadorDetailPage() {
                   </div>
                 </div>
               </div>
+              <div className="border-t border-gray-100 pt-4">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Contacto de emergencia</p>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="label">Nombre</label>
+                    <input className="input" value={editForm.contacto_emergencia_nombre} onChange={setF('contacto_emergencia_nombre')} placeholder="Nombre" />
+                  </div>
+                  <div>
+                    <label className="label">Teléfono</label>
+                    <input className="input" value={editForm.contacto_emergencia_telefono} onChange={setF('contacto_emergencia_telefono')} placeholder="+57 300…" />
+                  </div>
+                  <div>
+                    <label className="label">Relación</label>
+                    <select className="input" value={editForm.contacto_emergencia_relacion} onChange={setF('contacto_emergencia_relacion')}>
+                      <option value="">Seleccionar…</option>
+                      {RELACIONES.map(r => <option key={r}>{r}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div className="border-t border-gray-100 pt-4">
+                <div className="flex justify-between items-center mb-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Familiares</p>
+                  <button
+                    type="button"
+                    className="text-xs text-blue-600 hover:underline"
+                    onClick={() => setFamiliares(f => [...f, { nombre: '', relacion: '' }])}
+                  >
+                    + Agregar familiar
+                  </button>
+                </div>
+                {familiares.length === 0 && (
+                  <p className="text-xs text-gray-400">Sin familiares registrados</p>
+                )}
+                {familiares.map((fam, i) => (
+                  <div key={i} className="grid grid-cols-4 gap-2 mb-2 items-end">
+                    <div className="col-span-1">
+                      <label className="label text-xs">Nombre</label>
+                      <input className="input text-sm py-1.5" value={fam.nombre} onChange={e => setFamiliares(fs => fs.map((x, j) => j === i ? { ...x, nombre: e.target.value } : x))} placeholder="Nombre completo" />
+                    </div>
+                    <div>
+                      <label className="label text-xs">Relación</label>
+                      <select className="input text-sm py-1.5" value={fam.relacion} onChange={e => setFamiliares(fs => fs.map((x, j) => j === i ? { ...x, relacion: e.target.value } : x))}>
+                        <option value="">—</option>
+                        {RELACIONES.map(r => <option key={r}>{r}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="label text-xs">F. nacimiento</label>
+                      <input className="input text-sm py-1.5" type="date" value={fam.fecha_nacimiento ?? ''} onChange={e => setFamiliares(fs => fs.map((x, j) => j === i ? { ...x, fecha_nacimiento: e.target.value || undefined } : x))} />
+                    </div>
+                    <div className="flex gap-1 items-end">
+                      <div className="flex-1">
+                        <label className="label text-xs">Teléfono</label>
+                        <input className="input text-sm py-1.5" value={fam.telefono ?? ''} onChange={e => setFamiliares(fs => fs.map((x, j) => j === i ? { ...x, telefono: e.target.value || undefined } : x))} placeholder="+57…" />
+                      </div>
+                      <button type="button" className="pb-1.5 text-red-400 hover:text-red-600 text-lg leading-none" onClick={() => setFamiliares(fs => fs.filter((_, j) => j !== i))}>×</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
               <button className="btn-secondary" onClick={() => setShowEdit(false)}>Cancelar</button>
               <button className="btn-primary" onClick={handleSaveEdit} disabled={savingEdit}>
                 {savingEdit ? 'Guardando…' : 'Guardar cambios'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Registrar retiro ──────────────────────────────────────── */}
+      {showRetiro && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowRetiro(false)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+              <h2 className="text-lg font-bold text-gray-900">Registrar retiro</h2>
+              <button onClick={() => setShowRetiro(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-600">
+                El trabajador quedará marcado como <strong>INACTIVO</strong> a partir de la fecha indicada.
+              </p>
+              <div>
+                <label className="label">Fecha de retiro *</label>
+                <input className="input" type="date" value={fechaRetiro} onChange={e => setFechaRetiro(e.target.value)} />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+              <button className="btn-secondary" onClick={() => setShowRetiro(false)}>Cancelar</button>
+              <button className="bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors" onClick={handleRetiro} disabled={savingEstado}>
+                {savingEstado ? 'Guardando…' : 'Confirmar retiro'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Nuevo ingreso ──────────────────────────────────────────── */}
+      {showNuevoIngreso && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowNuevoIngreso(false)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+              <h2 className="text-lg font-bold text-gray-900">Registrar nuevo ingreso</h2>
+              <button onClick={() => setShowNuevoIngreso(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-600">
+                Se limpiará la fecha de retiro y el trabajador quedará <strong className="text-green-700">ACTIVO</strong> desde la nueva fecha de ingreso.
+              </p>
+              <div>
+                <label className="label">Nueva fecha de ingreso *</label>
+                <input className="input" type="date" value={fechaNuevoIngreso} onChange={e => setFechaNuevoIngreso(e.target.value)} />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+              <button className="btn-secondary" onClick={() => setShowNuevoIngreso(false)}>Cancelar</button>
+              <button className="btn-primary" onClick={handleNuevoIngreso} disabled={savingEstado}>
+                {savingEstado ? 'Guardando…' : 'Confirmar ingreso'}
               </button>
             </div>
           </div>

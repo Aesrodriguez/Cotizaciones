@@ -80,6 +80,19 @@ def _resumen_from_data(asigs: list, pagos: list) -> dict:
     }
 
 
+def _parse_familiares(t: Trabajador):
+    """Deserializa familiares_json → lista de FamiliarItem."""
+    from app.schemas.trabajador import FamiliarItem
+    raw = getattr(t, 'familiares_json', None)
+    if not raw:
+        return None
+    try:
+        items = json.loads(raw)
+        return [FamiliarItem(**f) for f in items] if isinstance(items, list) else None
+    except Exception:
+        return None
+
+
 def _trab_out(t: Trabajador, resumen: dict) -> TrabajadorOut:
     return TrabajadorOut(
         id=t.id,
@@ -105,6 +118,10 @@ def _trab_out(t: Trabajador, resumen: dict) -> TrabajadorOut:
         banco=t.banco,
         tipo_cuenta=t.tipo_cuenta,
         numero_cuenta=t.numero_cuenta,
+        contacto_emergencia_nombre=getattr(t, 'contacto_emergencia_nombre', None),
+        contacto_emergencia_telefono=getattr(t, 'contacto_emergencia_telefono', None),
+        contacto_emergencia_relacion=getattr(t, 'contacto_emergencia_relacion', None),
+        familiares=_parse_familiares(t),
         total_acordado=Decimal(str(resumen["total_acordado"])),
         total_pagado=Decimal(str(resumen["total_pagado"])),
         saldo=Decimal(str(resumen["saldo"])),
@@ -277,6 +294,10 @@ def create_trabajador(
         banco=body.banco,
         tipo_cuenta=body.tipo_cuenta,
         numero_cuenta=body.numero_cuenta,
+        contacto_emergencia_nombre=body.contacto_emergencia_nombre,
+        contacto_emergencia_telefono=body.contacto_emergencia_telefono,
+        contacto_emergencia_relacion=body.contacto_emergencia_relacion,
+        familiares_json=json.dumps([f.model_dump() for f in body.familiares], ensure_ascii=False) if body.familiares else None,
     )
     db.add(t)
     db.commit()
@@ -339,7 +360,12 @@ def update_trabajador(
     t = db.query(Trabajador).filter(Trabajador.id == trabajador_id, Trabajador.deleted_at.is_(None)).first()
     if not t:
         raise HTTPException(status_code=404, detail="Trabajador no encontrado")
-    for field, value in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    # familiares se almacena como JSON serializado
+    if 'familiares' in data:
+        familiares = data.pop('familiares')
+        t.familiares_json = json.dumps([f for f in familiares], ensure_ascii=False) if familiares else None
+    for field, value in data.items():
         setattr(t, field, value)
     db.commit()
     db.refresh(t)
