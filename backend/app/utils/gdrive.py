@@ -1,6 +1,5 @@
-"""Subida de archivos a Google Drive usando cuenta de servicio."""
+"""Subida de archivos a Google Drive usando OAuth2 con cuenta personal."""
 import io
-import json
 import logging
 from typing import Optional
 
@@ -9,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 def upload_to_drive(content: bytes, filename: str, mime_type: str) -> Optional[str]:
     """
-    Sube `content` a la carpeta de Google Drive configurada.
+    Sube `content` a la carpeta de Google Drive configurada usando OAuth2.
     Retorna el webViewLink, o None si Drive no está configurado o falla.
     Nunca lanza excepción — el fallo de Drive no bloquea el guardado.
     """
@@ -17,25 +16,34 @@ def upload_to_drive(content: bytes, filename: str, mime_type: str) -> Optional[s
         from app.config.settings import get_settings
         settings = get_settings()
 
-        sa_json = settings.GOOGLE_SERVICE_ACCOUNT_JSON.strip()
-        folder_id = settings.GDRIVE_FOLDER_ID.strip()
+        client_id     = settings.GOOGLE_CLIENT_ID.strip()
+        client_secret = settings.GOOGLE_CLIENT_SECRET.strip()
+        refresh_token = settings.GOOGLE_REFRESH_TOKEN.strip()
+        folder_id     = settings.GDRIVE_FOLDER_ID.strip()
 
-        if not sa_json:
-            logger.warning('Google Drive no configurado — falta GOOGLE_SERVICE_ACCOUNT_JSON')
-            return None
-        if not folder_id:
-            logger.warning('Google Drive no configurado — falta GDRIVE_FOLDER_ID')
+        missing = [k for k, v in {
+            'GOOGLE_CLIENT_ID': client_id,
+            'GOOGLE_CLIENT_SECRET': client_secret,
+            'GOOGLE_REFRESH_TOKEN': refresh_token,
+            'GDRIVE_FOLDER_ID': folder_id,
+        }.items() if not v]
+        if missing:
+            logger.warning('Google Drive no configurado — faltan: %s', ', '.join(missing))
             return None
 
-        from google.oauth2 import service_account
+        from google.oauth2.credentials import Credentials
+        from google.auth.transport.requests import Request
         from googleapiclient.discovery import build
         from googleapiclient.http import MediaIoBaseUpload
 
-        sa_info = json.loads(sa_json)
-        creds = service_account.Credentials.from_service_account_info(
-            sa_info,
-            scopes=['https://www.googleapis.com/auth/drive.file'],
+        creds = Credentials(
+            token=None,
+            refresh_token=refresh_token,
+            client_id=client_id,
+            client_secret=client_secret,
+            token_uri='https://oauth2.googleapis.com/token',
         )
+        creds.refresh(Request())
 
         service = build('drive', 'v3', credentials=creds, cache_discovery=False)
 

@@ -81,7 +81,7 @@ def gdrive_folder_url():
         from app.config.settings import get_settings
         settings = get_settings()
         folder_id = settings.GDRIVE_FOLDER_ID.strip()
-        configured = bool(settings.GOOGLE_SERVICE_ACCOUNT_JSON.strip())
+        configured = bool(settings.GOOGLE_REFRESH_TOKEN.strip())
         if folder_id and configured:
             return {"url": f"https://drive.google.com/drive/folders/{folder_id}"}
     except Exception:
