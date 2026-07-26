@@ -79,8 +79,10 @@ def gdrive_folder_url():
     """Retorna la URL de la carpeta de Drive donde se guardan las planillas."""
     try:
         from app.config.settings import get_settings
-        folder_id = get_settings().GDRIVE_FOLDER_ID.strip()
-        if folder_id:
+        settings = get_settings()
+        folder_id = settings.GDRIVE_FOLDER_ID.strip()
+        configured = bool(settings.GOOGLE_SERVICE_ACCOUNT_JSON.strip())
+        if folder_id and configured:
             return {"url": f"https://drive.google.com/drive/folders/{folder_id}"}
     except Exception:
         pass

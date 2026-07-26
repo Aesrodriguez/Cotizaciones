@@ -30,10 +30,8 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: List[str] = Field(default=["http://localhost:5173"])
 
-    # Google Drive (OAuth2 con cuenta personal — no service account)
-    GOOGLE_CLIENT_ID: str = Field(default="")
-    GOOGLE_CLIENT_SECRET: str = Field(default="")
-    GOOGLE_REFRESH_TOKEN: str = Field(default="")
+    # Google Drive — cuenta de servicio (JSON completo como string)
+    GOOGLE_SERVICE_ACCOUNT_JSON: str = Field(default="")
     GDRIVE_FOLDER_ID: str = Field(default="")
 
     # Email — SendGrid API (HTTPS, sin bloqueo de Render)
