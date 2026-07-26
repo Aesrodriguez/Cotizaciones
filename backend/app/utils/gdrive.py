@@ -21,7 +21,14 @@ def upload_to_drive(content: bytes, filename: str, mime_type: str) -> Optional[s
         refresh_token = settings.GOOGLE_REFRESH_TOKEN.strip()
         folder_id = settings.GDRIVE_FOLDER_ID.strip()
 
-        if not all([client_id, client_secret, refresh_token, folder_id]):
+        missing = [k for k, v in {
+            'GOOGLE_CLIENT_ID': client_id,
+            'GOOGLE_CLIENT_SECRET': client_secret,
+            'GOOGLE_REFRESH_TOKEN': refresh_token,
+            'GDRIVE_FOLDER_ID': folder_id,
+        }.items() if not v]
+        if missing:
+            logger.warning('Google Drive no configurado — faltan env vars: %s', ', '.join(missing))
             return None
 
         from google.oauth2.credentials import Credentials
