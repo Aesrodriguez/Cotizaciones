@@ -129,14 +129,17 @@ async def upload_extracto(
 
 @router.get("/")
 def list_extractos(
+    anio: int = Query(0, ge=0),
     db: Session = Depends(get_db_session),
     _: Usuario = Depends(get_authenticated_user),
 ):
-    rows = db.execute(text("""
+    where = f"WHERE periodo LIKE '{anio}%'" if anio else ""
+    rows = db.execute(text(f"""
         SELECT id, nombre_archivo, cuenta, periodo,
                saldo_inicial, saldo_final, total_creditos, total_debitos,
                num_movimientos, observaciones, created_at
         FROM extractos_bancarios
+        {where}
         ORDER BY periodo DESC, created_at DESC
     """)).fetchall()
 

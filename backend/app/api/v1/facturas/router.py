@@ -307,6 +307,7 @@ def list_facturas(
     search: str = Query(""),
     tiene_retencion: str = Query(""),
     tipo: str = Query(""),   # RECIBIDA | EMITIDA | "" (todas)
+    anio: int = Query(0, ge=0),
     db: Session = Depends(get_db_session),
     _: Usuario = Depends(get_authenticated_user),
 ):
@@ -326,6 +327,9 @@ def list_facturas(
         conds.append("tiene_retencion = TRUE")
     elif tiene_retencion == "false":
         conds.append("tiene_retencion = FALSE")
+    if anio:
+        conds.append("EXTRACT(YEAR FROM fecha_emision) = :anio")
+        params["anio"] = anio
 
     where = "WHERE " + " AND ".join(conds)
     total = db.execute(text(f"SELECT COUNT(*) FROM facturas_electronicas {where}"), params).scalar() or 0

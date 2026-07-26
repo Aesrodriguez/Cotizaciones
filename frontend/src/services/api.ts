@@ -406,7 +406,7 @@ export const extractosAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
   },
-  getAll: () => api.get<ExtractoBancario[]>('/extractos-bancarios/'),
+  getAll: (params?: object) => api.get<ExtractoBancario[]>('/extractos-bancarios/', { params }),
   getById: (id: string) => api.get<ExtractoBancario>(`/extractos-bancarios/${id}`),
   getMovimientos: (id: string, params?: object) =>
     api.get<{

@@ -382,6 +382,7 @@ export default function PlanillasPage() {
   type DriveFile = { id: string; name: string; web_url: string }
   type ImportLine = { name: string; status: 'pending' | 'ok' | 'skip' | 'error'; detail?: string }
   const [importModal, setImportModal] = useState<{ files: DriveFile[]; lines: ImportLine[]; running: boolean; done: boolean } | null>(null)
+  const [filtroAnio, setFiltroAnio] = useState(0)
 
   useEffect(() => {
     configuracionAPI.getDriveFolderUrl()
@@ -506,10 +507,13 @@ export default function PlanillasPage() {
     setOpenMonths(prev => { const s = new Set(prev); s.has(key) ? s.delete(key) : s.add(key); return s })
 
   // ── Agrupar planillas por año → mes ───────────────────────────────────────
+  const availableYears = [...new Set(planillas.map(p => parsePeriodo(p)?.year).filter(Boolean) as number[])].sort((a, b) => b - a)
+  const visiblePlanillas = filtroAnio ? planillas.filter(p => parsePeriodo(p)?.year === filtroAnio) : planillas
+
   const grouped = new Map<number, Map<number, Planilla[]>>()
   const ungrouped: Planilla[] = []
 
-  for (const p of planillas) {
+  for (const p of visiblePlanillas) {
     const parsed = parsePeriodo(p)
     if (!parsed) { ungrouped.push(p); continue }
     const { year, month } = parsed
@@ -520,7 +524,7 @@ export default function PlanillasPage() {
   }
 
   const sortedYears = [...grouped.keys()].sort((a, b) => b - a)
-  const totalValor = planillas.reduce((s, p) => s + p.valor_total, 0)
+  const totalValor = visiblePlanillas.reduce((s, p) => s + p.valor_total, 0)
 
   return (
     <>
@@ -532,10 +536,16 @@ export default function PlanillasPage() {
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Aportes en Línea · Seguridad social</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {planillas.length > 0 && (<>
+          {availableYears.length > 0 && (
+            <select value={filtroAnio} onChange={e => setFiltroAnio(Number(e.target.value))} className="input text-sm">
+              <option value={0}>Todos los años</option>
+              {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          )}
+          {visiblePlanillas.length > 0 && (<>
             <span className="text-xs px-3 py-1.5 rounded-lg font-mono"
               style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
-              {planillas.length} planilla{planillas.length !== 1 ? 's' : ''}
+              {visiblePlanillas.length} planilla{visiblePlanillas.length !== 1 ? 's' : ''}
             </span>
             <span className="text-xs px-3 py-1.5 rounded-lg font-mono font-semibold"
               style={{ background: 'var(--lime-dim)', color: 'var(--lime-text)', border: '1px solid var(--lime-border)' }}>

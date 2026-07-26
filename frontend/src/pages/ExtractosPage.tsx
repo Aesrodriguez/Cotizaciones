@@ -707,13 +707,14 @@ export default function ExtractosPage() {
   const [detalleResumen, setDetalleResumen] = useState<DetalleResumen | null>(null)
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState<ExtractoBancario | null>(null)
+  const [filtroAnio, setFiltroAnio] = useState(0)
 
   const load = useCallback(async () => {
     setLoading(true)
-    try { const r = await extractosAPI.getAll(); setExtractos(r.data) }
+    try { const r = await extractosAPI.getAll(filtroAnio ? { anio: filtroAnio } : undefined); setExtractos(r.data) }
     catch { setExtractos([]) }
     finally { setLoading(false) }
-  }, [])
+  }, [filtroAnio])
 
   const loadDetalleResumen = useCallback(async () => {
     try { const r = await extractosAPI.getDetallesResumen(); setDetalleResumen(r.data) }
@@ -741,11 +742,17 @@ export default function ExtractosPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">
-      <div>
-        <h1 className="text-xl font-bold" style={{ color: 'var(--text)' }}>Extractos Bancarios</h1>
-        <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-          Movimientos mensuales + detalle de pagos/transferencias
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--text)' }}>Extractos Bancarios</h1>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+            Movimientos mensuales + detalle de pagos/transferencias
+          </p>
+        </div>
+        <select value={filtroAnio} onChange={e => setFiltroAnio(Number(e.target.value))} className="input text-sm">
+          <option value={0}>Todos los años</option>
+          {Array.from({ length: new Date().getFullYear() - 2021 }, (_, i) => new Date().getFullYear() - i).map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
       </div>
 
       {/* Dos zonas de carga en paralelo */}

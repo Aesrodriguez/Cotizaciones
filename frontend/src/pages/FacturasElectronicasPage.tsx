@@ -626,6 +626,7 @@ export default function FacturasElectronicasPage() {
   const [filtroEstado, setFiltroEstado] = useState('')
   const [filtroRet, setFiltroRet] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('RECIBIDA')
+  const [filtroAnio, setFiltroAnio] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const debouncedSearch = useDebounce(search, 350)
@@ -634,16 +635,16 @@ export default function FacturasElectronicasPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const r = await facturasAPI.getAll({ page, limit, search: debouncedSearch, estado: filtroEstado, tiene_retencion: filtroRet, tipo: filtroTipo })
+      const r = await facturasAPI.getAll({ page, limit, search: debouncedSearch, estado: filtroEstado, tiene_retencion: filtroRet, tipo: filtroTipo, anio: filtroAnio || undefined })
       setFacturas(r.data.data)
       setTotal(r.data.total)
       setResumen(r.data.resumen)
     } catch { setFacturas([]) }
     finally { setLoading(false) }
-  }, [page, debouncedSearch, filtroEstado, filtroRet, filtroTipo])
+  }, [page, debouncedSearch, filtroEstado, filtroRet, filtroTipo, filtroAnio])
 
   useEffect(() => { load() }, [load])
-  useEffect(() => { setPage(1) }, [debouncedSearch, filtroEstado, filtroRet, filtroTipo])
+  useEffect(() => { setPage(1) }, [debouncedSearch, filtroEstado, filtroRet, filtroTipo, filtroAnio])
 
   const handleDelete = async (f: FacturaElectronica) => {
     if (!confirm(`¿Eliminar factura ${f.numero}?`)) return
@@ -700,6 +701,10 @@ export default function FacturasElectronicasPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="input text-sm w-64"
         />
+        <select value={filtroAnio} onChange={(e) => setFiltroAnio(Number(e.target.value))} className="input text-sm">
+          <option value={0}>Todos los años</option>
+          {Array.from({ length: new Date().getFullYear() - 2021 }, (_, i) => new Date().getFullYear() - i).map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
         <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} className="input text-sm w-40">
           <option value="">Todos los estados</option>
           {ESTADOS.map((e) => <option key={e}>{e}</option>)}
@@ -709,9 +714,9 @@ export default function FacturasElectronicasPage() {
           <option value="true">Con retención</option>
           <option value="false">Sin retención</option>
         </select>
-        {(search || filtroEstado || filtroRet) && (
+        {(search || filtroEstado || filtroRet || filtroAnio) && (
           <button
-            onClick={() => { setSearch(''); setFiltroEstado(''); setFiltroRet('') }}
+            onClick={() => { setSearch(''); setFiltroEstado(''); setFiltroRet(''); setFiltroAnio(0) }}
             className="text-xs px-3 py-1.5 rounded-lg"
             style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
           >

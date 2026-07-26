@@ -59,6 +59,7 @@ def list_pagos(
     obra_id:     str = Query(""),
     fecha_desde: str = Query(""),
     fecha_hasta: str = Query(""),
+    anio:        int = Query(0, ge=0),
     page:        int = Query(1, ge=1),
     limit:       int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
@@ -84,6 +85,9 @@ def list_pagos(
     if fecha_hasta:
         where += " AND p.fecha <= :fh"
         params["fh"] = fecha_hasta
+    if anio and not fecha_desde and not fecha_hasta:
+        where += " AND EXTRACT(YEAR FROM p.fecha) = :anio"
+        params["anio"] = anio
 
     total = db.execute(text(f"SELECT COUNT(*) FROM pagos p {where}"), params).scalar()
 

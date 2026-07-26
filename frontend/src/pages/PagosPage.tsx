@@ -530,6 +530,7 @@ export default function PagosPage() {
   const [filtroObra, setFiltroObra] = useState('')
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
+  const [filtroAnio, setFiltroAnio] = useState(0)
 
   const [showForm, setShowForm] = useState(false)
   const [editPago, setEditPago] = useState<Pago | null>(null)
@@ -543,6 +544,7 @@ export default function PagosPage() {
         pagosAPI.getAll({
           search, tipo: filtroTipo, metodo_pago: filtroMetodo,
           obra_id: filtroObra, fecha_desde: fechaDesde, fecha_hasta: fechaHasta,
+          anio: filtroAnio || undefined,
           page, limit,
         }),
         obrasAPI.getAll(),
@@ -554,10 +556,10 @@ export default function PagosPage() {
       setObras(oRes.data.data)
     } catch { setPagos([]) }
     finally { setLoading(false) }
-  }, [search, filtroTipo, filtroMetodo, filtroObra, fechaDesde, fechaHasta, page])
+  }, [search, filtroTipo, filtroMetodo, filtroObra, fechaDesde, fechaHasta, filtroAnio, page])
 
   useEffect(() => { load() }, [load])
-  useEffect(() => { setPage(1) }, [search, filtroTipo, filtroMetodo, filtroObra, fechaDesde, fechaHasta])
+  useEffect(() => { setPage(1) }, [search, filtroTipo, filtroMetodo, filtroObra, fechaDesde, fechaHasta, filtroAnio])
 
   const deletePago = async (p: Pago) => {
     if (!confirm(`¿Eliminar pago de ${fmt(p.monto)} a ${p.destinatario}?`)) return
@@ -566,7 +568,7 @@ export default function PagosPage() {
     load()
   }
 
-  const hasFilters = search || filtroTipo || filtroMetodo || filtroObra || fechaDesde || fechaHasta
+  const hasFilters = search || filtroTipo || filtroMetodo || filtroObra || fechaDesde || fechaHasta || filtroAnio
   const totalPages = Math.ceil(total / limit) || 1
 
   return (
@@ -635,6 +637,10 @@ export default function PagosPage() {
           <div className="flex flex-wrap gap-2 items-center">
             <input type="search" placeholder="Buscar destinatario, concepto…" value={search}
               onChange={e => setSearch(e.target.value)} className="input text-sm w-52" />
+            <select value={filtroAnio} onChange={e => setFiltroAnio(Number(e.target.value))} className="input text-sm">
+              <option value={0}>Todos los años</option>
+              {Array.from({ length: new Date().getFullYear() - 2021 }, (_, i) => new Date().getFullYear() - i).map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
             <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} className="input text-sm">
               <option value="">Todos los tipos</option>
               {TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -650,7 +656,7 @@ export default function PagosPage() {
             {hasFilters && (
               <button onClick={() => {
                 setSearch(''); setFiltroTipo(''); setFiltroMetodo('')
-                setFiltroObra(''); setFechaDesde(''); setFechaHasta('')
+                setFiltroObra(''); setFechaDesde(''); setFechaHasta(''); setFiltroAnio(0)
               }} className="text-xs px-3 py-1.5 rounded-lg"
                 style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
                 Limpiar
