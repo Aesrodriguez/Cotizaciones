@@ -379,6 +379,7 @@ export default function PlanillasPage() {
   const initializedRef = useRef(false)
   const [driveFolderUrl, setDriveFolderUrl] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
+  const [importing, setImporting] = useState(false)
 
   useEffect(() => {
     configuracionAPI.getDriveFolderUrl()
@@ -403,6 +404,31 @@ export default function PlanillasPage() {
       toast.error('Error al sincronizar con Drive')
     } finally {
       setSyncing(false)
+    }
+  }
+
+  const handleImportFromDrive = async () => {
+    if (!confirm('¿Importar todas las planillas de Drive que no estén en el sistema? Esto puede tomar 1-2 minutos.')) return
+    setImporting(true)
+    const tid = toast.loading('Importando planillas desde Drive…')
+    try {
+      const r = await planillasAPI.importFromDrive()
+      const { importadas, omitidas, fallidas } = r.data
+      toast.dismiss(tid)
+      if (importadas > 0) {
+        toast.success(`${importadas} planilla${importadas !== 1 ? 's' : ''} importada${importadas !== 1 ? 's' : ''} · ${omitidas} ya existían`, { duration: 6000 })
+        reload(false)
+      } else {
+        toast(`Todas las planillas de Drive ya estaban en el sistema (${omitidas})`, { icon: 'ℹ️', duration: 5000 })
+      }
+      if (fallidas.length > 0) {
+        toast(`${fallidas.length} archivo${fallidas.length !== 1 ? 's' : ''} no se pudo${fallidas.length !== 1 ? 'n' : ''} importar`, { icon: '⚠️', duration: 6000 })
+      }
+    } catch {
+      toast.dismiss(tid)
+      toast.error('Error al importar desde Drive')
+    } finally {
+      setImporting(false)
     }
   }
 
@@ -487,8 +513,24 @@ export default function PlanillasPage() {
           </>)}
           {driveFolderUrl && (<>
             <button
+              onClick={handleImportFromDrive}
+              disabled={importing || syncing}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
+              style={{ background: 'rgba(96,165,250,0.12)', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.25)' }}
+              title="Descargar e importar planillas de Drive que no estén en el sistema"
+            >
+              {importing ? (
+                <div className="w-3.5 h-3.5 rounded-full border-2 animate-spin" style={{ borderColor: '#60a5fa', borderTopColor: 'transparent' }} />
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M12 3v13.5m0 0-4.5-4.5m4.5 4.5 4.5-4.5" />
+                </svg>
+              )}
+              Importar desde Drive
+            </button>
+            <button
               onClick={handleSyncDrive}
-              disabled={syncing}
+              disabled={syncing || importing}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
               style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
               title="Buscar archivos en Drive y vincular planillas sin link"

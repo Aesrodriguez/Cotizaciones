@@ -834,6 +834,7 @@ export const planillasAPI = {
   delete: (id: number) => api.delete(`/planillas/${id}`),
   syncTrabajadores: () => api.post<{ trabajadores_creados: number; total_empleados: number; ya_existian: number }>('/planillas/sync-trabajadores'),
   syncDrive: () => api.post<{ archivos_en_drive: number; planillas_sin_link: number; vinculadas: number; sin_match: string[] }>('/planillas/sync-drive'),
+  importFromDrive: () => api.post<{ archivos_en_drive: number; importadas: number; omitidas: number; fallidas: { nombre: string; error: string }[]; detalle_importadas: string[] }>('/planillas/import-from-drive', {}, { timeout: 180000 }),
 }
 
 // ─── ACPs (Actas de Corte de Pago) ────────────────────────────────────────────

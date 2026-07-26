@@ -60,7 +60,7 @@ def list_drive_files() -> Optional[list]:
         while True:
             kwargs = dict(
                 q=f"'{folder_id}' in parents and trashed=false",
-                fields='nextPageToken,files(id,name,webViewLink)',
+                fields='nextPageToken,files(id,name,webViewLink,mimeType)',
                 pageSize=1000,
             )
             if page_token:
@@ -73,6 +73,26 @@ def list_drive_files() -> Optional[list]:
         return all_files
     except Exception as exc:
         logger.warning('Google Drive list failed: %s', exc)
+        return None
+
+
+def download_from_drive(file_id: str) -> Optional[bytes]:
+    """Descarga el contenido de un archivo de Drive por su ID."""
+    service, _ = _build_service()
+    if not service:
+        return None
+    try:
+        import io as _io
+        from googleapiclient.http import MediaIoBaseDownload
+        request = service.files().get_media(fileId=file_id)
+        buf = _io.BytesIO()
+        downloader = MediaIoBaseDownload(buf, request)
+        done = False
+        while not done:
+            _, done = downloader.next_chunk()
+        return buf.getvalue()
+    except Exception as exc:
+        logger.warning('Google Drive download failed (id=%s): %s', file_id, exc)
         return None
 
 
