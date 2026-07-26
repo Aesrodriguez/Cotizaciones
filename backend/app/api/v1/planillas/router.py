@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
+from pydantic import BaseModel
 from sqlalchemy import text
 from app.api.deps import get_db_session as get_db
 from app.utils.planilla_parser import parse_planilla_pdf, parse_planilla_txt
@@ -302,176 +303,200 @@ def sync_drive(db=Depends(get_db)):
 
 # ── Importar planillas desde Google Drive ─────────────────────────────────────
 
-@router.post('/import-from-drive', status_code=200)
-def import_from_drive(db=Depends(get_db)):
+@router.get('/import-from-drive/preview', status_code=200)
+def import_preview(db=Depends(get_db)):
     """
-    Descarga e importa desde Drive los archivos que aún no existen en la BD.
-    Compara por numero_planilla para evitar duplicados.
+    Lista qué archivos de Drive necesitan importarse (sin descargarlos).
+    Responde en <2 segundos para mostrar una vista previa al usuario.
     """
     drive_files = list_drive_files()
     if drive_files is None:
         raise HTTPException(503, 'Google Drive no configurado o no disponible')
 
-    # Números de planilla ya en la BD
     existing = {
         row[0]
         for row in db.execute(text("SELECT numero_planilla FROM planillas")).fetchall()
     }
+    existing_urls = {
+        row[0]
+        for row in db.execute(
+            text("SELECT archivo_url FROM planillas WHERE archivo_url IS NOT NULL")
+        ).fetchall()
+    }
 
-    importadas = []
-    omitidas = []   # ya existían
-    fallidas = []   # error de parse o descarga
+    to_import = []
+    already_linked = 0
 
-    for drive_file in drive_files:
-        name: str = drive_file['name']
-        file_id: str = drive_file['id']
-        web_url: str = drive_file.get('webViewLink', '')
-
-        is_pdf = name.lower().endswith('.pdf')
-        is_txt = name.lower().endswith('.txt')
-        if not (is_pdf or is_txt):
+    for f in drive_files:
+        name: str = f['name']
+        if not (name.lower().endswith('.pdf') or name.lower().endswith('.txt')):
             continue
-
-        # Intentar extraer numero_planilla del nombre: {periodo}_{numero}.ext
-        parts = name.rsplit('.', 1)[0].split('_', 1)
+        web_url = f.get('webViewLink', '')
+        # Ya vinculada por URL
+        if web_url and web_url in existing_urls:
+            already_linked += 1
+            continue
+        # Chequeo rápido por nombre
+        base = name.rsplit('.', 1)[0]
+        parts = base.split('_', 1)
         quick_num = parts[1] if len(parts) == 2 else None
-
         if quick_num and quick_num in existing:
-            # Asegurar que tenga archivo_url
-            db.execute(
-                text("UPDATE planillas SET archivo_url = :url WHERE numero_planilla = :n AND (archivo_url IS NULL OR archivo_url = '')"),
-                {'url': web_url, 'n': quick_num},
-            )
-            omitidas.append(name)
+            already_linked += 1
             continue
-
-        # Descargar y parsear
-        content = download_from_drive(file_id)
-        if not content:
-            fallidas.append({'nombre': name, 'error': 'No se pudo descargar'})
-            continue
-
-        try:
-            if is_pdf:
-                parsed = parse_planilla_pdf(content)
-            else:
-                txt = None
-                for enc in ('utf-8', 'latin-1', 'cp1252'):
-                    try:
-                        txt = content.decode(enc); break
-                    except UnicodeDecodeError:
-                        continue
-                if txt is None:
-                    fallidas.append({'nombre': name, 'error': 'Encoding no reconocido'})
-                    continue
-                parsed = parse_planilla_txt(txt)
-        except Exception as exc:
-            fallidas.append({'nombre': name, 'error': f'Parse error: {exc}'})
-            continue
-
-        if not parsed.get('numero_planilla'):
-            fallidas.append({'nombre': name, 'error': 'No se identificó número de planilla'})
-            continue
-
-        np_ = parsed['numero_planilla']
-        if np_ in existing:
-            db.execute(
-                text("UPDATE planillas SET archivo_url = :url WHERE numero_planilla = :n AND (archivo_url IS NULL OR archivo_url = '')"),
-                {'url': web_url, 'n': np_},
-            )
-            omitidas.append(name)
-            existing.add(np_)
-            continue
-
-        # Insertar planilla
-        row = db.execute(text("""
-            INSERT INTO planillas
-                (numero_planilla, nit, razon_social, periodo_pension, periodo_salud,
-                 tipo, fecha_limite, fecha_pago, banco, dias_mora, valor_total,
-                 total_afiliados, exonerado_sena_icbf, archivo_nombre, archivo_url)
-            VALUES
-                (:np, :nit, :rs, :pp, :ps, :tipo, :fl, :fp, :banco, :dm, :vt,
-                 :ta, :ex, :fn, :fu)
-            RETURNING id
-        """), {
-            'np': np_,
-            'nit': parsed.get('nit'),
-            'rs': parsed.get('razon_social'),
-            'pp': parsed.get('periodo_pension'),
-            'ps': parsed.get('periodo_salud'),
-            'tipo': parsed.get('tipo'),
-            'fl': parsed.get('fecha_limite'),
-            'fp': parsed.get('fecha_pago'),
-            'banco': parsed.get('banco'),
-            'dm': parsed.get('dias_mora', 0),
-            'vt': parsed.get('valor_total', 0),
-            'ta': parsed.get('total_afiliados', 0),
-            'ex': parsed.get('exonerado_sena_icbf', False),
-            'fn': name,
-            'fu': web_url,
-        }).fetchone()
-        planilla_id = row[0]
-
-        for emp in parsed.get('empleados', []):
-            db.execute(text("""
-                INSERT INTO planilla_empleados
-                    (planilla_id, numero, tipo_doc, cedula, nombre,
-                     cod_pension, dias_pension, ibc_pension, aporte_pension,
-                     cod_salud, dias_salud, ibc_salud, aporte_salud,
-                     cod_ccf, dias_ccf, ibc_ccf, aporte_ccf,
-                     cod_riesgo, dias_riesgo, ibc_riesgo, tarifa_riesgo, aporte_riesgo,
-                     dias_parafiscales, ibc_parafiscales, aporte_parafiscales,
-                     exonerado, total_aportes)
-                VALUES
-                    (:pid, :no, :td, :cc, :nm,
-                     :cp, :dp, :ip, :ap, :cs, :ds, :is_, :as_,
-                     :cc2, :dc, :ic, :ac, :cr, :dr, :ir, :tr, :ar,
-                     :dpar, :ipar, :apar, :ex, :tot)
-            """), {
-                'pid': planilla_id, 'no': emp.get('numero', 0),
-                'td': emp.get('tipo_doc', 'CC'), 'cc': emp.get('cedula'), 'nm': emp.get('nombre'),
-                'cp': emp.get('cod_pension'), 'dp': emp.get('dias_pension', 30),
-                'ip': emp.get('ibc_pension', 0), 'ap': emp.get('aporte_pension', 0),
-                'cs': emp.get('cod_salud'), 'ds': emp.get('dias_salud', 30),
-                'is_': emp.get('ibc_salud', 0), 'as_': emp.get('aporte_salud', 0),
-                'cc2': emp.get('cod_ccf'), 'dc': emp.get('dias_ccf', 30),
-                'ic': emp.get('ibc_ccf', 0), 'ac': emp.get('aporte_ccf', 0),
-                'cr': emp.get('cod_riesgo'), 'dr': emp.get('dias_riesgo', 30),
-                'ir': emp.get('ibc_riesgo', 0), 'tr': emp.get('tarifa_riesgo', 0),
-                'ar': emp.get('aporte_riesgo', 0), 'dpar': emp.get('dias_parafiscales', 30),
-                'ipar': emp.get('ibc_parafiscales', 0), 'apar': emp.get('aporte_parafiscales', 0),
-                'ex': emp.get('exonerado', False), 'tot': emp.get('total_aportes', 0),
-            })
-
-        for ent in parsed.get('entidades', []):
-            db.execute(text("""
-                INSERT INTO planilla_entidades
-                    (planilla_id, categoria, entidad, codigo, nit_entidad, dv,
-                     afiliados, valor_liquidado, intereses_mora, saldos_incapacidades,
-                     valor_a_pagar, es_subtotal)
-                VALUES
-                    (:pid, :cat, :ent, :cod, :nit, :dv, :afil, :vl, :im, :si, :vap, :sub)
-            """), {
-                'pid': planilla_id, 'cat': ent.get('categoria'), 'ent': ent.get('entidad'),
-                'cod': ent.get('codigo'), 'nit': ent.get('nit_entidad'), 'dv': ent.get('dv'),
-                'afil': ent.get('afiliados', 0), 'vl': ent.get('valor_liquidado', 0),
-                'im': ent.get('intereses_mora', 0), 'si': ent.get('saldos_incapacidades', 0),
-                'vap': ent.get('valor_a_pagar', 0), 'sub': ent.get('es_subtotal', False),
-            })
-
-        _sync_trabajadores(db, parsed.get('empleados', []))
-        existing.add(np_)
-        importadas.append(name)
-
-    db.commit()
+        to_import.append({'id': f['id'], 'name': name, 'web_url': web_url})
 
     return {
         'archivos_en_drive': len(drive_files),
-        'importadas': len(importadas),
-        'omitidas': len(omitidas),
-        'fallidas': fallidas,
-        'detalle_importadas': importadas,
+        'to_import': to_import,
+        'total_to_import': len(to_import),
+        'already_in_db': already_linked,
     }
+
+
+class SingleImportIn(BaseModel):
+    file_id: str
+    filename: str
+    web_url: str
+
+
+class SingleImportOut(BaseModel):
+    ok: bool
+    numero_planilla: str | None = None
+    trabajadores_creados: int = 0
+    error: str | None = None
+
+
+@router.post('/import-from-drive/single', response_model=SingleImportOut)
+def import_single(body: SingleImportIn, db=Depends(get_db)):
+    """
+    Descarga e importa UN archivo de Drive. El frontend llama esto por cada
+    archivo del preview, pudiendo mostrar progreso en tiempo real.
+    """
+    name = body.filename
+    is_pdf = name.lower().endswith('.pdf')
+    is_txt = name.lower().endswith('.txt')
+    if not (is_pdf or is_txt):
+        return SingleImportOut(ok=False, error='Formato no soportado')
+
+    # Verificar duplicado
+    base = name.rsplit('.', 1)[0]
+    parts = base.split('_', 1)
+    quick_num = parts[1] if len(parts) == 2 else None
+    if quick_num:
+        exists = db.execute(
+            text("SELECT id FROM planillas WHERE numero_planilla = :n"),
+            {'n': quick_num}
+        ).fetchone()
+        if exists:
+            db.execute(
+                text("UPDATE planillas SET archivo_url = :url WHERE numero_planilla = :n AND (archivo_url IS NULL OR archivo_url = '')"),
+                {'url': body.web_url, 'n': quick_num},
+            )
+            db.commit()
+            return SingleImportOut(ok=True, numero_planilla=quick_num, error='ya_existia')
+
+    content = download_from_drive(body.file_id)
+    if not content:
+        return SingleImportOut(ok=False, error='No se pudo descargar de Drive')
+
+    try:
+        if is_pdf:
+            parsed = parse_planilla_pdf(content)
+        else:
+            txt = None
+            for enc in ('utf-8', 'latin-1', 'cp1252'):
+                try:
+                    txt = content.decode(enc); break
+                except UnicodeDecodeError:
+                    continue
+            if txt is None:
+                return SingleImportOut(ok=False, error='Encoding no reconocido')
+            parsed = parse_planilla_txt(txt)
+    except Exception as exc:
+        return SingleImportOut(ok=False, error=f'Error de parseo: {exc}')
+
+    np_ = parsed.get('numero_planilla')
+    if not np_:
+        return SingleImportOut(ok=False, error='No se identificó número de planilla')
+
+    exists = db.execute(
+        text("SELECT id FROM planillas WHERE numero_planilla = :n"), {'n': np_}
+    ).fetchone()
+    if exists:
+        db.execute(
+            text("UPDATE planillas SET archivo_url = :url WHERE numero_planilla = :n AND (archivo_url IS NULL OR archivo_url = '')"),
+            {'url': body.web_url, 'n': np_},
+        )
+        db.commit()
+        return SingleImportOut(ok=True, numero_planilla=np_, error='ya_existia')
+
+    row = db.execute(text("""
+        INSERT INTO planillas
+            (numero_planilla, nit, razon_social, periodo_pension, periodo_salud,
+             tipo, fecha_limite, fecha_pago, banco, dias_mora, valor_total,
+             total_afiliados, exonerado_sena_icbf, archivo_nombre, archivo_url)
+        VALUES
+            (:np, :nit, :rs, :pp, :ps, :tipo, :fl, :fp, :banco, :dm, :vt,
+             :ta, :ex, :fn, :fu)
+        RETURNING id
+    """), {
+        'np': np_, 'nit': parsed.get('nit'), 'rs': parsed.get('razon_social'),
+        'pp': parsed.get('periodo_pension'), 'ps': parsed.get('periodo_salud'),
+        'tipo': parsed.get('tipo'), 'fl': parsed.get('fecha_limite'),
+        'fp': parsed.get('fecha_pago'), 'banco': parsed.get('banco'),
+        'dm': parsed.get('dias_mora', 0), 'vt': parsed.get('valor_total', 0),
+        'ta': parsed.get('total_afiliados', 0), 'ex': parsed.get('exonerado_sena_icbf', False),
+        'fn': name, 'fu': body.web_url,
+    }).fetchone()
+    planilla_id = row[0]
+
+    for emp in parsed.get('empleados', []):
+        db.execute(text("""
+            INSERT INTO planilla_empleados
+                (planilla_id, numero, tipo_doc, cedula, nombre,
+                 cod_pension, dias_pension, ibc_pension, aporte_pension,
+                 cod_salud, dias_salud, ibc_salud, aporte_salud,
+                 cod_ccf, dias_ccf, ibc_ccf, aporte_ccf,
+                 cod_riesgo, dias_riesgo, ibc_riesgo, tarifa_riesgo, aporte_riesgo,
+                 dias_parafiscales, ibc_parafiscales, aporte_parafiscales,
+                 exonerado, total_aportes)
+            VALUES
+                (:pid,:no,:td,:cc,:nm,:cp,:dp,:ip,:ap,:cs,:ds,:is_,:as_,
+                 :cc2,:dc,:ic,:ac,:cr,:dr,:ir,:tr,:ar,:dpar,:ipar,:apar,:ex,:tot)
+        """), {
+            'pid': planilla_id, 'no': emp.get('numero', 0),
+            'td': emp.get('tipo_doc', 'CC'), 'cc': emp.get('cedula'), 'nm': emp.get('nombre'),
+            'cp': emp.get('cod_pension'), 'dp': emp.get('dias_pension', 30),
+            'ip': emp.get('ibc_pension', 0), 'ap': emp.get('aporte_pension', 0),
+            'cs': emp.get('cod_salud'), 'ds': emp.get('dias_salud', 30),
+            'is_': emp.get('ibc_salud', 0), 'as_': emp.get('aporte_salud', 0),
+            'cc2': emp.get('cod_ccf'), 'dc': emp.get('dias_ccf', 30),
+            'ic': emp.get('ibc_ccf', 0), 'ac': emp.get('aporte_ccf', 0),
+            'cr': emp.get('cod_riesgo'), 'dr': emp.get('dias_riesgo', 30),
+            'ir': emp.get('ibc_riesgo', 0), 'tr': emp.get('tarifa_riesgo', 0),
+            'ar': emp.get('aporte_riesgo', 0), 'dpar': emp.get('dias_parafiscales', 30),
+            'ipar': emp.get('ibc_parafiscales', 0), 'apar': emp.get('aporte_parafiscales', 0),
+            'ex': emp.get('exonerado', False), 'tot': emp.get('total_aportes', 0),
+        })
+
+    for ent in parsed.get('entidades', []):
+        db.execute(text("""
+            INSERT INTO planilla_entidades
+                (planilla_id, categoria, entidad, codigo, nit_entidad, dv,
+                 afiliados, valor_liquidado, intereses_mora, saldos_incapacidades,
+                 valor_a_pagar, es_subtotal)
+            VALUES (:pid,:cat,:ent,:cod,:nit,:dv,:afil,:vl,:im,:si,:vap,:sub)
+        """), {
+            'pid': planilla_id, 'cat': ent.get('categoria'), 'ent': ent.get('entidad'),
+            'cod': ent.get('codigo'), 'nit': ent.get('nit_entidad'), 'dv': ent.get('dv'),
+            'afil': ent.get('afiliados', 0), 'vl': ent.get('valor_liquidado', 0),
+            'im': ent.get('intereses_mora', 0), 'si': ent.get('saldos_incapacidades', 0),
+            'vap': ent.get('valor_a_pagar', 0), 'sub': ent.get('es_subtotal', False),
+        })
+
+    creados = _sync_trabajadores(db, parsed.get('empleados', []))
+    db.commit()
+    return SingleImportOut(ok=True, numero_planilla=np_, trabajadores_creados=creados)
 
 
 # ── Sincronizar trabajadores desde planillas existentes ──────────────────────

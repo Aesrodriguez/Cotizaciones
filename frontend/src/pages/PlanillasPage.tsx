@@ -379,7 +379,9 @@ export default function PlanillasPage() {
   const initializedRef = useRef(false)
   const [driveFolderUrl, setDriveFolderUrl] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
-  const [importing, setImporting] = useState(false)
+  type DriveFile = { id: string; name: string; web_url: string }
+  type ImportLine = { name: string; status: 'pending' | 'ok' | 'skip' | 'error'; detail?: string }
+  const [importModal, setImportModal] = useState<{ files: DriveFile[]; lines: ImportLine[]; running: boolean; done: boolean } | null>(null)
 
   useEffect(() => {
     configuracionAPI.getDriveFolderUrl()
@@ -408,28 +410,56 @@ export default function PlanillasPage() {
   }
 
   const handleImportFromDrive = async () => {
-    if (!confirm('¿Importar todas las planillas de Drive que no estén en el sistema? Esto puede tomar 1-2 minutos.')) return
-    setImporting(true)
-    const tid = toast.loading('Importando planillas desde Drive…')
     try {
-      const r = await planillasAPI.importFromDrive()
-      const { importadas, omitidas, fallidas } = r.data
-      toast.dismiss(tid)
-      if (importadas > 0) {
-        toast.success(`${importadas} planilla${importadas !== 1 ? 's' : ''} importada${importadas !== 1 ? 's' : ''} · ${omitidas} ya existían`, { duration: 6000 })
-        reload(false)
-      } else {
-        toast(`Todas las planillas de Drive ya estaban en el sistema (${omitidas})`, { icon: 'ℹ️', duration: 5000 })
+      const r = await planillasAPI.importPreview()
+      const { to_import, already_in_db, archivos_en_drive } = r.data
+      if (to_import.length === 0) {
+        toast(`Todas las planillas de Drive ya están en el sistema (${already_in_db} de ${archivos_en_drive})`, { icon: 'ℹ️', duration: 5000 })
+        return
       }
-      if (fallidas.length > 0) {
-        toast(`${fallidas.length} archivo${fallidas.length !== 1 ? 's' : ''} no se pudo${fallidas.length !== 1 ? 'n' : ''} importar`, { icon: '⚠️', duration: 6000 })
-      }
+      setImportModal({
+        files: to_import,
+        lines: to_import.map(f => ({ name: f.name, status: 'pending' })),
+        running: false,
+        done: false,
+      })
     } catch {
-      toast.dismiss(tid)
-      toast.error('Error al importar desde Drive')
-    } finally {
-      setImporting(false)
+      toast.error('Error al conectar con Drive')
     }
+  }
+
+  const runImport = async () => {
+    if (!importModal) return
+    setImportModal(m => m ? { ...m, running: true } : m)
+    let importadas = 0
+    for (let i = 0; i < importModal.files.length; i++) {
+      const f = importModal.files[i]
+      setImportModal(m => m ? {
+        ...m,
+        lines: m.lines.map((l, idx) => idx === i ? { ...l, status: 'pending' } : l)
+      } : m)
+      try {
+        const r = await planillasAPI.importSingle({ file_id: f.id, filename: f.name, web_url: f.web_url })
+        const { ok, error } = r.data
+        const status = !ok ? 'error' : error === 'ya_existia' ? 'skip' : 'ok'
+        if (status === 'ok') importadas++
+        setImportModal(m => m ? {
+          ...m,
+          lines: m.lines.map((l, idx) => idx === i ? {
+            ...l,
+            status,
+            detail: !ok ? (r.data.error ?? 'Error') : error === 'ya_existia' ? 'Ya existía' : `#${r.data.numero_planilla}`,
+          } : l)
+        } : m)
+      } catch {
+        setImportModal(m => m ? {
+          ...m,
+          lines: m.lines.map((l, idx) => idx === i ? { ...l, status: 'error', detail: 'Error de red' } : l)
+        } : m)
+      }
+    }
+    setImportModal(m => m ? { ...m, running: false, done: true } : m)
+    if (importadas > 0) reload(false)
   }
 
   const reload = useCallback((resetOpen = false) => {
@@ -493,6 +523,7 @@ export default function PlanillasPage() {
   const totalValor = planillas.reduce((s, p) => s + p.valor_total, 0)
 
   return (
+    <>
     <div className="max-w-7xl mx-auto space-y-5">
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -514,23 +545,19 @@ export default function PlanillasPage() {
           {driveFolderUrl && (<>
             <button
               onClick={handleImportFromDrive}
-              disabled={importing || syncing}
+              disabled={syncing || !!importModal?.running}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
               style={{ background: 'rgba(96,165,250,0.12)', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.25)' }}
-              title="Descargar e importar planillas de Drive que no estén en el sistema"
+              title="Importar planillas de Drive que no estén en el sistema"
             >
-              {importing ? (
-                <div className="w-3.5 h-3.5 rounded-full border-2 animate-spin" style={{ borderColor: '#60a5fa', borderTopColor: 'transparent' }} />
-              ) : (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M12 3v13.5m0 0-4.5-4.5m4.5 4.5 4.5-4.5" />
-                </svg>
-              )}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M12 3v13.5m0 0-4.5-4.5m4.5 4.5 4.5-4.5" />
+              </svg>
               Importar desde Drive
             </button>
             <button
               onClick={handleSyncDrive}
-              disabled={syncing || importing}
+              disabled={syncing || !!importModal?.running}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
               style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
               title="Buscar archivos en Drive y vincular planillas sin link"
@@ -703,5 +730,105 @@ export default function PlanillasPage() {
         </div>
       )}
     </div>
+
+    {/* ── Modal importación desde Drive ───────────────────────────────────── */}
+    {importModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        style={{ background: 'rgba(0,0,0,0.6)' }}>
+        <div className="w-full max-w-md rounded-2xl p-5 space-y-4"
+          style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-bold" style={{ color: 'var(--text)' }}>
+              Importar desde Drive
+            </h2>
+            {!importModal.running && (
+              <button onClick={() => setImportModal(null)}
+                className="text-sm px-2 py-1 rounded" style={{ color: 'var(--text-muted)' }}>✕</button>
+            )}
+          </div>
+
+          {!importModal.running && !importModal.done && (
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+              Se encontraron <strong style={{ color: 'var(--text)' }}>{importModal.files.length}</strong> planillas en Drive que no están en el sistema. ¿Importar ahora?
+            </p>
+          )}
+
+          <div className="max-h-64 overflow-y-auto space-y-1 rounded-xl p-2"
+            style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            {importModal.lines.map((line, i) => {
+              const isActive = importModal.running && i === importModal.lines.findIndex(l => l.status === 'pending')
+              return (
+                <div key={i} className="flex items-center gap-2 px-2 py-1 rounded-lg text-xs"
+                  style={{ background: line.status !== 'pending' ? 'var(--card)' : undefined }}>
+                  <span className="w-4 flex-shrink-0 text-center">
+                    {isActive
+                      ? <span className="inline-block w-3 h-3 rounded-full border-2 animate-spin" style={{ borderColor: '#60a5fa', borderTopColor: 'transparent' }} />
+                      : line.status === 'ok' ? <span style={{ color: '#4ade80' }}>✓</span>
+                      : line.status === 'skip' ? <span style={{ color: 'var(--text-muted)' }}>—</span>
+                      : line.status === 'error' ? <span style={{ color: '#f87171' }}>✕</span>
+                      : <span style={{ color: 'var(--border)' }}>·</span>}
+                  </span>
+                  <span className="flex-1 truncate font-mono" style={{
+                    color: line.status === 'ok' ? '#4ade80' : line.status === 'error' ? '#f87171'
+                      : line.status === 'skip' ? 'var(--text-muted)' : 'var(--text)'
+                  }}>{line.name}</span>
+                  {line.detail && <span className="flex-shrink-0" style={{ color: 'var(--text-muted)' }}>{line.detail}</span>}
+                </div>
+              )
+            })}
+          </div>
+
+          {(importModal.running || importModal.done) && (() => {
+            const doneCount = importModal.lines.filter(l => l.status !== 'pending').length
+            const pct = Math.round(doneCount / importModal.lines.length * 100)
+            return (
+              <div>
+                <div className="flex justify-between text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
+                  <span>{doneCount} de {importModal.lines.length}</span><span>{pct}%</span>
+                </div>
+                <div className="h-1.5 rounded-full" style={{ background: 'var(--border)' }}>
+                  <div className="h-1.5 rounded-full transition-all" style={{ width: `${pct}%`, background: 'var(--lime)' }} />
+                </div>
+              </div>
+            )
+          })()}
+
+          {importModal.done && (() => {
+            const ok = importModal.lines.filter(l => l.status === 'ok').length
+            const err = importModal.lines.filter(l => l.status === 'error').length
+            return (
+              <p className="text-sm text-center font-medium" style={{ color: ok > 0 ? '#4ade80' : 'var(--text-muted)' }}>
+                {ok} importada{ok !== 1 ? 's' : ''}{err > 0 ? ` · ${err} con error` : ''}
+              </p>
+            )
+          })()}
+
+          <div className="flex gap-2 justify-end">
+            {!importModal.running && !importModal.done && (
+              <>
+                <button onClick={() => setImportModal(null)}
+                  className="text-sm px-4 py-2 rounded-xl"
+                  style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                  Cancelar
+                </button>
+                <button onClick={runImport}
+                  className="text-sm px-4 py-2 rounded-xl font-medium"
+                  style={{ background: 'rgba(96,165,250,0.15)', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.3)' }}>
+                  Importar {importModal.files.length} planillas
+                </button>
+              </>
+            )}
+            {importModal.done && (
+              <button onClick={() => setImportModal(null)}
+                className="text-sm px-4 py-2 rounded-xl font-medium"
+                style={{ background: 'var(--lime-dim)', color: 'var(--lime-text)', border: '1px solid var(--lime-border)' }}>
+                Cerrar
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }

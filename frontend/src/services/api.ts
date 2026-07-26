@@ -834,7 +834,9 @@ export const planillasAPI = {
   delete: (id: number) => api.delete(`/planillas/${id}`),
   syncTrabajadores: () => api.post<{ trabajadores_creados: number; total_empleados: number; ya_existian: number }>('/planillas/sync-trabajadores'),
   syncDrive: () => api.post<{ archivos_en_drive: number; planillas_sin_link: number; vinculadas: number; sin_match: string[] }>('/planillas/sync-drive'),
-  importFromDrive: () => api.post<{ archivos_en_drive: number; importadas: number; omitidas: number; fallidas: { nombre: string; error: string }[]; detalle_importadas: string[] }>('/planillas/import-from-drive', {}, { timeout: 180000 }),
+  importPreview: () => api.get<{ archivos_en_drive: number; to_import: { id: string; name: string; web_url: string }[]; total_to_import: number; already_in_db: number }>('/planillas/import-from-drive/preview'),
+  importSingle: (body: { file_id: string; filename: string; web_url: string }) =>
+    api.post<{ ok: boolean; numero_planilla: string | null; trabajadores_creados: number; error: string | null }>('/planillas/import-from-drive/single', body),
 }
 
 // ─── ACPs (Actas de Corte de Pago) ────────────────────────────────────────────
