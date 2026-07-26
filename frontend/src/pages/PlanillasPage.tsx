@@ -464,7 +464,7 @@ export default function PlanillasPage() {
 
   const reload = useCallback((resetOpen = false) => {
     setLoading(true)
-    planillasAPI.list()
+    planillasAPI.list({ limit: 500 })
       .then(r => {
         const data: Planilla[] = r.data.data
         setPlanillas(data)
