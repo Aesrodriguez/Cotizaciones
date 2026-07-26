@@ -939,6 +939,7 @@ export const configuracionAPI = {
   upsertSalarioMinimo: (anio: number, valor: number) =>
     api.post<import('../types').SalarioMinimo>('/configuracion/salario-minimo', { anio, valor }),
   deleteSalarioMinimo: (anio: number) => api.delete(`/configuracion/salario-minimo/${anio}`),
+  getDriveFolderUrl: () => api.get<{ url: string | null }>('/configuracion/gdrive-folder-url', _noToast),
 }
 
 export default api

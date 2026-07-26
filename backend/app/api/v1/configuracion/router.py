@@ -72,3 +72,16 @@ def delete_salario(anio: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="No encontrado")
     db.delete(row)
     db.commit()
+
+
+@router.get("/gdrive-folder-url")
+def gdrive_folder_url():
+    """Retorna la URL de la carpeta de Drive donde se guardan las planillas."""
+    try:
+        from app.config.settings import get_settings
+        folder_id = get_settings().GDRIVE_FOLDER_ID.strip()
+        if folder_id:
+            return {"url": f"https://drive.google.com/drive/folders/{folder_id}"}
+    except Exception:
+        pass
+    return {"url": None}

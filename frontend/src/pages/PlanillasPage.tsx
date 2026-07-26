@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { planillasAPI } from '../services/api'
+import { planillasAPI, configuracionAPI } from '../services/api'
 import type { Planilla, PlanillaDetalle } from '../services/api'
 import toast from 'react-hot-toast'
 
@@ -377,6 +377,13 @@ export default function PlanillasPage() {
   const [openYears, setOpenYears] = useState<Set<number>>(new Set())
   const [openMonths, setOpenMonths] = useState<Set<string>>(new Set())
   const initializedRef = useRef(false)
+  const [driveFolderUrl, setDriveFolderUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    configuracionAPI.getDriveFolderUrl()
+      .then(r => setDriveFolderUrl(r.data.url))
+      .catch(() => {})
+  }, [])
 
   const reload = useCallback((resetOpen = false) => {
     setLoading(true)
@@ -446,8 +453,8 @@ export default function PlanillasPage() {
           <h1 className="text-xl font-bold" style={{ color: 'var(--text)' }}>Planillas PILA</h1>
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Aportes en Línea · Seguridad social</p>
         </div>
-        {planillas.length > 0 && (
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {planillas.length > 0 && (<>
             <span className="text-xs px-3 py-1.5 rounded-lg font-mono"
               style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
               {planillas.length} planilla{planillas.length !== 1 ? 's' : ''}
@@ -456,8 +463,23 @@ export default function PlanillasPage() {
               style={{ background: 'var(--lime-dim)', color: 'var(--lime-text)', border: '1px solid var(--lime-border)' }}>
               {fmt(totalValor)}
             </span>
-          </div>
-        )}
+          </>)}
+          {driveFolderUrl && (
+            <a
+              href={driveFolderUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-opacity hover:opacity-80"
+              style={{ background: 'rgba(34,197,94,0.12)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.25)' }}
+              title="Abrir carpeta de planillas en Google Drive"
+            >
+              <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="currentColor">
+                <path d="M12.012 1.559L7.008 10.5h10.007L12.012 1.559zM6.004 12.5l-4.5 7.78h8.004L6.004 12.5zm10.004 0L10.504 20.28H22L16.008 12.5z"/>
+              </svg>
+              Carpeta en Drive
+            </a>
+          )}
+        </div>
       </div>
 
       <UploadZone onUploaded={() => reload(false)} />
