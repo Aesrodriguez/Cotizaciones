@@ -47,6 +47,7 @@ def _extracto_dict(e: ExtractoBancario) -> dict:
         "total_debitos":   float(e.total_debitos or 0),
         "num_movimientos": e.num_movimientos or 0,
         "observaciones":   e.observaciones,
+        "archivo_url":     e.archivo_url,
         "created_at":      str(e.created_at),
     }
 
@@ -122,6 +123,25 @@ async def upload_extracto(
         db.add(ExtractoBancarioMovimiento(extracto_id=extracto.id, **m))
 
     db.commit()
+    db.refresh(extracto)
+
+    # Subir a Drive en background (no bloquea si falla)
+    try:
+        from app.utils.gdrive import upload_to_drive
+        from app.config.settings import get_settings
+        settings = get_settings()
+        folder_id = settings.GDRIVE_EXTRACTOS_FOLDER_ID.strip()
+        if folder_id:
+            raw_bytes = raw  # ya leído arriba
+            url = upload_to_drive(raw_bytes, file.filename or 'extracto.txt', 'text/plain', folder_id_override=folder_id)
+            if url:
+                extracto.archivo_url = url
+                db.commit()
+                db.refresh(extracto)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning('Drive upload extracto failed: %s', exc)
+
     return _extracto_dict(extracto)
 
 
@@ -137,7 +157,7 @@ def list_extractos(
     rows = db.execute(text(f"""
         SELECT id, nombre_archivo, cuenta, periodo,
                saldo_inicial, saldo_final, total_creditos, total_debitos,
-               num_movimientos, observaciones, created_at
+               num_movimientos, observaciones, archivo_url, created_at
         FROM extractos_bancarios
         {where}
         ORDER BY periodo DESC, created_at DESC
@@ -148,7 +168,8 @@ def list_extractos(
             "id": str(r[0]), "nombre_archivo": r[1], "cuenta": r[2], "periodo": r[3],
             "saldo_inicial": float(r[4] or 0), "saldo_final": float(r[5] or 0),
             "total_creditos": float(r[6] or 0), "total_debitos": float(r[7] or 0),
-            "num_movimientos": r[8] or 0, "observaciones": r[9], "created_at": str(r[10]),
+            "num_movimientos": r[8] or 0, "observaciones": r[9], "archivo_url": r[10],
+            "created_at": str(r[11]),
         }
         for r in rows
     ]
@@ -283,6 +304,128 @@ def get_movimientos(
             for r in by_clas
         ],
     }
+
+
+# ── Drive: sincronizar y vincular extractos ───────────────────────────────────
+
+@router.post('/sync-drive', status_code=200)
+def sync_drive_extractos(
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    """Vincula extractos existentes en DB que no tengan archivo_url con los archivos en Drive."""
+    from app.utils.gdrive import list_drive_files_in_folder
+    from app.config.settings import get_settings
+    settings = get_settings()
+    folder_id = settings.GDRIVE_EXTRACTOS_FOLDER_ID.strip()
+    if not folder_id:
+        raise HTTPException(400, 'GDRIVE_EXTRACTOS_FOLDER_ID no configurado')
+
+    drive_files = list_drive_files_in_folder(folder_id)
+    if drive_files is None:
+        raise HTTPException(503, 'No se pudo conectar con Google Drive')
+
+    rows = db.execute(text("""
+        SELECT id, nombre_archivo FROM extractos_bancarios WHERE archivo_url IS NULL
+    """)).fetchall()
+
+    vinculados = 0
+    for eid, nombre in rows:
+        match = next((f for f in drive_files if f['name'] == nombre), None)
+        if match:
+            db.execute(text("UPDATE extractos_bancarios SET archivo_url = :url WHERE id = :id"),
+                       {"url": match['webViewLink'], "id": str(eid)})
+            vinculados += 1
+
+    db.commit()
+    return {"vinculados": vinculados, "archivos_en_drive": len(drive_files)}
+
+
+@router.get('/import-from-drive/preview', status_code=200)
+def import_drive_preview(
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    """Lista archivos en Drive que no están en la BD."""
+    from app.utils.gdrive import list_drive_files_in_folder
+    from app.config.settings import get_settings
+    settings = get_settings()
+    folder_id = settings.GDRIVE_EXTRACTOS_FOLDER_ID.strip()
+    if not folder_id:
+        raise HTTPException(400, 'GDRIVE_EXTRACTOS_FOLDER_ID no configurado')
+
+    drive_files = list_drive_files_in_folder(folder_id)
+    if drive_files is None:
+        raise HTTPException(503, 'No se pudo conectar con Google Drive')
+
+    existing = {r[0] for r in db.execute(text("SELECT nombre_archivo FROM extractos_bancarios")).fetchall()}
+
+    to_import = [f for f in drive_files if f['name'] not in existing and f['name'].lower().endswith('.txt')]
+    already_in_db = len(drive_files) - len(to_import)
+
+    return {
+        "archivos_en_drive": len(drive_files),
+        "to_import": [{"id": f["id"], "name": f["name"], "web_url": f["webViewLink"]} for f in to_import],
+        "total_to_import": len(to_import),
+        "already_in_db": already_in_db,
+    }
+
+
+@router.post('/import-from-drive/single', status_code=200)
+def import_drive_single(
+    body: dict,
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    """Descarga un TXT de Drive, lo parsea e inserta en la BD."""
+    from app.utils.gdrive import download_from_drive
+    from app.config.settings import get_settings
+
+    file_id = body.get('file_id', '')
+    filename = body.get('filename', 'extracto.txt')
+    web_url  = body.get('web_url', '')
+
+    if not file_id:
+        raise HTTPException(400, 'file_id requerido')
+
+    raw = download_from_drive(file_id)
+    if raw is None:
+        return {"ok": False, "periodo": None, "error": "No se pudo descargar de Drive"}
+
+    try:
+        content = _decode(raw)
+    except ValueError as exc:
+        return {"ok": False, "periodo": None, "error": str(exc)}
+
+    try:
+        parsed = parse_extracto_txt(content)
+    except ValueError as exc:
+        return {"ok": False, "periodo": None, "error": str(exc)}
+
+    if parsed.get('cuenta') and parsed.get('periodo'):
+        dup = db.execute(text("""
+            SELECT id FROM extractos_bancarios WHERE cuenta = :c AND periodo = :p LIMIT 1
+        """), {"c": parsed['cuenta'], "p": parsed['periodo']}).fetchone()
+        if dup:
+            return {"ok": False, "periodo": parsed.get('periodo'), "error": "Ya existe este extracto"}
+
+    movimientos = parsed.pop('movimientos')
+    settings = get_settings()
+    folder_id = settings.GDRIVE_EXTRACTOS_FOLDER_ID.strip()
+
+    extracto = ExtractoBancario(
+        nombre_archivo=filename,
+        archivo_url=web_url or None,
+        **{k: v for k, v in parsed.items()},
+    )
+    db.add(extracto)
+    db.flush()
+
+    for m in movimientos:
+        db.add(ExtractoBancarioMovimiento(extracto_id=extracto.id, **m))
+
+    db.commit()
+    return {"ok": True, "periodo": parsed.get('periodo') or extracto.periodo, "error": None}
 
 
 # ── Detalle de un extracto ────────────────────────────────────────────────────

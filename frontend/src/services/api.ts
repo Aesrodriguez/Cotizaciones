@@ -330,6 +330,7 @@ export interface ExtractoBancario {
   total_debitos: number
   num_movimientos: number
   observaciones: string | null
+  archivo_url: string | null
   created_at: string
 }
 
@@ -453,6 +454,17 @@ export const extractosAPI = {
     api.post('/extractos-bancarios/conciliacion/descartar-movimiento', {
       movimiento_id: movimientoId, factura_id: facturaId,
     }),
+  syncDrive: () => api.post<{ vinculados: number; archivos_en_drive: number }>('/extractos-bancarios/sync-drive'),
+  importPreview: () => api.get<{
+    archivos_en_drive: number
+    to_import: { id: string; name: string; web_url: string }[]
+    total_to_import: number
+    already_in_db: number
+  }>('/extractos-bancarios/import-from-drive/preview'),
+  importSingle: (body: { file_id: string; filename: string; web_url: string }) =>
+    api.post<{ ok: boolean; periodo: string | null; error: string | null }>(
+      '/extractos-bancarios/import-from-drive/single', body
+    ),
 }
 
 export interface MovimientoMatch {

@@ -18,6 +18,7 @@ class ExtractoBancario(Base):
     total_debitos   = Column(Numeric(18, 2), default=0)
     num_movimientos = Column(Integer, default=0)
     observaciones   = Column(Text)
+    archivo_url     = Column(VARCHAR(500))
     created_at      = Column(TIMESTAMP, nullable=False, server_default=sa.text("NOW()"))
 
 

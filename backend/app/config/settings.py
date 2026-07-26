@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str = Field(default="")
     GOOGLE_REFRESH_TOKEN: str = Field(default="")
     GDRIVE_FOLDER_ID: str = Field(default="")
+    GDRIVE_EXTRACTOS_FOLDER_ID: str = Field(default="")
 
     # Email — SendGrid API (HTTPS, sin bloqueo de Render)
     SENDGRID_API_KEY: str = Field(default="")

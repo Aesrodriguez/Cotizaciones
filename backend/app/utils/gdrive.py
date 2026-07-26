@@ -96,22 +96,24 @@ def download_from_drive(file_id: str) -> Optional[bytes]:
         return None
 
 
-def upload_to_drive(content: bytes, filename: str, mime_type: str) -> Optional[str]:
+def upload_to_drive(content: bytes, filename: str, mime_type: str, folder_id_override: Optional[str] = None) -> Optional[str]:
     """
     Sube `content` a la carpeta de Google Drive configurada usando OAuth2.
+    Si folder_id_override se provee, usa esa carpeta en lugar de la predeterminada.
     Retorna el webViewLink, o None si Drive no está configurado o falla.
     Nunca lanza excepción — el fallo de Drive no bloquea el guardado.
     """
     try:
         from googleapiclient.http import MediaIoBaseUpload
 
-        service, folder_id = _build_service()
+        service, default_folder_id = _build_service()
         if not service:
             return None
 
+        target_folder = folder_id_override or default_folder_id
         media = MediaIoBaseUpload(io.BytesIO(content), mimetype=mime_type, resumable=False)
         created = service.files().create(
-            body={'name': filename, 'parents': [folder_id]},
+            body={'name': filename, 'parents': [target_folder]},
             media_body=media,
             fields='id,webViewLink',
         ).execute()
@@ -122,4 +124,31 @@ def upload_to_drive(content: bytes, filename: str, mime_type: str) -> Optional[s
 
     except Exception as exc:
         logger.warning('Google Drive upload failed: %s', exc)
+        return None
+
+
+def list_drive_files_in_folder(folder_id: str) -> Optional[list]:
+    """Lista todos los archivos de una carpeta de Drive arbitraria."""
+    service, _ = _build_service()
+    if not service:
+        return None
+    try:
+        all_files = []
+        page_token = None
+        while True:
+            kwargs = dict(
+                q=f"'{folder_id}' in parents and trashed=false",
+                fields='nextPageToken,files(id,name,webViewLink,mimeType)',
+                pageSize=1000,
+            )
+            if page_token:
+                kwargs['pageToken'] = page_token
+            result = service.files().list(**kwargs).execute()
+            all_files.extend(result.get('files', []))
+            page_token = result.get('nextPageToken')
+            if not page_token:
+                break
+        return all_files
+    except Exception as exc:
+        logger.warning('Google Drive list failed (folder=%s): %s', folder_id, exc)
         return None
