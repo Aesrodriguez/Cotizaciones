@@ -49,29 +49,62 @@ function EstadoBadge({ estado }: { estado: string | null }) {
   )
 }
 
-// ── Upload zone TXT ───────────────────────────────────────────────────────────
-function UploadZone({ onUploaded }: { onUploaded: () => void }) {
+// ── Upload zone unificada (detecta por extensión) ─────────────────────────────
+function UploadZone({ onExtractoUploaded, onDetalleUploaded }: {
+  onExtractoUploaded: () => void
+  onDetalleUploaded: () => void
+}) {
   const [dragging, setDragging] = useState(false)
-  const [uploading, setUploading] = useState(false)
+  const [status, setStatus] = useState<null | { uploading: boolean; msgs: string[] }>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handle = async (files: FileList | File[]) => {
-    const accepted = Array.from(files).filter(f => {
+    const all = Array.from(files)
+    if (!all.length) return
+
+    const extractoFiles = all.filter(f => {
       const n = f.name.toLowerCase()
       return n.endsWith('.txt') || n.endsWith('.pdf') || !n.includes('.')
     })
-    if (!accepted.length) { toast.error('Solo se aceptan archivos .txt, .pdf o sin extensión'); return }
-    setUploading(true)
-    let ok = 0
-    for (const file of accepted) {
-      try { await extractosAPI.upload(file); ok++ }
-      catch (e: any) {
-        toast.error(`${file.name}: ${e?.response?.data?.detail ?? 'Error al procesar'}`, { duration: 6000 })
+    const detalleFiles = all.filter(f => f.name.toLowerCase().endsWith('.xlsx'))
+    const unknown = all.filter(f => !extractoFiles.includes(f) && !detalleFiles.includes(f))
+
+    if (unknown.length) {
+      toast.error(`Tipo no soportado: ${unknown.map(f => f.name).join(', ')}`)
+    }
+    if (!extractoFiles.length && !detalleFiles.length) return
+
+    setStatus({ uploading: true, msgs: [] })
+    const msgs: string[] = []
+
+    for (const file of extractoFiles) {
+      try {
+        await extractosAPI.upload(file)
+        msgs.push(`✓ ${file.name}`)
+      } catch (e: any) {
+        const err = e?.response?.data?.detail ?? 'Error al procesar'
+        toast.error(`${file.name}: ${err}`, { duration: 6000 })
       }
     }
-    setUploading(false)
-    if (ok) { toast.success(`${ok} extracto${ok > 1 ? 's' : ''} cargado${ok > 1 ? 's' : ''}`); onUploaded() }
+    if (extractoFiles.length && msgs.some(m => m.startsWith('✓'))) onExtractoUploaded()
+
+    for (const file of detalleFiles) {
+      try {
+        const r = await extractosAPI.uploadDetalle(file)
+        msgs.push(`✓ ${file.name}`)
+        toast.success(r.data.mensaje, { duration: 5000 })
+        onDetalleUploaded()
+      } catch (e: any) {
+        const err = e?.response?.data?.detail ?? 'Error al procesar'
+        toast.error(`${file.name}: ${err}`, { duration: 7000 })
+      }
+    }
+
+    setStatus({ uploading: false, msgs })
+    setTimeout(() => setStatus(null), 3000)
   }
+
+  const isUploading = status?.uploading === true
 
   return (
     <div
@@ -84,66 +117,29 @@ function UploadZone({ onUploaded }: { onUploaded: () => void }) {
       onDragOver={e => { e.preventDefault(); setDragging(true) }}
       onDragLeave={() => setDragging(false)}
       onDrop={e => { e.preventDefault(); setDragging(false); handle(e.dataTransfer.files) }}
-      onClick={() => inputRef.current?.click()}
+      onClick={() => !isUploading && inputRef.current?.click()}
     >
-      <input ref={inputRef} type="file" accept=".txt,.pdf,*" multiple hidden onChange={e => e.target.files && handle(e.target.files)} />
-      <div className="text-3xl">{uploading ? '⏳' : '🏦'}</div>
-      {uploading ? (
-        <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Procesando…</p>
+      <input ref={inputRef} type="file" accept=".txt,.pdf,.xlsx,*" multiple hidden
+        onChange={e => e.target.files && handle(e.target.files)} />
+
+      {isUploading ? (
+        <>
+          <div className="text-3xl">⏳</div>
+          <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Procesando…</p>
+        </>
       ) : (
-        <div className="text-center">
-          <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Extracto mensual</p>
-          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Bancolombia (.txt) · Davivienda (.txt, .pdf, sin extensión)</p>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Upload zone XLSX (detalle de pagos) ───────────────────────────────────────
-function DetalleUploadZone({ onUploaded }: { onUploaded: () => void }) {
-  const [dragging, setDragging] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  const handle = async (files: FileList | File[]) => {
-    const accepted = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.xlsx'))
-    if (!accepted.length) { toast.error('Solo se aceptan archivos .xlsx'); return }
-    setUploading(true)
-    for (const file of accepted) {
-      try {
-        const r = await extractosAPI.uploadDetalle(file)
-        toast.success(r.data.mensaje, { duration: 5000 })
-        onUploaded()
-      } catch (e: any) {
-        toast.error(`${file.name}: ${e?.response?.data?.detail ?? 'Error al procesar'}`, { duration: 7000 })
-      }
-    }
-    setUploading(false)
-  }
-
-  return (
-    <div
-      className="rounded-2xl flex flex-col items-center justify-center gap-3 p-8 cursor-pointer transition-all"
-      style={{
-        border: `2px dashed ${dragging ? '#60a5fa' : 'var(--border)'}`,
-        background: dragging ? 'rgba(96,165,250,0.07)' : 'var(--card)',
-        minHeight: '120px',
-      }}
-      onDragOver={e => { e.preventDefault(); setDragging(true) }}
-      onDragLeave={() => setDragging(false)}
-      onDrop={e => { e.preventDefault(); setDragging(false); handle(e.dataTransfer.files) }}
-      onClick={() => inputRef.current?.click()}
-    >
-      <input ref={inputRef} type="file" accept=".xlsx" hidden onChange={e => e.target.files && handle(e.target.files)} />
-      <div className="text-3xl">{uploading ? '⏳' : '📊'}</div>
-      {uploading ? (
-        <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Procesando Excel…</p>
-      ) : (
-        <div className="text-center">
-          <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Detalle de pagos .xlsx</p>
-          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Reclamación Bancolombia · Hojas Logs_pagos y Logs_transferencias</p>
-        </div>
+        <>
+          <div className="text-3xl">📂</div>
+          <div className="text-center">
+            <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Subir archivo</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+              Extracto mensual (.txt · .pdf · sin extensión) · Detalle de pagos (.xlsx)
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+              Detecta automáticamente el tipo de archivo
+            </p>
+          </div>
+        </>
       )}
     </div>
   )
@@ -820,11 +816,7 @@ export default function ExtractosPage() {
         </div>
       </div>
 
-      {/* Dos zonas de carga en paralelo */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <UploadZone onUploaded={load} />
-        <DetalleUploadZone onUploaded={loadDetalleResumen} />
-      </div>
+      <UploadZone onExtractoUploaded={load} onDetalleUploaded={loadDetalleResumen} />
 
       {/* Resumen de detalles cargados */}
       {detalleResumen && <DetalleResumenPanel resumen={detalleResumen} />}
