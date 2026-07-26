@@ -378,12 +378,33 @@ export default function PlanillasPage() {
   const [openMonths, setOpenMonths] = useState<Set<string>>(new Set())
   const initializedRef = useRef(false)
   const [driveFolderUrl, setDriveFolderUrl] = useState<string | null>(null)
+  const [syncing, setSyncing] = useState(false)
 
   useEffect(() => {
     configuracionAPI.getDriveFolderUrl()
       .then(r => setDriveFolderUrl(r.data.url))
       .catch(() => {})
   }, [])
+
+  const handleSyncDrive = async () => {
+    setSyncing(true)
+    try {
+      const r = await planillasAPI.syncDrive()
+      const { vinculadas, sin_match, archivos_en_drive } = r.data
+      if (vinculadas > 0) {
+        toast.success(`${vinculadas} planilla${vinculadas !== 1 ? 's' : ''} vinculada${vinculadas !== 1 ? 's' : ''} con Drive`, { duration: 5000 })
+        reload(false)
+      } else if (sin_match.length === 0) {
+        toast.success('Todas las planillas ya tienen link de Drive')
+      } else {
+        toast(`${archivos_en_drive} archivos en Drive · ${sin_match.length} planilla${sin_match.length !== 1 ? 's' : ''} sin coincidencia`, { icon: 'ℹ️', duration: 5000 })
+      }
+    } catch {
+      toast.error('Error al sincronizar con Drive')
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   const reload = useCallback((resetOpen = false) => {
     setLoading(true)
@@ -464,7 +485,23 @@ export default function PlanillasPage() {
               {fmt(totalValor)}
             </span>
           </>)}
-          {driveFolderUrl && (
+          {driveFolderUrl && (<>
+            <button
+              onClick={handleSyncDrive}
+              disabled={syncing}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
+              style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+              title="Buscar archivos en Drive y vincular planillas sin link"
+            >
+              {syncing ? (
+                <div className="w-3.5 h-3.5 rounded-full border-2 animate-spin" style={{ borderColor: 'var(--text-muted)', borderTopColor: 'transparent' }} />
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                </svg>
+              )}
+              Sincronizar Drive
+            </button>
             <a
               href={driveFolderUrl}
               target="_blank"
@@ -478,7 +515,7 @@ export default function PlanillasPage() {
               </svg>
               Carpeta en Drive
             </a>
-          )}
+          </>)}
         </div>
       </div>
 

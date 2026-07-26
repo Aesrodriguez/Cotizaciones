@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy import text
 from app.api.deps import get_db_session as get_db
 from app.utils.planilla_parser import parse_planilla_pdf, parse_planilla_txt
-from app.utils.gdrive import upload_to_drive
+from app.utils.gdrive import upload_to_drive, list_drive_files
 
 router = APIRouter(prefix='/planillas', tags=['planillas'])
 
@@ -242,6 +242,61 @@ def upload_planilla(file: UploadFile = File(...), db=Depends(get_db)):
         'archivo_url': archivo_url,
         'trabajadores_creados': trabajadores_creados,
         'warnings': parsed.get('warnings', []),
+    }
+
+
+# ── Sincronizar archivos con Google Drive ─────────────────────────────────────
+
+@router.post('/sync-drive', status_code=200)
+def sync_drive(db=Depends(get_db)):
+    """
+    Lista los archivos en la carpeta de Drive y vincula los que coincidan
+    por nombre con planillas que aún no tienen archivo_url.
+    """
+    drive_files = list_drive_files()
+    if drive_files is None:
+        raise HTTPException(503, 'Google Drive no configurado o no disponible')
+
+    # Mapa nombre → webViewLink
+    drive_map: dict = {f['name']: f['webViewLink'] for f in drive_files}
+
+    # Planillas sin link
+    rows = db.execute(text("""
+        SELECT id, numero_planilla, periodo_pension, periodo_salud
+        FROM planillas
+        WHERE archivo_url IS NULL OR archivo_url = ''
+        ORDER BY id
+    """)).fetchall()
+
+    vinculadas = 0
+    sin_match = []
+
+    for planilla_id, numero, periodo_pension, periodo_salud in rows:
+        periodo = periodo_pension or periodo_salud or 'sin-periodo'
+        found_url = None
+        for ext in ('.pdf', '.txt'):
+            cand = f"{periodo}_{numero}{ext}"
+            if cand in drive_map:
+                found_url = drive_map[cand]
+                break
+
+        if found_url:
+            db.execute(
+                text("UPDATE planillas SET archivo_url = :url WHERE id = :id"),
+                {'url': found_url, 'id': planilla_id},
+            )
+            vinculadas += 1
+        else:
+            sin_match.append(numero)
+
+    if vinculadas:
+        db.commit()
+
+    return {
+        'archivos_en_drive': len(drive_files),
+        'planillas_sin_link': len(rows),
+        'vinculadas': vinculadas,
+        'sin_match': sin_match,
     }
 
 

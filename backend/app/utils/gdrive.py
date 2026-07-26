@@ -1,4 +1,4 @@
-"""Subida de archivos a Google Drive usando OAuth2 con cuenta personal."""
+"""Subida y listado de archivos en Google Drive usando OAuth2 con cuenta personal."""
 import io
 import logging
 from typing import Optional
@@ -6,12 +6,8 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
-def upload_to_drive(content: bytes, filename: str, mime_type: str) -> Optional[str]:
-    """
-    Sube `content` a la carpeta de Google Drive configurada usando OAuth2.
-    Retorna el webViewLink, o None si Drive no está configurado o falla.
-    Nunca lanza excepción — el fallo de Drive no bloquea el guardado.
-    """
+def _build_service():
+    """Construye el cliente de Drive autenticado. Retorna None si no está configurado."""
     try:
         from app.config.settings import get_settings
         settings = get_settings()
@@ -29,12 +25,11 @@ def upload_to_drive(content: bytes, filename: str, mime_type: str) -> Optional[s
         }.items() if not v]
         if missing:
             logger.warning('Google Drive no configurado — faltan: %s', ', '.join(missing))
-            return None
+            return None, None
 
         from google.oauth2.credentials import Credentials
         from google.auth.transport.requests import Request
         from googleapiclient.discovery import build
-        from googleapiclient.http import MediaIoBaseUpload
 
         creds = Credentials(
             token=None,
@@ -44,8 +39,55 @@ def upload_to_drive(content: bytes, filename: str, mime_type: str) -> Optional[s
             token_uri='https://oauth2.googleapis.com/token',
         )
         creds.refresh(Request())
-
         service = build('drive', 'v3', credentials=creds, cache_discovery=False)
+        return service, folder_id
+    except Exception as exc:
+        logger.warning('Google Drive auth failed: %s', exc)
+        return None, None
+
+
+def list_drive_files() -> Optional[list]:
+    """
+    Lista todos los archivos en la carpeta de Drive configurada.
+    Retorna lista de {name, webViewLink} o None si Drive no está disponible.
+    """
+    service, folder_id = _build_service()
+    if not service:
+        return None
+    try:
+        all_files = []
+        page_token = None
+        while True:
+            kwargs = dict(
+                q=f"'{folder_id}' in parents and trashed=false",
+                fields='nextPageToken,files(id,name,webViewLink)',
+                pageSize=1000,
+            )
+            if page_token:
+                kwargs['pageToken'] = page_token
+            result = service.files().list(**kwargs).execute()
+            all_files.extend(result.get('files', []))
+            page_token = result.get('nextPageToken')
+            if not page_token:
+                break
+        return all_files
+    except Exception as exc:
+        logger.warning('Google Drive list failed: %s', exc)
+        return None
+
+
+def upload_to_drive(content: bytes, filename: str, mime_type: str) -> Optional[str]:
+    """
+    Sube `content` a la carpeta de Google Drive configurada usando OAuth2.
+    Retorna el webViewLink, o None si Drive no está configurado o falla.
+    Nunca lanza excepción — el fallo de Drive no bloquea el guardado.
+    """
+    try:
+        from googleapiclient.http import MediaIoBaseUpload
+
+        service, folder_id = _build_service()
+        if not service:
+            return None
 
         media = MediaIoBaseUpload(io.BytesIO(content), mimetype=mime_type, resumable=False)
         created = service.files().create(

@@ -833,6 +833,7 @@ export const planillasAPI = {
   get: (id: number) => api.get<PlanillaDetalle>(`/planillas/${id}`, _noToast),
   delete: (id: number) => api.delete(`/planillas/${id}`),
   syncTrabajadores: () => api.post<{ trabajadores_creados: number; total_empleados: number; ya_existian: number }>('/planillas/sync-trabajadores'),
+  syncDrive: () => api.post<{ archivos_en_drive: number; planillas_sin_link: number; vinculadas: number; sin_match: string[] }>('/planillas/sync-drive'),
 }
 
 // ─── ACPs (Actas de Corte de Pago) ────────────────────────────────────────────
