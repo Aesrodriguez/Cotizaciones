@@ -112,10 +112,23 @@ def _clean_ref(s: str) -> str | None:
 
 def parse_extracto_txt(content: str) -> dict:
     """
-    Parsea el contenido de un TXT de extracto Bancolombia.
+    Auto-detecta el formato del extracto y lo parsea.
+    Soporta: Bancolombia delimitado por ';', Davivienda digital (200 chars),
+    Davivienda human-readable (texto plano o PDF convertido).
     Devuelve: { cuenta, periodo, movimientos[], saldo_inicial, saldo_final,
                 total_creditos, total_debitos, num_movimientos }
     """
+    from app.services.extracto_davivienda_parser import (
+        is_davivienda_machine, is_davivienda_human, is_davivienda_pdf_text,
+        parse_davivienda_machine, parse_davivienda_human, parse_davivienda_pdf_text,
+    )
+    if is_davivienda_machine(content):
+        return parse_davivienda_machine(content)
+    if is_davivienda_pdf_text(content):
+        return parse_davivienda_pdf_text(content)
+    if is_davivienda_human(content):
+        return parse_davivienda_human(content)
+    # Fallback: Bancolombia delimitado por ';'
     movimientos = []
     cuenta = None
     saldo_anterior = None  # seguimos el saldo para detectar el inicial

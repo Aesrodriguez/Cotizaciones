@@ -76,7 +76,18 @@ def _mov_dict(r) -> dict:
     }
 
 
-# ── Upload TXT ────────────────────────────────────────────────────────────────
+# ── Upload TXT / PDF / sin extensión ─────────────────────────────────────────
+
+_ALLOWED_EXT = {'.txt', '.pdf', ''}
+
+def _extract_text_from_pdf(raw: bytes) -> str:
+    """Extrae texto de un PDF usando pdfplumber."""
+    import io
+    import pdfplumber
+    with pdfplumber.open(io.BytesIO(raw)) as pdf:
+        pages = [page.extract_text() or '' for page in pdf.pages]
+    return '\n'.join(pages)
+
 
 @router.post("/upload", status_code=201)
 async def upload_extracto(
@@ -85,15 +96,24 @@ async def upload_extracto(
     db: Session = Depends(get_db_session),
     _: Usuario = Depends(get_authenticated_user),
 ):
-    fname = (file.filename or '').lower()
-    if not fname.endswith('.txt'):
-        raise HTTPException(400, "Solo se aceptan archivos .txt")
+    fname = file.filename or ''
+    ext   = ('.' + fname.rsplit('.', 1)[-1].lower()) if '.' in fname else ''
+    if ext not in _ALLOWED_EXT:
+        raise HTTPException(400, "Solo se aceptan archivos .txt, .pdf o sin extensión")
 
     raw = await file.read()
-    try:
-        content = _decode(raw)
-    except ValueError as e:
-        raise HTTPException(400, str(e))
+    mime_type = 'application/pdf' if ext == '.pdf' else 'text/plain'
+
+    if ext == '.pdf':
+        try:
+            content = _extract_text_from_pdf(raw)
+        except Exception as exc:
+            raise HTTPException(422, f"No se pudo leer el PDF: {exc}")
+    else:
+        try:
+            content = _decode(raw)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
 
     try:
         parsed = parse_extracto_txt(content)
@@ -133,7 +153,7 @@ async def upload_extracto(
         folder_id = settings.GDRIVE_EXTRACTOS_FOLDER_ID.strip()
         if folder_id:
             raw_bytes = raw  # ya leído arriba
-            url = upload_to_drive(raw_bytes, file.filename or 'extracto.txt', 'text/plain', folder_id_override=folder_id)
+            url = upload_to_drive(raw_bytes, fname or 'extracto', mime_type, folder_id_override=folder_id)
             if url:
                 extracto.archivo_url = url
                 db.commit()
@@ -360,7 +380,8 @@ def import_drive_preview(
 
     existing = {r[0] for r in db.execute(text("SELECT nombre_archivo FROM extractos_bancarios")).fetchall()}
 
-    to_import = [f for f in drive_files if f['name'] not in existing and f['name'].lower().endswith('.txt')]
+    to_import = [f for f in drive_files if f['name'] not in existing
+                 and (f['name'].lower().endswith('.txt') or f['name'].lower().endswith('.pdf') or '.' not in f['name'])]
     already_in_db = len(drive_files) - len(to_import)
 
     return {
@@ -392,9 +413,13 @@ def import_drive_single(
     if raw is None:
         return {"ok": False, "periodo": None, "error": "No se pudo descargar de Drive"}
 
+    is_pdf = filename.lower().endswith('.pdf')
     try:
-        content = _decode(raw)
-    except ValueError as exc:
+        if is_pdf:
+            content = _extract_text_from_pdf(raw)
+        else:
+            content = _decode(raw)
+    except Exception as exc:
         return {"ok": False, "periodo": None, "error": str(exc)}
 
     try:

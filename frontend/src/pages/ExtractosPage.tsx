@@ -56,8 +56,11 @@ function UploadZone({ onUploaded }: { onUploaded: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handle = async (files: FileList | File[]) => {
-    const accepted = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.txt'))
-    if (!accepted.length) { toast.error('Solo se aceptan archivos .txt'); return }
+    const accepted = Array.from(files).filter(f => {
+      const n = f.name.toLowerCase()
+      return n.endsWith('.txt') || n.endsWith('.pdf') || !n.includes('.')
+    })
+    if (!accepted.length) { toast.error('Solo se aceptan archivos .txt, .pdf o sin extensión'); return }
     setUploading(true)
     let ok = 0
     for (const file of accepted) {
@@ -83,14 +86,14 @@ function UploadZone({ onUploaded }: { onUploaded: () => void }) {
       onDrop={e => { e.preventDefault(); setDragging(false); handle(e.dataTransfer.files) }}
       onClick={() => inputRef.current?.click()}
     >
-      <input ref={inputRef} type="file" accept=".txt" multiple hidden onChange={e => e.target.files && handle(e.target.files)} />
+      <input ref={inputRef} type="file" accept=".txt,.pdf,*" multiple hidden onChange={e => e.target.files && handle(e.target.files)} />
       <div className="text-3xl">{uploading ? '⏳' : '🏦'}</div>
       {uploading ? (
         <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Procesando…</p>
       ) : (
         <div className="text-center">
-          <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Extracto mensual .txt</p>
-          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Formato Bancolombia delimitado por punto y coma</p>
+          <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Extracto mensual</p>
+          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Bancolombia (.txt) · Davivienda (.txt, .pdf, sin extensión)</p>
         </div>
       )}
     </div>
