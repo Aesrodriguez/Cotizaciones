@@ -61,6 +61,63 @@ def _dec(el: ET.Element | None, path: str) -> Decimal:
     return Decimal('0')
 
 
+def _best_numero(inv: ET.Element, outer: ET.Element) -> str:
+    """
+    Extrae el número de factura con múltiples fallbacks.
+
+    Algunos proveedores (SIIGO, SODIMAC) ponen en <cbc:ID> solo el prefijo
+    ("94-", "2401-") en lugar del número completo ("941480243").
+    En esos casos buscamos el número completo en el resto del documento.
+    """
+    # 1. Búsqueda estándar con namespace UBL
+    val = _text(inv, 'cbc:ID')
+
+    # 2. Fallback agnostico de namespace: hijos directos del Invoice
+    #    (cubre proveedores con URI de namespace ligeramente distinta)
+    if not val:
+        for child in list(inv):
+            if _strip_ns(child.tag) == 'ID' and child.text and child.text.strip():
+                val = child.text.strip()
+                break
+
+    # 3. Fallback al envelope outer (AttachedDocument)
+    if not val:
+        val = _text(outer, 'cbc:ParentDocumentID') or ''
+    if not val:
+        for child in list(outer):
+            tag = _strip_ns(child.tag)
+            if tag in ('ID', 'ParentDocumentID') and child.text and child.text.strip():
+                val = child.text.strip()
+                break
+
+    # 4. Si el valor termina en "-" es solo el prefijo; buscar el número completo
+    if val.endswith('-'):
+        prefix_part = val.rstrip('-')
+
+        # 4a. cbc:ID del AttachedDocument externo (a veces tiene el completo)
+        outer_id = _text(outer, 'cbc:ID') or ''
+        if outer_id.startswith(prefix_part) and not outer_id.endswith('-') and len(outer_id) > len(val):
+            return outer_id
+
+        # 4b. Recorrer todo el documento buscando un ID más largo con el mismo prefijo
+        for el in outer.iter():
+            tag = _strip_ns(el.tag)
+            if tag == 'ID' and el.text:
+                v = el.text.strip()
+                if v.startswith(prefix_part) and len(v) > len(val) and not v.endswith('-'):
+                    return v
+
+        # 4c. Buscar en campos alternativos (InvoiceID, ReferenceID)
+        for el in outer.iter():
+            tag = _strip_ns(el.tag)
+            if tag in ('InvoiceID', 'ReferenceID', 'ParentDocumentID') and el.text:
+                v = el.text.strip()
+                if v.startswith(prefix_part) and len(v) > len(val):
+                    return v
+
+    return val
+
+
 def _parse_date(s: str) -> date | None:
     if not s:
         return None
@@ -225,9 +282,7 @@ def parse_dian_xml(xml_content: str) -> dict:
     inv = invoice_root
 
     # ── Número, CUFE, fecha ───────────────────────────────────────────────────
-    numero = _text(inv, 'cbc:ID')
-    if not numero:
-        numero = _text(outer, 'cbc:ParentDocumentID')  # fallback del envelope
+    numero = _best_numero(inv, outer)
     if not numero:
         raise ValueError("No se encontró el número de factura (cbc:ID)")
 

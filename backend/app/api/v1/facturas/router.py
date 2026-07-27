@@ -159,12 +159,15 @@ def _save_one_parsed(db: Session, parsed: dict, filename: str,
     numero = parsed['numero']
     nit    = parsed.get('proveedor_nit')
 
+    # Evitar falsos duplicados cuando el número es solo prefijo ("94-", "2401-")
+    numero_confiable = bool(numero) and not numero.endswith('-')
+
     dup = db.execute(text("""
         SELECT numero FROM facturas_electronicas
         WHERE (:cufe IS NOT NULL AND cufe = :cufe)
-           OR (proveedor_nit = :nit AND numero = :num)
+           OR (:numero_ok AND proveedor_nit = :nit AND numero = :num)
         LIMIT 1
-    """), {"cufe": cufe, "nit": nit, "num": numero}).fetchone()
+    """), {"cufe": cufe, "nit": nit, "num": numero, "numero_ok": numero_confiable}).fetchone()
 
     if dup:
         raise ValueError(f"La factura '{numero}' ya fue registrada (duplicado)")
