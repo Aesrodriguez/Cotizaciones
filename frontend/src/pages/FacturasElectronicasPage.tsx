@@ -456,19 +456,27 @@ export function DetalleModal({ facturaId, onClose, onUpdated }: {
                 </div>
               )}
 
-              {/* QR DIAN */}
-              {f.qr_url && (
-                <div className="mt-2 mb-1">
+              {/* Portal DIAN */}
+              {f.cufe && (
+                <div className="mt-2 mb-1 flex items-center gap-2">
                   <a
-                    href={f.qr_url}
+                    href="https://catalogo-vpfe.dian.gov.co/User/SearchDocument"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg"
+                    className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg flex-1"
                     style={{ background: 'color-mix(in srgb, #3b82f6 12%, transparent)', color: '#3b82f6', border: '1px solid color-mix(in srgb, #3b82f6 30%, transparent)' }}
                   >
                     <span>🔗</span>
-                    <span className="font-medium">Ver en portal DIAN</span>
+                    <span className="font-medium">Consultar en portal DIAN</span>
+                    <span style={{ color: 'color-mix(in srgb, #3b82f6 60%, transparent)', fontSize: '10px' }}>pega el CUFE →</span>
                   </a>
+                  <button
+                    onClick={copyCUFE}
+                    className="text-xs px-3 py-2 rounded-lg font-medium flex-shrink-0"
+                    style={{ background: copied ? 'var(--lime)' : 'color-mix(in srgb, #3b82f6 12%, transparent)', color: copied ? '#111' : '#3b82f6', border: '1px solid color-mix(in srgb, #3b82f6 30%, transparent)' }}
+                  >
+                    {copied ? '✓ Copiado' : 'Copiar CUFE'}
+                  </button>
                 </div>
               )}
 
