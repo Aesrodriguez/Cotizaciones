@@ -185,6 +185,13 @@ function DestinatarioInput({ value, tipo, staticSugs, onChange, onSelectId }: {
   )
 }
 
+// ─── DriveIcon pequeño (compartido) ──────────────────────────────────────────
+const DriveIconSm = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
+    <path d="M12.012 1.559L7.008 10.5h10.007L12.012 1.559zM6.004 12.5l-4.5 7.78h8.004L6.004 12.5zm10.004 0L10.504 20.28H22L16.008 12.5z"/>
+  </svg>
+)
+
 // ─── PagoForm ─────────────────────────────────────────────────────────────────
 interface PagoFormData {
   fecha: string
@@ -226,6 +233,9 @@ function PagoFormModal({ initial, obras, onClose, onSaved }: {
   const [facturas, setFacturas] = useState<{ id: string; numero: string; proveedor_nombre: string | null; total_pagar: number }[]>([])
   const [trabajadores, setTrabajadores] = useState<{ id: string; nombres: string; apellidos: string; cargo?: string }[]>([])
   const [saving, setSaving] = useState(false)
+  const [soporteFile, setSoporteFile] = useState<File | null>(null)
+  const [savingStep, setSavingStep] = useState<'pago' | 'soporte' | null>(null)
+  const soporteRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     // Cargar facturas RECIBIDAS para vincular
@@ -288,16 +298,29 @@ function PagoFormModal({ initial, obras, onClose, onSaved }: {
         obra_id: form.obra_id || null,
         notas: form.notas || null,
       }
+      let pagoId: string
+      setSavingStep('pago')
       if (isEdit) {
         await pagosAPI.update(initial!.id, payload)
+        pagoId = initial!.id
         toast.success('Pago actualizado')
       } else {
-        await pagosAPI.create(payload)
+        const r = await pagosAPI.create(payload)
+        pagoId = r.data.id
         toast.success('Pago registrado')
+      }
+      if (soporteFile) {
+        setSavingStep('soporte')
+        try {
+          await pagosAPI.uploadSoporte(pagoId, soporteFile)
+          toast.success('Soporte guardado en Google Drive')
+        } catch {
+          toast.error('Pago guardado, pero el soporte no se pudo subir — intenta desde la lista')
+        }
       }
       onSaved()
       onClose()
-    } finally { setSaving(false) }
+    } finally { setSaving(false); setSavingStep(null) }
   }
 
   // When tipo changes, clear irrelevant links
@@ -412,12 +435,68 @@ function PagoFormModal({ initial, obras, onClose, onSaved }: {
         <Field label="Notas internas">
           <textarea className="input w-full text-sm resize-none" rows={2} value={form.notas} onChange={f('notas')} />
         </Field>
+
+        {/* Soporte de pago */}
+        <Field label="Soporte de pago (PDF o imagen — opcional)">
+          <input
+            ref={soporteRef}
+            type="file"
+            accept=".pdf,.png,.jpg,.jpeg,.webp"
+            className="hidden"
+            onChange={e => setSoporteFile(e.target.files?.[0] ?? null)}
+          />
+          {/* Soporte ya guardado en Drive (al editar) */}
+          {isEdit && initial?.soporte_url && !soporteFile && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg mb-1"
+              style={{ background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.25)' }}>
+              <DriveIconSm />
+              <a href={initial.soporte_url} target="_blank" rel="noopener noreferrer"
+                className="text-xs flex-1 truncate font-medium" style={{ color: '#60a5fa' }}>
+                {initial.soporte_filename ?? 'Ver soporte actual'}
+              </a>
+              <button onClick={() => soporteRef.current?.click()}
+                className="text-xs px-2 py-0.5 rounded" style={{ color: 'var(--text-muted)', background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                Reemplazar
+              </button>
+            </div>
+          )}
+          {/* Archivo seleccionado */}
+          {soporteFile ? (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg"
+              style={{ background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.25)' }}>
+              <span className="text-base">📎</span>
+              <span className="text-xs flex-1 truncate font-medium" style={{ color: 'var(--text)' }}>
+                {soporteFile.name}
+              </span>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                {(soporteFile.size / 1024).toFixed(0)} KB
+              </span>
+              <button onClick={() => setSoporteFile(null)}
+                className="text-xs opacity-60 hover:opacity-100 ml-1" style={{ color: '#ef4444' }}>✕</button>
+            </div>
+          ) : (
+            !isEdit || !initial?.soporte_url ? (
+              <button
+                onClick={() => soporteRef.current?.click()}
+                type="button"
+                className="flex items-center gap-2 w-full px-3 py-2.5 rounded-lg text-sm transition-colors"
+                style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px dashed var(--border)' }}
+              >
+                <span className="text-base">📎</span>
+                <span>Adjuntar soporte (PDF, JPG, PNG…)</span>
+              </button>
+            ) : null
+          )}
+        </Field>
       </div>
 
       <div className="flex gap-2 justify-end pt-2">
         <button onClick={onClose} className="btn-ghost text-sm px-4 py-2">Cancelar</button>
-        <button onClick={save} disabled={saving} className="btn-primary text-sm px-4 py-2">
-          {saving ? 'Guardando…' : isEdit ? 'Guardar cambios' : 'Registrar pago'}
+        <button onClick={save} disabled={saving} className="btn-primary text-sm px-4 py-2 min-w-36">
+          {saving
+            ? savingStep === 'soporte' ? '☁ Subiendo soporte…' : '💾 Guardando…'
+            : isEdit ? 'Guardar cambios' : 'Registrar pago'
+          }
         </button>
       </div>
     </Modal>
@@ -425,12 +504,6 @@ function PagoFormModal({ initial, obras, onClose, onSaved }: {
 }
 
 // ─── DriveIcon pequeño ────────────────────────────────────────────────────────
-const DriveIconSm = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
-    <path d="M12.012 1.559L7.008 10.5h10.007L12.012 1.559zM6.004 12.5l-4.5 7.78h8.004L6.004 12.5zm10.004 0L10.504 20.28H22L16.008 12.5z"/>
-  </svg>
-)
-
 // ─── PagoRow ──────────────────────────────────────────────────────────────────
 function PagoRow({ pago, onEdit, onDelete, onReload }: {
   pago: Pago
