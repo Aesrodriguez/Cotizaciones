@@ -810,34 +810,44 @@ export default function PagosPage() {
         {/* Left: filtros + tabla */}
         <div className="lg:col-span-2 space-y-3">
           {/* Filtros */}
-          <div className="flex flex-wrap gap-2 items-center">
-            <input type="search" placeholder="Buscar destinatario, concepto…" value={search}
-              onChange={e => setSearch(e.target.value)} className="input text-sm w-52" />
-            <select value={filtroAnio} onChange={e => setFiltroAnio(Number(e.target.value))} className="input text-sm">
-              <option value={0}>Todos los años</option>
-              {Array.from({ length: new Date().getFullYear() - 2021 }, (_, i) => new Date().getFullYear() - i).map(y => <option key={y} value={y}>{y}</option>)}
-            </select>
-            <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} className="input text-sm">
-              <option value="">Todos los tipos</option>
-              {TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-            <select value={filtroMetodo} onChange={e => setFiltroMetodo(e.target.value)} className="input text-sm">
-              <option value="">Todos los métodos</option>
-              {METODOS.map(m => <option key={m}>{m}</option>)}
-            </select>
-            <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)}
-              className="input text-sm" title="Desde" />
-            <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)}
-              className="input text-sm" title="Hasta" />
-            {hasFilters && (
-              <button onClick={() => {
-                setSearch(''); setFiltroTipo(''); setFiltroMetodo('')
-                setFiltroObra(''); setFechaDesde(''); setFechaHasta(''); setFiltroAnio(new Date().getFullYear())
-              }} className="text-xs px-3 py-1.5 rounded-lg"
-                style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
-                Limpiar
-              </button>
-            )}
+          <div className="rounded-xl p-3 space-y-2" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+            {/* Fila 1: búsqueda + año + tipo + método */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <input type="search" placeholder="Buscar destinatario…" value={search}
+                onChange={e => setSearch(e.target.value)} className="input text-sm sm:col-span-1" />
+              <select value={filtroAnio} onChange={e => setFiltroAnio(Number(e.target.value))} className="input text-sm">
+                <option value={0}>Todos los años</option>
+                {Array.from({ length: new Date().getFullYear() - 2021 }, (_, i) => new Date().getFullYear() - i).map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+              <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} className="input text-sm">
+                <option value="">Todos los tipos</option>
+                {TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+              <select value={filtroMetodo} onChange={e => setFiltroMetodo(e.target.value)} className="input text-sm">
+                <option value="">Todos los métodos</option>
+                {METODOS.map(m => <option key={m}>{m}</option>)}
+              </select>
+            </div>
+            {/* Fila 2: fechas + limpiar */}
+            <div className="flex flex-wrap gap-2 items-center">
+              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                <span className="text-xs whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>Desde</span>
+                <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} className="input text-sm flex-1" />
+              </div>
+              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                <span className="text-xs whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>Hasta</span>
+                <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} className="input text-sm flex-1" />
+              </div>
+              {hasFilters && (
+                <button onClick={() => {
+                  setSearch(''); setFiltroTipo(''); setFiltroMetodo('')
+                  setFiltroObra(''); setFechaDesde(''); setFechaHasta(''); setFiltroAnio(new Date().getFullYear())
+                }} className="text-xs px-3 py-1.5 rounded-lg whitespace-nowrap"
+                  style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                  ✕ Limpiar
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Tabla */}
