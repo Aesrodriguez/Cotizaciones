@@ -40,7 +40,7 @@ _SELECT = """
     SELECT p.id, p.fecha, p.monto, p.destinatario, p.tipo,
            p.metodo_pago, p.referencia, p.concepto,
            p.factura_id,   f.numero  AS factura_num,
-           p.trabajador_id, CONCAT(t.nombre, ' ', t.apellido) AS trabajador_nombre,
+           p.trabajador_id, CONCAT(t.nombres, ' ', t.apellidos) AS trabajador_nombre,
            p.obra_id,      o.nombre  AS obra_nombre,
            p.notas, p.created_at,
            p.soporte_url, p.soporte_filename
