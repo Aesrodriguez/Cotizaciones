@@ -232,7 +232,7 @@ function PagoFormModal({ initial, obras, onClose, onSaved }: {
     } : { ...EMPTY_FORM }
   )
   const [facturas, setFacturas] = useState<{ id: string; numero: string; proveedor_nombre: string | null; total_pagar: number }[]>([])
-  const [trabajadores, setTrabajadores] = useState<{ id: string; nombres: string; apellidos: string; cargo?: string }[]>([])
+  const [trabajadores, setTrabajadores] = useState<{ id: string; nombres: string; apellidos: string; cargo?: string; tipo?: string }[]>([])
   const [saving, setSaving] = useState(false)
   const [soporteFile, setSoporteFile] = useState<File | null>(null)
   const [savingStep, setSavingStep] = useState<'pago' | 'soporte' | null>(null)
@@ -249,24 +249,27 @@ function PagoFormModal({ initial, obras, onClose, onSaved }: {
     }).catch(() => {})
     // Cargar trabajadores
     trabajadoresAPI.getAll({ limit: 200 }).then(r => setTrabajadores(
-      r.data.data.map(t => ({ id: t.id, nombres: t.nombres, apellidos: t.apellidos, cargo: t.cargo }))
+      r.data.data.map(t => ({ id: t.id, nombres: t.nombres, apellidos: t.apellidos, cargo: t.cargo, tipo: t.tipo }))
     )).catch(() => {})
   }, [])
 
   // Sugerencias estáticas según tipo seleccionado
   const staticSugs: Sugerencia[] = (() => {
     if (form.tipo === 'TRABAJADOR') {
-      return trabajadores.map(t => ({
-        label: `${t.nombres} ${t.apellidos}`.trim(),
-        sub: t.cargo ?? undefined,
-        tipo: 'TRABAJADOR' as TipoPago,
-        fuente: 'trabajador' as const,
-        id: t.id,
-      }))
+      return trabajadores
+        .filter(t => t.tipo !== 'Proveedor')
+        .map(t => ({
+          label: `${t.nombres} ${t.apellidos}`.trim(),
+          sub: t.cargo ?? undefined,
+          tipo: 'TRABAJADOR' as TipoPago,
+          fuente: 'trabajador' as const,
+          id: t.id,
+        }))
     }
     if (form.tipo === 'PROVEEDOR') {
+      // Proveedores de facturas recibidas
       const seen = new Set<string>()
-      return facturas.flatMap(f => {
+      const deFacturas: Sugerencia[] = facturas.flatMap(f => {
         if (!f.proveedor_nombre || seen.has(f.proveedor_nombre)) return []
         seen.add(f.proveedor_nombre)
         return [{
@@ -276,6 +279,18 @@ function PagoFormModal({ initial, obras, onClose, onSaved }: {
           fuente: 'proveedor' as const,
         }]
       })
+      // Trabajadores registrados como Proveedor
+      const deTrabajadores: Sugerencia[] = trabajadores
+        .filter(t => t.tipo === 'Proveedor')
+        .filter(t => !seen.has(`${t.nombres} ${t.apellidos}`.trim()))
+        .map(t => ({
+          label: `${t.nombres} ${t.apellidos}`.trim(),
+          sub: t.cargo ?? undefined,
+          tipo: 'PROVEEDOR' as TipoPago,
+          fuente: 'trabajador' as const,
+          id: t.id,
+        }))
+      return [...deFacturas, ...deTrabajadores]
     }
     return []
   })()
