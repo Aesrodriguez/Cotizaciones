@@ -149,15 +149,15 @@ def _upsert_catalogo(db: Session, item: dict, proveedor_nit: str | None,
     return str(result.fetchone()[0])
 
 
-def _save_one_xml(db: Session, xml_content: str, filename: str, observaciones: str) -> dict:
-    parsed = parse_dian_xml(xml_content)
+def _save_one_parsed(db: Session, parsed: dict, filename: str,
+                     observaciones: str, xml_content: str = '') -> dict:
+    """Guarda una factura desde un dict ya parseado (XML o PDF)."""
     items_data = parsed.pop('items', [])
 
     cufe   = parsed.get('cufe')
     numero = parsed['numero']
     nit    = parsed.get('proveedor_nit')
 
-    # Verificar duplicados antes de insertar
     dup = db.execute(text("""
         SELECT numero FROM facturas_electronicas
         WHERE (:cufe IS NOT NULL AND cufe = :cufe)
@@ -173,12 +173,12 @@ def _save_one_xml(db: Session, xml_content: str, filename: str, observaciones: s
     factura = FacturaElectronica(
         **parsed,
         xml_filename=filename,
-        xml_content=xml_content,
+        xml_content=xml_content or None,
         observaciones=observaciones or None,
         tipo=tipo,
     )
     db.add(factura)
-    db.flush()  # assigns factura.id
+    db.flush()
 
     for item in items_data:
         catalogo_id = _upsert_catalogo(
@@ -194,6 +194,11 @@ def _save_one_xml(db: Session, xml_content: str, filename: str, observaciones: s
         ))
 
     return _to_dict(factura, _serialize_items(items_data))
+
+
+def _save_one_xml(db: Session, xml_content: str, filename: str, observaciones: str) -> dict:
+    parsed = parse_dian_xml(xml_content)
+    return _save_one_parsed(db, parsed, filename, observaciones, xml_content=xml_content)
 
 
 def _serialize_items(items_data: list) -> list:
@@ -253,12 +258,33 @@ async def upload_factura(
     _: Usuario = Depends(get_authenticated_user),
 ):
     fname = (file.filename or '').lower()
-    if not fname.endswith('.xml') and not fname.endswith('.zip'):
-        raise HTTPException(400, "Solo se aceptan archivos .xml o .zip")
+    if not fname.endswith('.xml') and not fname.endswith('.zip') and not fname.endswith('.pdf'):
+        raise HTTPException(400, "Solo se aceptan archivos .xml, .zip o .pdf")
 
     raw = await file.read()
     obs = observaciones.strip()
 
+    # ── PDF DIAN ──────────────────────────────────────────────────────────────
+    if fname.endswith('.pdf'):
+        from app.services.factura_pdf_parser import parse_dian_pdf, is_dian_pdf_text
+        import pdfplumber
+        try:
+            with pdfplumber.open(io.BytesIO(raw)) as pdf:
+                text = '\n'.join(page.extract_text() or '' for page in pdf.pages)
+            if not is_dian_pdf_text(text):
+                raise HTTPException(422, "El PDF no parece ser una factura electrónica DIAN")
+            parsed = parse_dian_pdf(raw)
+            result = _save_one_parsed(db, parsed, file.filename or 'factura.pdf', obs)
+            db.commit()
+        except HTTPException:
+            raise
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+        except Exception as e:
+            raise HTTPException(422, f"Error al procesar PDF: {e}")
+        return result
+
+    # ── ZIP ───────────────────────────────────────────────────────────────────
     if fname.endswith('.zip'):
         try:
             zf = zipfile.ZipFile(io.BytesIO(raw))
@@ -281,6 +307,7 @@ async def upload_factura(
         db.commit()
         return {"procesados": len(saved), "errores": errors, "facturas": saved}
 
+    # ── XML ───────────────────────────────────────────────────────────────────
     try:
         xml_content = _decode_xml(raw)
     except ValueError as e:

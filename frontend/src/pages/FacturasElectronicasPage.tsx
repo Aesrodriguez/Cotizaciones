@@ -40,8 +40,8 @@ function UploadZone({ onUploaded }: { onUploaded: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null)
 
   const processFiles = async (list: FileList | File[]) => {
-    const accepted = Array.from(list).filter((f) => /\.(xml|zip)$/i.test(f.name))
-    if (!accepted.length) { toast.error('Solo se aceptan archivos .xml o .zip'); return }
+    const accepted = Array.from(list).filter((f) => /\.(xml|zip|pdf)$/i.test(f.name))
+    if (!accepted.length) { toast.error('Solo se aceptan archivos .xml, .zip o .pdf'); return }
     setFiles(accepted)
     setUploading(true)
     let ok = 0
@@ -79,7 +79,7 @@ function UploadZone({ onUploaded }: { onUploaded: () => void }) {
       onDrop={(e) => { e.preventDefault(); setDragging(false); processFiles(e.dataTransfer.files) }}
       onClick={() => inputRef.current?.click()}
     >
-      <input ref={inputRef} type="file" accept=".xml,.zip" multiple className="hidden" onChange={(e) => e.target.files && processFiles(e.target.files)} />
+      <input ref={inputRef} type="file" accept=".xml,.zip,.pdf" multiple className="hidden" onChange={(e) => e.target.files && processFiles(e.target.files)} />
       <div className="text-3xl">{uploading ? '⏳' : '📄'}</div>
       {uploading ? (
         <div className="text-center">
@@ -90,9 +90,9 @@ function UploadZone({ onUploaded }: { onUploaded: () => void }) {
         </div>
       ) : (
         <div className="text-center">
-          <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Arrastra facturas XML aquí o haz click</p>
+          <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Arrastra facturas aquí o haz click</p>
           <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-            Formato DIAN UBL 2.1 · Archivos .xml o .zip con XMLs adentro · Varios a la vez
+            DIAN UBL 2.1 (.xml · .zip) · Representación gráfica (.pdf) · Varios a la vez
           </p>
         </div>
       )}
