@@ -110,7 +110,7 @@ export default function RetencionesPeriodoPage() {
               <tr style={{ background: 'var(--surface)', borderTop: '2px solid var(--border)' }}>
                 <td className="px-3 py-2 font-bold text-xs" style={{ color: 'var(--text-muted)' }}>TOTALES {anio}</td>
                 <td className="px-3 py-2 text-right font-mono text-xs" style={{ color: 'var(--text-muted)' }}>{totales.n_facturas ?? 0}</td>
-                <td colSpan={3} />
+                <td colSpan={2} />
                 <td className="px-3 py-2 text-right font-bold font-mono text-xs" style={{ color: '#f59e0b' }}>{fmt(totales.retefuente ?? 0)}</td>
                 <td className="px-3 py-2 text-right font-bold font-mono text-xs" style={{ color: '#f59e0b' }}>{fmt(totales.reteiva ?? 0)}</td>
                 <td className="px-3 py-2 text-right font-bold font-mono text-xs" style={{ color: '#f59e0b' }}>{fmt(totales.reteica ?? 0)}</td>

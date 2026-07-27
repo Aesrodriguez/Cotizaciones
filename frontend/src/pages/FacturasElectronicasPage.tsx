@@ -297,7 +297,7 @@ function DriveSection({ url, filename }: { url: string; filename?: string | null
   )
 }
 
-function DetalleModal({ facturaId, onClose, onUpdated }: {
+export function DetalleModal({ facturaId, onClose, onUpdated }: {
   facturaId: string
   onClose: () => void
   onUpdated: () => void
@@ -539,9 +539,10 @@ function DetalleModal({ facturaId, onClose, onUpdated }: {
               </div>
 
               {/* Líneas de la factura */}
-              {f.items && f.items.length > 0 && (
+              <SectionTitle label="Líneas de la factura" />
+              {f.items && f.items.length > 0 ? (
                 <>
-                  <SectionTitle label={`Líneas de la factura (${f.items.length})`} />
+                  <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>{f.items.length} línea{f.items.length !== 1 ? 's' : ''}</p>
                   <div className="rounded-xl overflow-hidden mb-2" style={{ border: '1px solid var(--border)' }}>
                     <table className="w-full text-xs">
                       <thead>
@@ -622,6 +623,10 @@ function DetalleModal({ facturaId, onClose, onUpdated }: {
                     </table>
                   </div>
                 </>
+              ) : (
+                <p className="text-xs py-2 mb-2" style={{ color: 'var(--text-muted)' }}>
+                  No se encontraron ítems. Los XMLs incluyen líneas de detalle; los PDFs de representación gráfica pueden no incluirlas.
+                </p>
               )}
 
               {/* Movimientos bancarios coincidentes */}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { extractosAPI, type ConciliacionSugerencia } from '../services/api'
 import { formatCurrency } from '../utils/format'
 import toast from 'react-hot-toast'
+import { DetalleModal } from './FacturasElectronicasPage'
 
 function fmt(v?: number | null) {
   return v == null ? '—' : formatCurrency(v)
@@ -57,11 +58,12 @@ function KPI({ label, value, color, onClick, active }: {
 
 // ── Tarjeta de sugerencia ─────────────────────────────────────────────────────
 function SugerenciaCard({
-  s, onAprobar, onRechazar, loading,
+  s, onAprobar, onRechazar, onVerFactura, loading,
 }: {
   s: ConciliacionSugerencia
   onAprobar: () => void
   onRechazar: () => void
+  onVerFactura: () => void
   loading: boolean
 }) {
   const isPending = s.estado === 'PENDIENTE'
@@ -181,7 +183,7 @@ function SugerenciaCard({
             </div>
           )}
 
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
             {s.factura_num && (
               <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>#{s.factura_num}</span>
             )}
@@ -190,6 +192,15 @@ function SugerenciaCard({
                 ['PAGADA', 'PAGADO'].includes(s.factura_estado ?? '') ? 'badge-status-green' :
                 s.factura_estado === 'RECHAZADA' ? 'badge-status-red' : 'badge-muted'
               }`}>{s.factura_estado}</span>
+            )}
+            {s.factura_id && (
+              <button
+                onClick={onVerFactura}
+                className="text-xs px-2 py-0.5 rounded-lg font-medium"
+                style={{ background: 'rgba(245,158,11,0.12)', color: 'var(--amber)', border: '1px solid rgba(245,158,11,0.25)' }}
+              >
+                Ver factura →
+              </button>
             )}
           </div>
 
@@ -243,6 +254,7 @@ export default function ConciliacionPage() {
   const [filtroEstado, setFiltroEstado] = useState('PENDIENTE')
   const [actionId, setActionId] = useState<string | null>(null)
   const [total, setTotal] = useState(0)
+  const [selectedFacturaId, setSelectedFacturaId] = useState<string | null>(null)
 
   const loadStats = useCallback(async () => {
     try { const r = await extractosAPI.getConciliacionStats(); setStats(r.data) } catch {}
@@ -277,8 +289,7 @@ export default function ConciliacionPage() {
     try {
       await extractosAPI.aprobarSugerencia(id)
       toast.success('Enlace aprobado · Factura marcada como PAGADA')
-      setSugerencias(prev => prev.map(s => s.id === id ? { ...s, estado: 'APROBADO', aprobado_en: new Date().toISOString() } : s))
-      await loadStats()
+      await Promise.all([load(), loadStats()])
     } catch (e: any) {
       toast.error(e?.response?.data?.detail ?? 'Error al aprobar')
     } finally { setActionId(null) }
@@ -288,8 +299,8 @@ export default function ConciliacionPage() {
     setActionId(id)
     try {
       await extractosAPI.rechazarSugerencia(id)
-      setSugerencias(prev => prev.map(s => s.id === id ? { ...s, estado: 'RECHAZADO', rechazado_en: new Date().toISOString() } : s))
-      await loadStats()
+      toast.success('Sugerencia descartada')
+      await Promise.all([load(), loadStats()])
     } catch (e: any) {
       toast.error(e?.response?.data?.detail ?? 'Error al rechazar')
     } finally { setActionId(null) }
@@ -359,10 +370,19 @@ export default function ConciliacionPage() {
               key={s.id} s={s}
               onAprobar={() => handleAprobar(s.id)}
               onRechazar={() => handleRechazar(s.id)}
+              onVerFactura={() => setSelectedFacturaId(s.factura_id)}
               loading={actionId === s.id}
             />
           ))}
         </div>
+      )}
+
+      {selectedFacturaId && (
+        <DetalleModal
+          facturaId={selectedFacturaId}
+          onClose={() => setSelectedFacturaId(null)}
+          onUpdated={load}
+        />
       )}
     </div>
   )
