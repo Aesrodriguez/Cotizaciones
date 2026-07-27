@@ -202,7 +202,9 @@ async def upload_soporte(
     db: Session = Depends(get_db),
 ):
     """Sube el soporte de pago (PDF/imagen) a Google Drive y guarda la URL en el pago."""
-    row = db.execute(text("SELECT id FROM pagos WHERE id = :id"), {"id": pid}).fetchone()
+    row = db.execute(
+        text("SELECT id, fecha, destinatario FROM pagos WHERE id = :id"), {"id": pid}
+    ).fetchone()
     if not row:
         raise HTTPException(404, "Pago no encontrado")
 
@@ -211,8 +213,21 @@ async def upload_soporte(
         raise HTTPException(400, "Archivo vacío")
 
     from app.utils.gdrive import upload_to_drive
-    safe_name = (file.filename or "soporte").replace(" ", "_")
-    drive_filename = f"Soporte_{pid[:8]}_{safe_name}"
+    import re
+
+    # Extensión del archivo original
+    orig_name = file.filename or "soporte"
+    ext = orig_name.rsplit(".", 1)[-1] if "." in orig_name else ""
+
+    # Nombre limpio: fecha + destinatario
+    fecha_str = str(row[1]) if row[1] else "sin-fecha"         # "2026-07-27"
+    destinatario_str = str(row[2]) if row[2] else "sin-nombre"
+    destinatario_clean = re.sub(r"[^A-Za-z0-9áéíóúÁÉÍÓÚñÑ\s]", "", destinatario_str).strip()
+    destinatario_clean = re.sub(r"\s+", "_", destinatario_clean)[:40]
+
+    drive_filename = f"Soporte_{fecha_str}_{destinatario_clean}.{ext}" if ext else f"Soporte_{fecha_str}_{destinatario_clean}"
+    display_filename = f"Soporte {fecha_str} {row[2]}.{ext}" if ext else f"Soporte {fecha_str} {row[2]}"
+
     mime = file.content_type or "application/octet-stream"
 
     url = upload_to_drive(content, drive_filename, mime)
@@ -223,10 +238,10 @@ async def upload_soporte(
         UPDATE pagos
         SET soporte_url = :url, soporte_filename = :fname, updated_at = NOW()
         WHERE id = :id
-    """), {"url": url, "fname": file.filename, "id": pid})
+    """), {"url": url, "fname": display_filename, "id": pid})
     db.commit()
 
-    return {"soporte_url": url, "soporte_filename": file.filename}
+    return {"soporte_url": url, "soporte_filename": display_filename}
 
 
 @router.delete("/{pid}/soporte")
