@@ -43,6 +43,44 @@ def _search(pattern: str, lines: list[str], group: int = 1, flags: int = 0) -> s
     return None
 
 
+def _extract_numero(lines: list[str]) -> tuple[str | None, str | None]:
+    """
+    Extrae el número de factura y su prefijo de forma robusta.
+
+    Problema real: pdfplumber divide el número en dos líneas para SIIGO/SODIMAC:
+      Línea N:   "Número de Factura  94-"
+      Línea N+1: "1480243"
+    El regex simple captura solo "94-"; aquí detectamos ese patrón y
+    concatenamos el consecutivo de la línea siguiente → "941480243".
+    """
+    # Etiquetas que usan distintos proveedores para el número de factura
+    _LABEL_RE = re.compile(
+        r'(?:Número de Factura|No\.?\s*Factura|Folio|Número\s+Factura)[:\s]+(\S+)',
+        re.IGNORECASE,
+    )
+
+    for i, line in enumerate(lines):
+        m = _LABEL_RE.search(line)
+        if m:
+            val = m.group(1).strip()
+
+            # Número partido en dos líneas: "94-" + siguiente línea "1480243"
+            if val.endswith('-'):
+                for j in range(i + 1, min(i + 5, len(lines))):
+                    nxt = lines[j].strip()
+                    if nxt and re.match(r'^\d+$', nxt):
+                        # Unir sin guion: "94" + "1480243" → "941480243"
+                        val = val.rstrip('-') + nxt
+                        break
+                    if nxt:  # línea no vacía y no es dígitos → ya no es el consecutivo
+                        break
+
+            prefijo = val.split('-')[0] if '-' in val else None
+            return val, prefijo
+
+    return None, None
+
+
 def _search_amount(pattern: str, lines: list[str], group: int = 1) -> Decimal:
     v = _search(pattern, lines, group, re.IGNORECASE)
     return _to_decimal(v) if v else Decimal('0')
@@ -89,8 +127,7 @@ def parse_dian_pdf(raw: bytes) -> dict:
                     break
 
     # ── Número y prefijo ──────────────────────────────────────────────────────
-    numero = _search(r'Número de Factura[:\s]+(\S+)', lines)
-    prefijo = numero.split('-')[0] if numero and '-' in numero else None
+    numero, prefijo = _extract_numero(lines)
 
     # ── Fechas ────────────────────────────────────────────────────────────────
     fecha_str = _search(r'Fecha de Emisión[:\s]*(\d{2}/\d{2}/\d{4})', lines)

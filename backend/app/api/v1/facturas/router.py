@@ -699,6 +699,100 @@ def update_factura(
     return _to_dict(f, items)
 
 
+# ── Backfill: corregir números de factura truncados ───────────────────────────
+
+@router.post('/fix-numeros-truncados', status_code=200)
+def fix_numeros_truncados(
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    """
+    Repara registros cuyo campo 'numero' quedó truncado al prefijo (p.ej. "94-", "2401-").
+    Para cada registro afectado con xml_content, re-parsea el XML con el parser corregido
+    y actualiza numero + prefijo.  Los registros sin xml_content se listan aparte para
+    que el usuario los suba de nuevo desde Drive.
+    """
+    # Localizar registros con número incompleto (termina en "-")
+    rows = db.execute(text("""
+        SELECT id, numero, cufe, proveedor_nit, xml_content, archivo_url
+        FROM facturas_electronicas
+        WHERE numero LIKE '%-'
+        ORDER BY fecha_emision
+    """)).fetchall()
+
+    corregidos: list[dict] = []
+    sin_xml:    list[dict] = []
+    errores:    list[dict] = []
+
+    for row in rows:
+        fid, numero_viejo, cufe, nit, xml_content, archivo_url = row
+
+        if not xml_content:
+            sin_xml.append({
+                "id":          str(fid),
+                "cufe_12":     (cufe or '')[:12],
+                "numero_malo": numero_viejo,
+                "nit":         nit,
+                "archivo_url": archivo_url,
+                "accion":      "re-sube el archivo desde Drive para corregir",
+            })
+            continue
+
+        try:
+            parsed = parse_dian_xml(xml_content)
+            numero_nuevo  = parsed.get('numero', '')
+            prefijo_nuevo = parsed.get('prefijo', '')
+
+            if not numero_nuevo or numero_nuevo == numero_viejo or numero_nuevo.endswith('-'):
+                errores.append({"id": str(fid), "numero": numero_viejo,
+                                "error": f"re-parseo devolvió '{numero_nuevo}', sin mejora"})
+                continue
+
+            # Verificar si ya existe otro registro con ese número real para el mismo NIT
+            dup = db.execute(text("""
+                SELECT id FROM facturas_electronicas
+                WHERE proveedor_nit = :nit AND numero = :num AND id <> :id
+                LIMIT 1
+            """), {"nit": nit, "num": numero_nuevo, "id": str(fid)}).fetchone()
+
+            if dup:
+                # El número real ya está en BD → este registro truncado es el verdadero duplicado
+                db.execute(text("DELETE FROM facturas_electronicas WHERE id = :id"),
+                           {"id": str(fid)})
+                corregidos.append({
+                    "id":           str(fid),
+                    "cufe_12":      (cufe or '')[:12],
+                    "numero_viejo": numero_viejo,
+                    "numero_nuevo": numero_nuevo,
+                    "accion":       "eliminado (duplicado real ya existe)",
+                })
+            else:
+                db.execute(text("""
+                    UPDATE facturas_electronicas
+                    SET numero = :num, prefijo = :pfx
+                    WHERE id = :id
+                """), {"num": numero_nuevo, "pfx": prefijo_nuevo, "id": str(fid)})
+                corregidos.append({
+                    "id":           str(fid),
+                    "cufe_12":      (cufe or '')[:12],
+                    "numero_viejo": numero_viejo,
+                    "numero_nuevo": numero_nuevo,
+                    "accion":       "actualizado",
+                })
+
+        except Exception as exc:
+            errores.append({"id": str(fid), "numero": numero_viejo, "error": str(exc)})
+
+    db.commit()
+
+    return {
+        "total_afectados":  len(rows),
+        "corregidos":       corregidos,
+        "sin_xml_content":  sin_xml,
+        "errores":          errores,
+    }
+
+
 # ── Eliminar ──────────────────────────────────────────────────────────────────
 
 @router.delete("/{factura_id}", status_code=204)
