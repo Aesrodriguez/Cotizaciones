@@ -24,8 +24,12 @@ function IconSearch() {
   )
 }
 
-const ESTADOS = ['', 'Activo', 'Inactivo', 'Suspendido', 'Retirado']
-const TIPOS = ['Empleado', 'Subcontratista']
+const ESTADOS = [
+  { value: 'ACTIVO',   label: 'Activo' },
+  { value: 'INACTIVO', label: 'Inactivo' },
+  { value: 'LICENCIA', label: 'Licencia' },
+]
+const TIPOS = ['Empleado', 'Subcontratista', 'Proveedor']
 
 interface FormState {
   nombres: string
@@ -34,6 +38,7 @@ interface FormState {
   cargo: string
   especialidad: string
   tipo: string
+  estado: string
   telefono: string
   email: string
   salario_base: string
@@ -53,6 +58,7 @@ const emptyForm = (): FormState => ({
   cargo: '',
   especialidad: '',
   tipo: 'Empleado',
+  estado: 'ACTIVO',
   telefono: '',
   email: '',
   salario_base: '',
@@ -131,6 +137,7 @@ export default function TrabajadoresPage() {
       cargo: t.cargo ?? '',
       especialidad: t.especialidad ?? '',
       tipo: t.tipo ?? 'Empleado',
+      estado: t.estado ?? 'ACTIVO',
       telefono: t.telefono ?? '',
       email: t.email ?? '',
       salario_base: t.salario_base != null ? String(t.salario_base) : '',
@@ -159,8 +166,7 @@ export default function TrabajadoresPage() {
         tipo_salario: form.tipo_salario,
         fecha_ingreso: form.fecha_ingreso || null,
         fecha_termino: form.fecha_retiro || null,
-        // Si tiene fecha de retiro → INACTIVO; si se limpió → vuelve ACTIVO
-        estado: form.fecha_retiro ? 'INACTIVO' : 'ACTIVO',
+        estado: form.estado,
       }
       if (editing) {
         await trabajadoresAPI.update(editing.id, payload)
@@ -261,13 +267,15 @@ export default function TrabajadoresPage() {
   const set = (k: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
 
-  const esRetirado = (t: Trabajador) =>
+  const esInactivo = (t: Trabajador) =>
     t.estado === 'INACTIVO' || !!t.fecha_termino
 
   const badgeEstado = (t: Trabajador) => {
-    if (esRetirado(t))
-      return <span className="badge bg-gray-100 text-gray-500">Retirado</span>
-    if (!t.estado_saldo) return null
+    if (t.estado === 'INACTIVO')
+      return <span className="badge bg-gray-100 text-gray-500">Inactivo</span>
+    if (t.estado === 'LICENCIA')
+      return <span className="badge bg-yellow-100 text-yellow-700">Licencia</span>
+    if (!t.estado_saldo) return <span className="badge bg-green-100 text-green-700">Activo</span>
     const cls = t.estado_saldo === 'Al día'
       ? 'bg-green-100 text-green-800'
       : t.estado_saldo === 'Saldo a favor'
@@ -350,7 +358,7 @@ export default function TrabajadoresPage() {
         </div>
         <select className="input w-36" value={estado} onChange={e => handleEstado(e.target.value)}>
           <option value="">Todos los estados</option>
-          {ESTADOS.filter(Boolean).map(s => <option key={s} value={s}>{s}</option>)}
+          {ESTADOS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
       </div>
 
@@ -385,7 +393,7 @@ export default function TrabajadoresPage() {
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <p className={`font-medium ${esRetirado(t) ? 'text-gray-400' : 'text-gray-900'}`}>{t.nombres} {t.apellidos}</p>
+                      <p className={`font-medium ${esInactivo(t) ? 'text-gray-400' : 'text-gray-900'}`}>{t.nombres} {t.apellidos}</p>
                     </div>
                     <p className="text-xs text-gray-400">
                       {t.codigo} {t.cedula ? `· CC ${t.cedula}` : ''}
@@ -473,6 +481,14 @@ export default function TrabajadoresPage() {
                   <label className="label">Tipo</label>
                   <select className="input" value={form.tipo} onChange={set('tipo')}>
                     {TIPOS.map(t => <option key={t}>{t}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Estado</label>
+                  <select className="input" value={form.estado} onChange={set('estado')}>
+                    {ESTADOS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                   </select>
                 </div>
               </div>
