@@ -523,7 +523,6 @@ function PagoFormModal({ initial, obras, onClose, onSaved }: {
   )
 }
 
-// ─── DriveIcon pequeño ────────────────────────────────────────────────────────
 // ─── PagoRow ──────────────────────────────────────────────────────────────────
 function PagoRow({ pago, onEdit, onDelete, onReload }: {
   pago: Pago
@@ -730,8 +729,10 @@ export default function PagosPage() {
       setResumen(pRes.data.resumen)
       setPorDestinatario(pRes.data.por_destinatario)
       setObras(oRes.data.data)
-    } catch { setPagos([]) }
-    finally { setLoading(false) }
+    } catch {
+      setPagos([])
+      toast.error('Error al cargar pagos')
+    } finally { setLoading(false) }
   }, [search, filtroTipo, filtroMetodo, filtroObra, fechaDesde, fechaHasta, filtroAnio, page])
 
   useEffect(() => { load() }, [load])

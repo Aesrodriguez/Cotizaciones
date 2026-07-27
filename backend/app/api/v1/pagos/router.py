@@ -1,7 +1,9 @@
+import re
 from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.api.deps import get_db_session as get_db
+from app.utils.gdrive import upload_to_drive
 
 router = APIRouter(prefix="/pagos", tags=["pagos"])
 
@@ -147,30 +149,33 @@ def list_pagos(
 def create_pago(body: dict, db: Session = Depends(get_db)):
     if not body.get("fecha") or not body.get("monto") or not body.get("destinatario"):
         raise HTTPException(400, "Faltan campos obligatorios: fecha, monto, destinatario")
-
-    row = db.execute(text("""
-        INSERT INTO pagos
-            (fecha, monto, destinatario, tipo, metodo_pago, referencia,
-             concepto, factura_id, trabajador_id, obra_id, notas)
-        VALUES
-            (:fecha, :monto, :destinatario, :tipo, :metodo_pago, :referencia,
-             :concepto, :factura_id, :trabajador_id, :obra_id, :notas)
-        RETURNING id
-    """), {
-        "fecha":          body["fecha"],
-        "monto":          float(body["monto"]),
-        "destinatario":   body["destinatario"].strip(),
-        "tipo":           body.get("tipo", "OTRO"),
-        "metodo_pago":    body.get("metodo_pago") or None,
-        "referencia":     body.get("referencia") or None,
-        "concepto":       body.get("concepto") or None,
-        "factura_id":     body.get("factura_id") or None,
-        "trabajador_id":  body.get("trabajador_id") or None,
-        "obra_id":        body.get("obra_id") or None,
-        "notas":          body.get("notas") or None,
-    }).fetchone()
-    db.commit()
-    return {"id": str(row[0])}
+    try:
+        row = db.execute(text("""
+            INSERT INTO pagos
+                (fecha, monto, destinatario, tipo, metodo_pago, referencia,
+                 concepto, factura_id, trabajador_id, obra_id, notas)
+            VALUES
+                (:fecha, :monto, :destinatario, :tipo, :metodo_pago, :referencia,
+                 :concepto, :factura_id, :trabajador_id, :obra_id, :notas)
+            RETURNING id
+        """), {
+            "fecha":          body["fecha"],
+            "monto":          float(body["monto"]),
+            "destinatario":   body["destinatario"].strip(),
+            "tipo":           body.get("tipo", "OTRO"),
+            "metodo_pago":    body.get("metodo_pago") or None,
+            "referencia":     body.get("referencia") or None,
+            "concepto":       body.get("concepto") or None,
+            "factura_id":     body.get("factura_id") or None,
+            "trabajador_id":  body.get("trabajador_id") or None,
+            "obra_id":        body.get("obra_id") or None,
+            "notas":          body.get("notas") or None,
+        }).fetchone()
+        db.commit()
+        return {"id": str(row[0])}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Error al crear pago: {e}")
 
 
 @router.patch("/{pid}")
@@ -211,9 +216,6 @@ async def upload_soporte(
     content = await file.read()
     if not content:
         raise HTTPException(400, "Archivo vacío")
-
-    from app.utils.gdrive import upload_to_drive
-    import re
 
     # Extensión del archivo original
     orig_name = file.filename or "soporte"
