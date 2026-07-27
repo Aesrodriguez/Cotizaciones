@@ -47,36 +47,64 @@ def _extract_numero(lines: list[str]) -> tuple[str | None, str | None]:
     """
     Extrae el número de factura y su prefijo de forma robusta.
 
-    Problema real: pdfplumber divide el número en dos líneas para SIIGO/SODIMAC:
-      Línea N:   "Número de Factura  94-"
-      Línea N+1: "1480243"
-    El regex simple captura solo "94-"; aquí detectamos ese patrón y
-    concatenamos el consecutivo de la línea siguiente → "941480243".
+    Problema real: pdfplumber divide el número en dos líneas para SIIGO/SODIMAC.
+    Ejemplos de layouts observados en producción:
+
+      Caso A — consecutivo en la siguiente línea inmediata:
+        "Número de Factura  94-"
+        "1480243"
+
+      Caso B — hay texto o fecha entre el prefijo y el consecutivo:
+        "Número de Factura  94-    Fecha de Emisión  14/04/2026"
+        "1467621"
+
+      Caso C — prefijo y consecutivo en la misma línea separados por espacio:
+        "Número de Factura  94- 1467621"
+
+    En todos los casos el número completo es PREFIX + CONSECUTIVO (sin guion).
     """
     # Etiquetas que usan distintos proveedores para el número de factura
     _LABEL_RE = re.compile(
-        r'(?:Número de Factura|No\.?\s*Factura|Folio|Número\s+Factura)[:\s]+(\S+)',
+        r'(?:Número\s+de\s+Factura|No\.?\s*Factura|Folio|Número\s+Factura)[:\s]+(\S+)',
         re.IGNORECASE,
     )
 
     for i, line in enumerate(lines):
         m = _LABEL_RE.search(line)
-        if m:
-            val = m.group(1).strip()
+        if not m:
+            continue
 
-            # Número partido en dos líneas: "94-" + siguiente línea "1480243"
-            if val.endswith('-'):
-                for j in range(i + 1, min(i + 5, len(lines))):
+        val = m.group(1).strip()
+
+        if val.endswith('-'):
+            prefix_part = val.rstrip('-')
+
+            # Caso C: el consecutivo puede estar justo después del guion en la misma línea
+            rest_of_line = line[m.end():].strip()
+            leading_digits = re.match(r'^(\d+)', rest_of_line)
+            if leading_digits:
+                val = prefix_part + leading_digits.group(1)
+            else:
+                # Casos A y B: buscar el consecutivo en las siguientes líneas.
+                # Saltamos líneas en blanco y líneas que no empiezan por dígitos.
+                # Paramos si encontramos una etiqueta conocida (empieza nueva sección).
+                _STOP_LABELS = re.compile(
+                    r'^(?:Fecha|NIT|RUT|CUFE|Forma|Dirección|Teléfono|Correo|Nombre|Razón)',
+                    re.IGNORECASE,
+                )
+                for j in range(i + 1, min(i + 8, len(lines))):
                     nxt = lines[j].strip()
-                    if nxt and re.match(r'^\d+$', nxt):
-                        # Unir sin guion: "94" + "1480243" → "941480243"
-                        val = val.rstrip('-') + nxt
+                    if not nxt:
+                        continue  # saltar líneas vacías
+                    digits_match = re.match(r'^(\d{4,})', nxt)  # mínimo 4 dígitos al inicio
+                    if digits_match:
+                        val = prefix_part + digits_match.group(1)
                         break
-                    if nxt:  # línea no vacía y no es dígitos → ya no es el consecutivo
-                        break
+                    if _STOP_LABELS.search(nxt):
+                        break  # nueva sección, ya no encontraremos el consecutivo
 
-            prefijo = val.split('-')[0] if '-' in val else None
-            return val, prefijo
+        prefijo = val.split('-')[0] if '-' in val else None
+        return val, prefijo
 
     return None, None
 

@@ -182,7 +182,18 @@ def _save_one_parsed(db: Session, parsed: dict, filename: str,
         tipo=tipo,
     )
     db.add(factura)
-    db.flush()
+    try:
+        db.flush()
+    except Exception as exc:
+        # Capturar UniqueViolation de BD como último recurso
+        db.rollback()
+        err_str = str(exc).lower()
+        if 'unique' in err_str or 'duplicate' in err_str:
+            raise ValueError(
+                f"La factura '{numero}' ya fue registrada (duplicado de BD). "
+                "Si el número parece truncado, usa POST /fix-numeros-truncados."
+            ) from exc
+        raise
 
     for item in items_data:
         catalogo_id = _upsert_catalogo(
