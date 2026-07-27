@@ -655,9 +655,17 @@ export default function FacturasElectronicasPage() {
     setSyncing(true)
     try {
       const r = await facturasAPI.syncDrive()
-      const { vinculados, archivos_en_drive } = r.data as any
-      toast.success(`${vinculados} factura${vinculados !== 1 ? 's' : ''} vinculada${vinculados !== 1 ? 's' : ''} · ${archivos_en_drive} en Drive`)
-      if (vinculados > 0) load()
+      const { vinculados, importados, duplicados, errores, archivos_en_drive } = r.data as any
+      const parts: string[] = []
+      if (importados > 0) parts.push(`${importados} importada${importados !== 1 ? 's' : ''}`)
+      if (vinculados > 0) parts.push(`${vinculados} vinculada${vinculados !== 1 ? 's' : ''}`)
+      if (duplicados > 0) parts.push(`${duplicados} duplicada${duplicados !== 1 ? 's' : ''}`)
+      const msg = parts.length ? parts.join(' · ') : 'Sin cambios'
+      toast.success(`Drive (${archivos_en_drive} archivos): ${msg}`, { duration: 7000 })
+      if ((errores as string[]).length) {
+        toast.error(`${errores.length} error${errores.length !== 1 ? 'es' : ''}: ${errores.slice(0, 2).join(', ')}`, { duration: 9000 })
+      }
+      if (importados > 0 || vinculados > 0) load()
     } catch { toast.error('Error al sincronizar con Drive') }
     finally { setSyncing(false) }
   }
@@ -741,7 +749,7 @@ export default function FacturasElectronicasPage() {
           <button onClick={handleSyncDrive} disabled={syncing}
             className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-opacity hover:opacity-80 disabled:opacity-50 whitespace-nowrap"
             style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
-            {syncing ? '⏳' : '🔄'} Sincronizar Drive
+            {syncing ? '⏳ Sincronizando…' : '🔄 Sincronizar Drive'}
           </button>
         </div>
       </div>

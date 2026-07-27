@@ -352,15 +352,73 @@ async def upload_factura(
     return result
 
 
-# ── Sincronizar Drive ─────────────────────────────────────────────────────────
+# ── Helper: parsear y guardar un archivo (XML, PDF, ZIP) desde bytes ──────────
+
+def _import_raw(db: Session, raw: bytes, filename: str, web_url: str) -> list[dict]:
+    """
+    Parsea `raw` (XML / PDF / ZIP) y guarda en BD.
+    Retorna lista de {ok, numero, error} — un entry por factura encontrada.
+    """
+    fname_low = filename.lower()
+    results: list[dict] = []
+
+    def _save(parsed: dict, fname: str) -> dict:
+        try:
+            r = _save_one_parsed(db, parsed, fname, observaciones='Importado desde Drive')
+            db.flush()
+            if web_url:
+                db.execute(text("UPDATE facturas_electronicas SET archivo_url = :url WHERE id = :id"),
+                           {"url": web_url, "id": r['id']})
+            return {"ok": True, "numero": r.get('numero'), "error": None}
+        except ValueError as exc:
+            return {"ok": False, "numero": None, "error": str(exc)}
+        except Exception as exc:
+            return {"ok": False, "numero": None, "error": str(exc)}
+
+    if fname_low.endswith('.pdf'):
+        from app.services.factura_pdf_parser import parse_dian_pdf
+        try:
+            parsed = parse_dian_pdf(raw)
+            results.append(_save(parsed, filename))
+        except Exception as exc:
+            results.append({"ok": False, "numero": None, "error": str(exc)})
+
+    elif fname_low.endswith('.zip'):
+        try:
+            zf = zipfile.ZipFile(io.BytesIO(raw))
+            xml_names = [n for n in zf.namelist()
+                         if n.lower().endswith('.xml') and not n.startswith('__MACOSX')]
+            if not xml_names:
+                results.append({"ok": False, "numero": None, "error": "ZIP sin XMLs"})
+            for name in xml_names:
+                try:
+                    parsed = parse_dian_xml(_decode_xml(zf.read(name)))
+                    results.append(_save(parsed, name.split('/')[-1]))
+                except Exception as exc:
+                    results.append({"ok": False, "numero": None, "error": f"{name}: {exc}"})
+        except Exception as exc:
+            results.append({"ok": False, "numero": None, "error": str(exc)})
+
+    else:
+        try:
+            parsed = parse_dian_xml(_decode_xml(raw))
+            results.append(_save(parsed, filename))
+        except Exception as exc:
+            results.append({"ok": False, "numero": None, "error": str(exc)})
+
+    return results
+
+
+# ── Sincronizar Drive (vincular + importar todo) ───────────────────────────────
 
 @router.post('/sync-drive', status_code=200)
 def sync_drive_facturas(
     db: Session = Depends(get_db_session),
     _: Usuario = Depends(get_authenticated_user),
 ):
+    import re as _re
     from app.config.settings import get_settings
-    from app.utils.gdrive import list_drive_files_in_folder
+    from app.utils.gdrive import list_drive_files_in_folder, download_from_drive
     settings = get_settings()
 
     folder_id = settings.GDRIVE_FACTURAS_FOLDER_ID.strip()
@@ -371,24 +429,60 @@ def sync_drive_facturas(
     if drive_files is None:
         raise HTTPException(503, 'No se pudo conectar con Google Drive')
 
+    # Archivos ya en BD (por nombre de archivo)
+    existing = {r[0] for r in db.execute(text(
+        "SELECT xml_filename FROM facturas_electronicas WHERE xml_filename IS NOT NULL"
+    )).fetchall()}
+
     vinculados = 0
+    importados = 0
+    duplicados = 0
+    errores: list[str] = []
+
     for f in drive_files:
-        row = db.execute(text(
-            "SELECT id FROM facturas_electronicas WHERE xml_filename = :name AND archivo_url IS NULL"
-        ), {"name": f['name']}).fetchone()
-        if row:
+        fname    = f['name']
+        web_url  = f['webViewLink']
+        fname_low = fname.lower()
+
+        # Solo archivos de factura
+        if not _re.search(r'\.(xml|pdf|zip)$', fname_low):
+            continue
+
+        # Ya está en BD → solo actualizar archivo_url si falta
+        if fname in existing:
             db.execute(text(
-                "UPDATE facturas_electronicas SET archivo_url = :url WHERE id = :id"
-            ), {"url": f['webViewLink'], "id": str(row[0])})
+                "UPDATE facturas_electronicas SET archivo_url = :url "
+                "WHERE xml_filename = :name AND archivo_url IS NULL"
+            ), {"url": web_url, "name": fname})
             vinculados += 1
+            continue
 
-    if vinculados:
-        db.commit()
+        # No está en BD → descargar e importar
+        raw = download_from_drive(f['id'])
+        if raw is None:
+            errores.append(f"{fname}: no se pudo descargar")
+            continue
 
-    return {"vinculados": vinculados, "archivos_en_drive": len(drive_files)}
+        for res in _import_raw(db, raw, fname, web_url):
+            if res['ok']:
+                importados += 1
+            elif res['error'] and 'duplicado' in res['error'].lower():
+                duplicados += 1
+            else:
+                errores.append(f"{fname}: {res['error']}")
+
+    db.commit()
+
+    return {
+        "vinculados":        vinculados,
+        "importados":        importados,
+        "duplicados":        duplicados,
+        "errores":           errores,
+        "archivos_en_drive": len(drive_files),
+    }
 
 
-# ── Importar desde Drive ──────────────────────────────────────────────────────
+# ── Importar desde Drive (preview + single — se mantienen para compatibilidad) ─
 
 @router.get('/import-from-drive/preview')
 def import_drive_preview(
@@ -408,18 +502,19 @@ def import_drive_preview(
     if drive_files is None:
         raise HTTPException(503, 'No se pudo conectar con Google Drive')
 
-    existing = {r[0] for r in db.execute(text("SELECT xml_filename FROM facturas_electronicas")).fetchall()}
+    existing = {r[0] for r in db.execute(text(
+        "SELECT xml_filename FROM facturas_electronicas WHERE xml_filename IS NOT NULL"
+    )).fetchall()}
 
     to_import = [
         f for f in drive_files
         if f['name'] not in existing
-        and _re.search(r'\.(xml|pdf)$', f['name'], _re.IGNORECASE)
+        and _re.search(r'\.(xml|pdf|zip)$', f['name'], _re.IGNORECASE)
     ]
-    already_in_db = len(drive_files) - len(to_import)
 
     return {
-        "to_import":       [{"id": f["id"], "name": f["name"], "web_url": f["webViewLink"]} for f in to_import],
-        "already_in_db":   already_in_db,
+        "to_import":         [{"id": f["id"], "name": f["name"], "web_url": f["webViewLink"]} for f in to_import],
+        "already_in_db":     len(drive_files) - len(to_import),
         "archivos_en_drive": len(drive_files),
     }
 
@@ -431,8 +526,6 @@ def import_drive_single(
     _: Usuario = Depends(get_authenticated_user),
 ):
     from app.utils.gdrive import download_from_drive
-    from app.config.settings import get_settings
-    settings = get_settings()
 
     file_id  = body.get('file_id', '')
     filename = body.get('filename', '')
@@ -442,30 +535,15 @@ def import_drive_single(
     if raw is None:
         return {"ok": False, "numero": None, "error": "No se pudo descargar de Drive"}
 
-    try:
-        if filename.lower().endswith('.pdf'):
-            from app.services.factura_pdf_parser import parse_dian_pdf
-            parsed = parse_dian_pdf(raw)
-        else:
-            xml_content = _decode_xml(raw)
-            parsed = parse_dian_xml(xml_content)
+    results = _import_raw(db, raw, filename, web_url)
+    db.commit()
 
-        result = _save_one_parsed(db, parsed, filename, observaciones='Importado desde Drive')
-        db.commit()
+    ok_results = [r for r in results if r['ok']]
+    err_results = [r for r in results if not r['ok']]
 
-        # Guardar la URL de Drive directamente
-        if web_url:
-            db.execute(text("UPDATE facturas_electronicas SET archivo_url = :url WHERE id = :id"),
-                       {"url": web_url, "id": result['id']})
-            db.commit()
-            result['archivo_url'] = web_url
-
-    except ValueError as e:
-        return {"ok": False, "numero": None, "error": str(e)}
-    except Exception as e:
-        return {"ok": False, "numero": None, "error": str(e)}
-
-    return {"ok": True, "numero": result.get('numero'), "error": None}
+    if ok_results:
+        return {"ok": True, "numero": ok_results[0].get('numero'), "error": None}
+    return {"ok": False, "numero": None, "error": err_results[0].get('error') if err_results else 'Sin resultados'}
 
 
 # ── Listado ───────────────────────────────────────────────────────────────────
