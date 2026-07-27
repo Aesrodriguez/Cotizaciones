@@ -424,8 +424,50 @@ function PagoFormModal({ initial, obras, onClose, onSaved }: {
   )
 }
 
+// ─── DriveIcon pequeño ────────────────────────────────────────────────────────
+const DriveIconSm = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
+    <path d="M12.012 1.559L7.008 10.5h10.007L12.012 1.559zM6.004 12.5l-4.5 7.78h8.004L6.004 12.5zm10.004 0L10.504 20.28H22L16.008 12.5z"/>
+  </svg>
+)
+
 // ─── PagoRow ──────────────────────────────────────────────────────────────────
-function PagoRow({ pago, onEdit, onDelete }: { pago: Pago; onEdit: () => void; onDelete: () => void }) {
+function PagoRow({ pago, onEdit, onDelete, onReload }: {
+  pago: Pago
+  onEdit: () => void
+  onDelete: () => void
+  onReload: () => void
+}) {
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      await pagosAPI.uploadSoporte(pago.id, file)
+      toast.success('Soporte guardado en Google Drive')
+      onReload()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? 'Error al subir soporte')
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
+
+  const handleDeleteSoporte = async () => {
+    if (!confirm('¿Quitar el soporte de este pago?')) return
+    try {
+      await pagosAPI.deleteSoporte(pago.id)
+      toast.success('Soporte eliminado')
+      onReload()
+    } catch {
+      toast.error('Error al eliminar soporte')
+    }
+  }
+
   return (
     <tr style={{ borderBottom: '1px solid var(--border)' }}
       onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface)')}
@@ -454,6 +496,47 @@ function PagoRow({ pago, onEdit, onDelete }: { pago: Pago; onEdit: () => void; o
           )}
           {pago.obra_nombre && (
             <p className="text-xs" style={{ color: 'var(--lime)' }}>🏗 {pago.obra_nombre}</p>
+          )}
+          {/* Soporte de pago */}
+          {pago.soporte_url ? (
+            <div className="flex items-center gap-1 mt-0.5">
+              <a
+                href={pago.soporte_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md"
+                style={{ background: 'rgba(96,165,250,0.10)', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.2)' }}
+                title={pago.soporte_filename ?? 'Ver soporte'}
+              >
+                <DriveIconSm />
+                <span>Soporte</span>
+              </a>
+              <button
+                onClick={handleDeleteSoporte}
+                className="text-xs opacity-40 hover:opacity-100 transition-opacity"
+                style={{ color: '#ef4444' }}
+                title="Quitar soporte"
+              >✕</button>
+            </div>
+          ) : (
+            <div className="mt-0.5">
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg,.webp"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+              <button
+                onClick={() => fileRef.current?.click()}
+                disabled={uploading}
+                className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md opacity-40 hover:opacity-100 transition-opacity disabled:opacity-20"
+                style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                title="Subir soporte de pago (PDF o imagen)"
+              >
+                {uploading ? '⏳' : <><DriveIconSm /><span>+ Soporte</span></>}
+              </button>
+            </div>
           )}
         </div>
       </td>
@@ -692,7 +775,8 @@ export default function PagosPage() {
                     {pagos.map(p => (
                       <PagoRow key={p.id} pago={p}
                         onEdit={() => setEditPago(p)}
-                        onDelete={() => deletePago(p)} />
+                        onDelete={() => deletePago(p)}
+                        onReload={load} />
                     ))}
                   </tbody>
                   <tfoot>

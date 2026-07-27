@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.api.deps import get_db_session as get_db
@@ -15,22 +15,24 @@ METODOS = ["TRANSFERENCIA", "EFECTIVO", "CHEQUE", "PSE", "NEQUI", "DAVIPLATA", "
 
 def _pago(r) -> dict:
     return {
-        "id":             str(r[0]),
-        "fecha":          str(r[1]),
-        "monto":          float(r[2]),
-        "destinatario":   r[3],
-        "tipo":           r[4],
-        "metodo_pago":    r[5],
-        "referencia":     r[6],
-        "concepto":       r[7],
-        "factura_id":     str(r[8]) if r[8] else None,
-        "factura_num":    r[9],
-        "trabajador_id":  str(r[10]) if r[10] else None,
+        "id":               str(r[0]),
+        "fecha":            str(r[1]),
+        "monto":            float(r[2]),
+        "destinatario":     r[3],
+        "tipo":             r[4],
+        "metodo_pago":      r[5],
+        "referencia":       r[6],
+        "concepto":         r[7],
+        "factura_id":       str(r[8]) if r[8] else None,
+        "factura_num":      r[9],
+        "trabajador_id":    str(r[10]) if r[10] else None,
         "trabajador_nombre": r[11],
-        "obra_id":        str(r[12]) if r[12] else None,
-        "obra_nombre":    r[13],
-        "notas":          r[14],
-        "created_at":     str(r[15]),
+        "obra_id":          str(r[12]) if r[12] else None,
+        "obra_nombre":      r[13],
+        "notas":            r[14],
+        "created_at":       str(r[15]),
+        "soporte_url":      r[16],
+        "soporte_filename": r[17],
     }
 
 
@@ -40,7 +42,8 @@ _SELECT = """
            p.factura_id,   f.numero  AS factura_num,
            p.trabajador_id, CONCAT(t.nombre, ' ', t.apellido) AS trabajador_nombre,
            p.obra_id,      o.nombre  AS obra_nombre,
-           p.notas, p.created_at
+           p.notas, p.created_at,
+           p.soporte_url, p.soporte_filename
     FROM pagos p
     LEFT JOIN facturas_electronicas f ON f.id = p.factura_id
     LEFT JOIN trabajadores          t ON t.id = p.trabajador_id
@@ -188,6 +191,51 @@ def update_pago(pid: str, body: dict, db: Session = Depends(get_db)):
 @router.delete("/{pid}")
 def delete_pago(pid: str, db: Session = Depends(get_db)):
     db.execute(text("DELETE FROM pagos WHERE id = :id"), {"id": pid})
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/{pid}/soporte")
+async def upload_soporte(
+    pid: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """Sube el soporte de pago (PDF/imagen) a Google Drive y guarda la URL en el pago."""
+    row = db.execute(text("SELECT id FROM pagos WHERE id = :id"), {"id": pid}).fetchone()
+    if not row:
+        raise HTTPException(404, "Pago no encontrado")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(400, "Archivo vacío")
+
+    from app.utils.gdrive import upload_to_drive
+    safe_name = (file.filename or "soporte").replace(" ", "_")
+    drive_filename = f"Soporte_{pid[:8]}_{safe_name}"
+    mime = file.content_type or "application/octet-stream"
+
+    url = upload_to_drive(content, drive_filename, mime)
+    if not url:
+        raise HTTPException(500, "No se pudo subir a Google Drive — verifique la configuración")
+
+    db.execute(text("""
+        UPDATE pagos
+        SET soporte_url = :url, soporte_filename = :fname, updated_at = NOW()
+        WHERE id = :id
+    """), {"url": url, "fname": file.filename, "id": pid})
+    db.commit()
+
+    return {"soporte_url": url, "soporte_filename": file.filename}
+
+
+@router.delete("/{pid}/soporte")
+def delete_soporte(pid: str, db: Session = Depends(get_db)):
+    """Elimina el soporte de pago (solo borra la referencia, no el archivo de Drive)."""
+    db.execute(text("""
+        UPDATE pagos SET soporte_url = NULL, soporte_filename = NULL, updated_at = NOW()
+        WHERE id = :id
+    """), {"id": pid})
     db.commit()
     return {"ok": True}
 

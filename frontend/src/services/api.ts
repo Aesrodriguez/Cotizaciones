@@ -662,6 +662,8 @@ export interface Pago {
   obra_nombre: string | null
   notas: string | null
   created_at: string
+  soporte_url: string | null
+  soporte_filename: string | null
 }
 
 export interface PagosResumen {
@@ -688,6 +690,12 @@ export const pagosAPI = {
   remove: (id: string) => api.delete(`/pagos/${id}`),
   autocompleteDestinatarios: (q: string) =>
     api.get<{ destinatario: string; tipo: string }[]>(`/pagos/autocomplete/destinatarios?q=${encodeURIComponent(q)}`, _noToast),
+  uploadSoporte: (id: string, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post<{ soporte_url: string; soporte_filename: string }>(`/pagos/${id}/soporte`, form)
+  },
+  deleteSoporte: (id: string) => api.delete<{ ok: boolean }>(`/pagos/${id}/soporte`),
 }
 
 // ─── Equipos ──────────────────────────────────────────────────────────────────
