@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { trabajadoresAPI, configuracionAPI } from '../services/api'
 import type { FamiliarItem, SalarioMinimo, SoportePago, TrabajadorAsignacion, TrabajadorDetalle, TrabajadorPago } from '../types'
+import { MoneyInput } from '../components/common/MoneyInput'
 
 const COP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })
 const fmt = (v?: number | null) => v != null ? COP.format(v) : '—'
@@ -784,7 +785,7 @@ export default function TrabajadorDetailPage() {
               {descuentos.map((d, i) => (
                 <div key={i} className="flex gap-2 mb-1.5">
                   <input className="input flex-1" placeholder="Concepto" value={d.concepto} onChange={e => setConcepto(descuentos, setDescuentos, i, 'concepto', e.target.value)} />
-                  <input className="input w-28" type="number" placeholder="Valor" value={d.valor} onChange={e => setConcepto(descuentos, setDescuentos, i, 'valor', e.target.value)} />
+                  <MoneyInput className="input w-28" placeholder="Valor" value={d.valor} onChange={v => setConcepto(descuentos, setDescuentos, i, 'valor', v)} />
                   <button className="text-red-400 hover:text-red-600 px-1" onClick={() => removeConcepto(descuentos, setDescuentos, i)}>×</button>
                 </div>
               ))}
@@ -799,7 +800,7 @@ export default function TrabajadorDetailPage() {
               {deudas.map((d, i) => (
                 <div key={i} className="flex gap-2 mb-1.5">
                   <input className="input flex-1" placeholder="Concepto" value={d.concepto} onChange={e => setConcepto(deudas, setDeudas, i, 'concepto', e.target.value)} />
-                  <input className="input w-28" type="number" placeholder="Valor" value={d.valor} onChange={e => setConcepto(deudas, setDeudas, i, 'valor', e.target.value)} />
+                  <MoneyInput className="input w-28" placeholder="Valor" value={d.valor} onChange={v => setConcepto(deudas, setDeudas, i, 'valor', v)} />
                   <button className="text-red-400 hover:text-red-600 px-1" onClick={() => removeConcepto(deudas, setDeudas, i)}>×</button>
                 </div>
               ))}

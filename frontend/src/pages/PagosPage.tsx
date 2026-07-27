@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { pagosAPI, obrasAPI, facturasAPI, trabajadoresAPI } from '../services/api'
 import type { MetodoPago, Obra, Pago, PagoDestinatario, PagosResumen, TipoPago } from '../services/api'
+import { MoneyInput } from '../components/common/MoneyInput'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -355,8 +356,12 @@ function PagoFormModal({ initial, obras, onClose, onSaved }: {
             <input type="date" className="input w-full text-sm" value={form.fecha} onChange={f('fecha')} />
           </Field>
           <Field label="Monto * (COP)">
-            <input type="number" min="0" step="any" className="input w-full text-sm"
-              value={form.monto} onChange={f('monto')} placeholder="0" />
+            <MoneyInput
+              value={form.monto}
+              onChange={v => setForm(p => ({ ...p, monto: v }))}
+              className="input w-full text-sm"
+              placeholder="0"
+            />
           </Field>
         </div>
 

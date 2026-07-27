@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { equiposAPI, obrasAPI } from '../services/api'
 import type { Equipo, Obra, UsoEquipo } from '../services/api'
+import { MoneyInput } from '../components/common/MoneyInput'
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n)
@@ -79,7 +80,7 @@ function NuevoEquipoModal({ onClose, onCreated }: { onClose: () => void; onCreat
             </select>
           </Field>
           <Field label="Fecha compra"><input type="date" className="input w-full text-sm" value={form.fecha_compra} onChange={f('fecha_compra')} /></Field>
-          <Field label="Valor compra"><input type="number" min="0" className="input w-full text-sm" value={form.valor_compra} onChange={f('valor_compra')} /></Field>
+          <Field label="Valor compra"><MoneyInput value={form.valor_compra} onChange={v => setForm(p => ({ ...p, valor_compra: v }))} className="input w-full text-sm" /></Field>
         </div>
         <Field label="Notas"><textarea className="input w-full text-sm resize-none" rows={2} value={form.notas} onChange={f('notas')} /></Field>
       </div>

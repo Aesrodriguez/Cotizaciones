@@ -6,6 +6,7 @@ import type { AcpListItem, Acp } from '../services/api'
 import { formatCurrency, formatDate } from '../utils/format'
 import toast from 'react-hot-toast'
 import type { Contrato, ContratoActa, ContratoCapitulo, ContratoGasto, ContratoPago, ContratoDashboard } from '../types'
+import { MoneyInput } from '../components/common/MoneyInput'
 
 type Tab = 'resumen' | 'presupuesto' | 'ejecucion' | 'actas' | 'acps' | 'gastos' | 'pagos' | 'documentos'
 
@@ -696,7 +697,7 @@ export default function ContratoDetailPage() {
               <input {...itemForm.register('descripcion', { required: true })} className="input text-xs py-1.5 sm:col-span-2" placeholder="Descripción *" />
               <input {...itemForm.register('unidad')} className="input text-xs py-1.5" placeholder="Unidad" />
               <input type="number" step="0.0001" {...itemForm.register('cantidad_contratada', { valueAsNumber: true })} className="input text-xs py-1.5" placeholder="Cantidad" />
-              <input type="number" step="0.01" {...itemForm.register('valor_unitario', { valueAsNumber: true })} className="input text-xs py-1.5" placeholder="V. unitario" />
+              <MoneyInput value={itemForm.watch('valor_unitario') ?? ''} onChange={v => itemForm.setValue('valor_unitario', v ? Number(v) : 0)} className="input text-xs py-1.5" placeholder="V. unitario" />
               <div className="flex gap-1 col-span-2 sm:col-span-1">
                 <button type="submit" className="btn-primary py-1 px-3 text-xs">Crear</button>
                 <button type="button" onClick={() => setAddingCapTo(null)} className="btn-secondary py-1 px-2 text-xs">×</button>
@@ -1424,7 +1425,7 @@ export default function ContratoDetailPage() {
                 </div>
                 <div>
                   <label className="label">Valor *</label>
-                  <input type="number" step="0.01" min="0" {...gastoForm.register('valor', { required: true, valueAsNumber: true })} className="input text-sm" placeholder="0" />
+                  <MoneyInput value={gastoForm.watch('valor') ?? ''} onChange={v => gastoForm.setValue('valor', v ? Number(v) : 0)} className="input text-sm" placeholder="0" />
                 </div>
                 <div className="sm:col-span-2">
                   <label className="label">Descripción *</label>
@@ -1510,7 +1511,7 @@ export default function ContratoDetailPage() {
                 </div>
                 <div>
                   <label className="label">Valor *</label>
-                  <input type="number" step="0.01" min="0" {...pagoForm.register('valor', { required: true, valueAsNumber: true })} className="input text-sm" placeholder="0" />
+                  <MoneyInput value={pagoForm.watch('valor') ?? ''} onChange={v => pagoForm.setValue('valor', v ? Number(v) : 0)} className="input text-sm" placeholder="0" />
                 </div>
                 <div>
                   <label className="label">Método de pago</label>

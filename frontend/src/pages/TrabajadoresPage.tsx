@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { trabajadoresAPI, planillasAPI, configuracionAPI } from '../services/api'
 import type { SalarioMinimo, Trabajador } from '../types'
 import SkeletonTable from '../components/common/SkeletonTable'
+import { MoneyInput } from '../components/common/MoneyInput'
 
 const COP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 })
 const fmt = (v?: number) => v != null ? COP.format(v) : '—'
@@ -538,31 +539,21 @@ export default function TrabajadoresPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="label">Salario mensual</label>
-                  <input
-                    className="input"
-                    type="number"
+                  <MoneyInput
+                    className="input w-full"
                     value={form.salario_base}
-                    onChange={e => {
-                      const v = e.target.value
-                      setForm(f => ({ ...f, salario_base: v, salario_diario: v ? String(Math.round(Number(v) / 30)) : '', tipo_salario: 'OTRO' }))
-                    }}
+                    onChange={v => setForm(f => ({ ...f, salario_base: v, salario_diario: v ? String(Math.round(Number(v) / 30)) : '', tipo_salario: 'OTRO' }))}
                     placeholder="0"
                   />
-                  {form.salario_base && <p className="text-xs text-gray-400 mt-1 font-mono">{fmt(Number(form.salario_base))}</p>}
                 </div>
                 <div>
                   <label className="label">Salario diario</label>
-                  <input
-                    className="input"
-                    type="number"
+                  <MoneyInput
+                    className="input w-full"
                     value={form.salario_diario}
-                    onChange={e => {
-                      const v = e.target.value
-                      setForm(f => ({ ...f, salario_diario: v, salario_base: v ? String(Math.round(Number(v) * 30)) : '', tipo_salario: 'OTRO' }))
-                    }}
+                    onChange={v => setForm(f => ({ ...f, salario_diario: v, salario_base: v ? String(Math.round(Number(v) * 30)) : '', tipo_salario: 'OTRO' }))}
                     placeholder="0"
                   />
-                  {form.salario_diario && <p className="text-xs text-gray-400 mt-1 font-mono">{fmt(Number(form.salario_diario))}</p>}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -630,16 +621,12 @@ export default function TrabajadoresPage() {
                   </div>
                   <div className="flex-1">
                     <label className="label">Valor mensual (COP)</label>
-                    <input
-                      className="input"
-                      type="number"
+                    <MoneyInput
+                      className="input w-full"
                       value={salMinForm.valor}
-                      onChange={e => setSalMinForm(f => ({ ...f, valor: e.target.value }))}
-                      placeholder="Ej: 1300000"
+                      onChange={v => setSalMinForm(f => ({ ...f, valor: v }))}
+                      placeholder="1300000"
                     />
-                    {salMinForm.valor && (
-                      <p className="text-xs text-gray-400 mt-0.5 font-mono">{fmt(Number(salMinForm.valor))} / mes · {fmt(Math.round(Number(salMinForm.valor) / 30))} / día</p>
-                    )}
                   </div>
                   <div className="flex items-end">
                     <button className="btn-primary" onClick={saveSalMin} disabled={savingSalMin}>

@@ -5,6 +5,7 @@ import { contratosAPI, clientesAPI, usuariosAPI } from '../services/api'
 import { formatDate } from '../utils/format'
 import toast from 'react-hot-toast'
 import type { Cliente, Usuario } from '../types'
+import { MoneyInput } from '../components/common/MoneyInput'
 
 interface FormData {
   numero: string
@@ -281,7 +282,7 @@ export default function ContratoFormPage() {
               </div>
               <div>
                 <label className="label">Valor del contrato (costos directos)</label>
-                <input type="number" step="0.01" min="0" {...register('monto_total', { valueAsNumber: true })} className="input" placeholder="0" />
+                <MoneyInput value={watch('monto_total') ?? ''} onChange={v => setValue('monto_total', v ? Number(v) : 0)} className="input" placeholder="0" />
               </div>
             </div>
 

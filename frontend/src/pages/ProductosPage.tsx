@@ -7,6 +7,7 @@ import Modal from '../components/common/Modal'
 import toast from 'react-hot-toast'
 import type { Producto } from '../types'
 import { useDebounce } from '../hooks/useDebounce'
+import { MoneyInput } from '../components/common/MoneyInput'
 
 export default function ProductosPage() {
   const user = useAuthStore((s) => s.user)
@@ -17,7 +18,7 @@ export default function ProductosPage() {
   const debouncedSearch = useDebounce(search, 350)
   const [modalOpen, setModalOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<Producto | null>(null)
-  const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm<Partial<Producto>>()
+  const { register, handleSubmit, reset, watch, setValue, formState: { isSubmitting } } = useForm<Partial<Producto>>()
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -111,7 +112,7 @@ export default function ProductosPage() {
               </datalist>
             </div>
             <div><label className="label">Unidad</label><input {...register('unidad_medida')} className="input" /></div>
-            <div><label className="label">Precio *</label><input type="number" step="0.01" min="0" {...register('precio_unitario', { required: true })} className="input" /></div>
+            <div><label className="label">Precio *</label><MoneyInput value={watch('precio_unitario') ?? ''} onChange={v => setValue('precio_unitario', v ? Number(v) : 0)} className="input" /></div>
             <div><label className="label">IVA %</label><input type="number" step="0.1" min="0" max="100" {...register('impuesto_porcentaje')} className="input" /></div>
             <div className="sm:col-span-2"><label className="label">Descripción</label><textarea {...register('descripcion')} rows={2} className="input resize-none" /></div>
           </div>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { materialesAPI, obrasAPI } from '../services/api'
 import type { CompraMaterial, Material, Obra, UsoMaterial } from '../services/api'
+import { MoneyInput } from '../components/common/MoneyInput'
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n)
@@ -221,7 +222,7 @@ function AddCompraModal({ material, obras, onClose, onAdded }: {
             <input type="number" min="0" step="any" className="input w-full text-sm" value={form.cantidad} onChange={f('cantidad')} autoFocus />
           </Field>
           <Field label="Precio unitario">
-            <input type="number" min="0" step="any" className="input w-full text-sm" value={form.precio_unitario} onChange={f('precio_unitario')} placeholder="0" />
+            <MoneyInput value={form.precio_unitario} onChange={v => setForm(p => ({ ...p, precio_unitario: v }))} className="input w-full text-sm" placeholder="0" />
           </Field>
         </div>
         <div className="grid grid-cols-2 gap-3">
