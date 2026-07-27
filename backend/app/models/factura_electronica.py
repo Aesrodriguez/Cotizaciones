@@ -48,6 +48,7 @@ class FacturaElectronica(Base):
     prefijo                = Column(VARCHAR(20))
     qr_url                 = Column(Text)
     tipo                   = Column(VARCHAR(10), nullable=False, server_default='RECIBIDA')  # RECIBIDA | EMITIDA
+    archivo_url            = Column(VARCHAR(500))
     created_at             = Column(TIMESTAMP, nullable=False, server_default=sa.text("NOW()"))
     updated_at             = Column(TIMESTAMP, nullable=False, server_default=sa.text("NOW()"), onupdate=sa.text("NOW()"))
 

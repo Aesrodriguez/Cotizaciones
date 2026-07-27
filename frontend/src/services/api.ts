@@ -288,6 +288,7 @@ export interface FacturaElectronica {
   prefijo: string | null
   qr_url: string | null
   tipo: 'RECIBIDA' | 'EMITIDA'
+  archivo_url: string | null
   items: FacturaElectronicaItem[]
 }
 
@@ -317,6 +318,10 @@ export const facturasAPI = {
     api.patch<{ ok: boolean; estado: string }>(`/facturas-electronicas/${id}/estado`, { estado }),
   update: (id: string, data: object) => api.patch<FacturaElectronica>(`/facturas-electronicas/${id}`, data),
   remove: (id: string) => api.delete(`/facturas-electronicas/${id}`),
+  syncDrive: () => api.post('/facturas-electronicas/sync-drive'),
+  importPreview: () => api.get<{ to_import: { id: string; name: string; web_url: string }[]; already_in_db: number; archivos_en_drive: number }>('/facturas-electronicas/import-from-drive/preview'),
+  importSingle: (body: { file_id: string; filename: string; web_url: string }) =>
+    api.post<{ ok: boolean; numero: string | null; error: string | null }>('/facturas-electronicas/import-from-drive/single', body),
 }
 
 export interface ExtractoBancario {

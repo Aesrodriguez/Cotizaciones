@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { extractosAPI, facturasAPI, type FacturaElectronica, type FacturasResumen, type MovimientoMatch } from '../services/api'
+
+type DriveFileF = { id: string; name: string; web_url: string }
+type ImportLineF = { name: string; status: 'pending' | 'ok' | 'skip' | 'error'; detail?: string }
 import { formatCurrency } from '../utils/format'
 import { printFacturaPDF } from '../utils/facturasPDF'
 import toast from 'react-hot-toast'
@@ -629,6 +632,8 @@ export default function FacturasElectronicasPage() {
   const [filtroAnio, setFiltroAnio] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [syncing, setSyncing] = useState(false)
+  const [importModal, setImportModal] = useState<{ files: DriveFileF[]; lines: ImportLineF[]; running: boolean; done: boolean } | null>(null)
   const debouncedSearch = useDebounce(search, 350)
   const limit = 50
 
@@ -645,6 +650,46 @@ export default function FacturasElectronicasPage() {
 
   useEffect(() => { load() }, [load])
   useEffect(() => { setPage(1) }, [debouncedSearch, filtroEstado, filtroRet, filtroTipo, filtroAnio])
+
+  const handleSyncDrive = async () => {
+    setSyncing(true)
+    try {
+      const r = await facturasAPI.syncDrive()
+      const { vinculados, archivos_en_drive } = r.data as any
+      toast.success(`${vinculados} factura${vinculados !== 1 ? 's' : ''} vinculada${vinculados !== 1 ? 's' : ''} · ${archivos_en_drive} en Drive`)
+      if (vinculados > 0) load()
+    } catch { toast.error('Error al sincronizar con Drive') }
+    finally { setSyncing(false) }
+  }
+
+  const handleImportFromDrive = async () => {
+    try {
+      const r = await facturasAPI.importPreview()
+      const { to_import, already_in_db, archivos_en_drive } = r.data
+      if (to_import.length === 0) {
+        toast(`Todas las facturas de Drive ya están en el sistema (${already_in_db} de ${archivos_en_drive})`, { icon: 'ℹ️', duration: 5000 })
+        return
+      }
+      setImportModal({ files: to_import, lines: to_import.map(f => ({ name: f.name, status: 'pending' })), running: false, done: false })
+    } catch { toast.error('Error al conectar con Drive') }
+  }
+
+  const runImport = async () => {
+    if (!importModal) return
+    setImportModal(m => m ? { ...m, running: true } : m)
+    let ok = 0
+    for (let i = 0; i < importModal.files.length; i++) {
+      const f = importModal.files[i]
+      try {
+        const r = await facturasAPI.importSingle({ file_id: f.id, filename: f.name, web_url: f.web_url })
+        const d = r.data
+        if (d.ok) { ok++; setImportModal(m => m ? { ...m, lines: m.lines.map((l, j) => j === i ? { ...l, status: 'ok', detail: d.numero ?? undefined } : l) } : m) }
+        else { setImportModal(m => m ? { ...m, lines: m.lines.map((l, j) => j === i ? { ...l, status: d.error?.includes('ya fue') ? 'skip' : 'error', detail: d.error ?? undefined } : l) } : m) }
+      } catch { setImportModal(m => m ? { ...m, lines: m.lines.map((l, j) => j === i ? { ...l, status: 'error', detail: 'Error de red' } : l) } : m) }
+    }
+    setImportModal(m => m ? { ...m, running: false, done: true } : m)
+    if (ok > 0) { toast.success(`${ok} factura${ok !== 1 ? 's' : ''} importada${ok !== 1 ? 's' : ''}`); load() }
+  }
 
   const handleDelete = async (f: FacturaElectronica) => {
     if (!confirm(`¿Eliminar factura ${f.numero}?`)) return
@@ -680,7 +725,26 @@ export default function FacturasElectronicasPage() {
         </div>
       </div>
 
-      <UploadZone onUploaded={load} />
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex-1 min-w-0">
+          <UploadZone onUploaded={load} />
+        </div>
+        <div className="flex flex-col gap-2 flex-shrink-0">
+          <button onClick={handleImportFromDrive} disabled={syncing || !!importModal?.running}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-opacity hover:opacity-80 disabled:opacity-50 whitespace-nowrap"
+            style={{ background: 'rgba(96,165,250,0.12)', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.25)' }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M12 3v13.5m0 0-4.5-4.5m4.5 4.5 4.5-4.5" />
+            </svg>
+            Importar desde Drive
+          </button>
+          <button onClick={handleSyncDrive} disabled={syncing}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-opacity hover:opacity-80 disabled:opacity-50 whitespace-nowrap"
+            style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+            {syncing ? '⏳' : '🔄'} Sincronizar Drive
+          </button>
+        </div>
+      </div>
 
       {resumen && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -803,14 +867,26 @@ export default function FacturasElectronicasPage() {
                       <EstadoBadge estado={f.estado} />
                     </td>
                     <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => handleDelete(f)}
-                        disabled={deleting === f.id}
-                        className="text-xs px-2 py-1 rounded opacity-40 hover:opacity-100 transition-opacity"
-                        style={{ color: '#ef4444' }}
-                      >
-                        {deleting === f.id ? '…' : '✕'}
-                      </button>
+                      <div className="flex items-center justify-center gap-1.5">
+                        {f.archivo_url && (
+                          <a href={f.archivo_url} target="_blank" rel="noopener noreferrer"
+                            title="Ver en Drive"
+                            className="flex items-center opacity-50 hover:opacity-100 transition-opacity"
+                            style={{ color: '#60a5fa' }}>
+                            <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="currentColor">
+                              <path d="M12.012 1.559L7.008 10.5h10.007L12.012 1.559zM6.004 12.5l-4.5 7.78h8.004L6.004 12.5zm10.004 0L10.504 20.28H22L16.008 12.5z"/>
+                            </svg>
+                          </a>
+                        )}
+                        <button
+                          onClick={() => handleDelete(f)}
+                          disabled={deleting === f.id}
+                          className="text-xs px-2 py-1 rounded opacity-40 hover:opacity-100 transition-opacity"
+                          style={{ color: '#ef4444' }}
+                        >
+                          {deleting === f.id ? '…' : '✕'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )
@@ -856,6 +932,59 @@ export default function FacturasElectronicasPage() {
           onClose={() => setSelectedId(null)}
           onUpdated={() => { load() }}
         />
+      )}
+
+      {/* Modal importar desde Drive */}
+      {importModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)' }}>
+          <div className="w-full max-w-md rounded-2xl p-6 space-y-4" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+            <h2 className="text-base font-bold" style={{ color: 'var(--text)' }}>Importar facturas desde Drive</h2>
+
+            {!importModal.running && !importModal.done && (
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                Se importarán <strong style={{ color: 'var(--text)' }}>{importModal.files.length}</strong> factura{importModal.files.length !== 1 ? 's' : ''} nuevas.
+              </p>
+            )}
+
+            {(importModal.running || importModal.done) && (
+              <>
+                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--surface)' }}>
+                  <div className="h-full rounded-full transition-all" style={{
+                    background: 'var(--lime)',
+                    width: `${Math.round(importModal.lines.filter(l => l.status !== 'pending').length / importModal.lines.length * 100)}%`,
+                  }} />
+                </div>
+                <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                  {importModal.lines.map((l, i) => {
+                    const isPending = l.status === 'pending'
+                    const isActive  = isPending && i === importModal.lines.findIndex(x => x.status === 'pending')
+                    return (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        <span>{isActive ? '⏳' : l.status === 'ok' ? '✓' : l.status === 'skip' ? '—' : l.status === 'error' ? '✕' : '·'}</span>
+                        <span className="truncate flex-1" style={{ color: 'var(--text)' }}>{l.name}</span>
+                        {l.detail && <span style={{ color: 'var(--text-muted)' }}>{l.detail}</span>}
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+
+            <div className="flex gap-2 justify-end pt-2">
+              {!importModal.running && (
+                <button onClick={() => setImportModal(null)} className="text-sm px-4 py-2 rounded-lg"
+                  style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                  {importModal.done ? 'Cerrar' : 'Cancelar'}
+                </button>
+              )}
+              {!importModal.running && !importModal.done && (
+                <button onClick={runImport} className="btn-primary text-sm px-4 py-2">
+                  Importar {importModal.files.length} factura{importModal.files.length !== 1 ? 's' : ''}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

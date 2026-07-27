@@ -80,6 +80,7 @@ def _to_dict(f: FacturaElectronica, items: list | None = None) -> dict:
         "prefijo":                f.prefijo,
         "qr_url":                 f.qr_url,
         "tipo":                   f.tipo or 'RECIBIDA',
+        "archivo_url":            f.archivo_url,
         "items":                  items or [],
     }
     return d
@@ -264,6 +265,21 @@ async def upload_factura(
     raw = await file.read()
     obs = observaciones.strip()
 
+    from app.config.settings import get_settings
+    settings = get_settings()
+
+    def _auto_upload_drive(content: bytes, filename: str, mime: str, factura_id: str) -> str | None:
+        folder_id = settings.GDRIVE_FACTURAS_FOLDER_ID.strip()
+        if not folder_id:
+            return None
+        from app.utils.gdrive import upload_to_drive
+        url = upload_to_drive(content, filename, mime, folder_id_override=folder_id)
+        if url:
+            db.execute(text("UPDATE facturas_electronicas SET archivo_url = :url WHERE id = :id"),
+                       {"url": url, "id": factura_id})
+            db.commit()
+        return url
+
     # ── PDF DIAN ──────────────────────────────────────────────────────────────
     if fname.endswith('.pdf'):
         from app.services.factura_pdf_parser import parse_dian_pdf, is_dian_pdf_text
@@ -274,8 +290,12 @@ async def upload_factura(
             if not is_dian_pdf_text(text):
                 raise HTTPException(422, "El PDF no parece ser una factura electrónica DIAN")
             parsed = parse_dian_pdf(raw)
-            result = _save_one_parsed(db, parsed, file.filename or 'factura.pdf', obs)
+            filename_save = file.filename or 'factura.pdf'
+            result = _save_one_parsed(db, parsed, filename_save, obs)
             db.commit()
+            url = _auto_upload_drive(raw, filename_save, 'application/pdf', result['id'])
+            if url:
+                result['archivo_url'] = url
         except HTTPException:
             raise
         except ValueError as e:
@@ -299,8 +319,12 @@ async def upload_factura(
         errors = []
         for name in xml_names:
             try:
-                content = _decode_xml(zf.read(name))
-                saved.append(_save_one_xml(db, content, name.split('/')[-1], obs))
+                xml_bytes = zf.read(name)
+                content = _decode_xml(xml_bytes)
+                r = _save_one_xml(db, content, name.split('/')[-1], obs)
+                saved.append(r)
+                db.flush()
+                _auto_upload_drive(xml_bytes, name.split('/')[-1], 'application/xml', r['id'])
             except (ValueError, Exception) as e:
                 errors.append({"archivo": name.split('/')[-1], "error": str(e)})
 
@@ -314,14 +338,134 @@ async def upload_factura(
         raise HTTPException(400, str(e))
 
     try:
-        result = _save_one_xml(db, xml_content, file.filename or 'factura.xml', obs)
+        filename_save = file.filename or 'factura.xml'
+        result = _save_one_xml(db, xml_content, filename_save, obs)
         db.commit()
+        url = _auto_upload_drive(raw, filename_save, 'application/xml', result['id'])
+        if url:
+            result['archivo_url'] = url
     except ValueError as e:
         raise HTTPException(422, str(e))
     except Exception as e:
         raise HTTPException(422, f"Error al procesar XML: {e}")
 
     return result
+
+
+# ── Sincronizar Drive ─────────────────────────────────────────────────────────
+
+@router.post('/sync-drive', status_code=200)
+def sync_drive_facturas(
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    from app.config.settings import get_settings
+    from app.utils.gdrive import list_drive_files_in_folder
+    settings = get_settings()
+
+    folder_id = settings.GDRIVE_FACTURAS_FOLDER_ID.strip()
+    if not folder_id:
+        raise HTTPException(400, 'GDRIVE_FACTURAS_FOLDER_ID no configurado')
+
+    drive_files = list_drive_files_in_folder(folder_id)
+    if drive_files is None:
+        raise HTTPException(503, 'No se pudo conectar con Google Drive')
+
+    vinculados = 0
+    for f in drive_files:
+        row = db.execute(text(
+            "SELECT id FROM facturas_electronicas WHERE xml_filename = :name AND archivo_url IS NULL"
+        ), {"name": f['name']}).fetchone()
+        if row:
+            db.execute(text(
+                "UPDATE facturas_electronicas SET archivo_url = :url WHERE id = :id"
+            ), {"url": f['webViewLink'], "id": str(row[0])})
+            vinculados += 1
+
+    if vinculados:
+        db.commit()
+
+    return {"vinculados": vinculados, "archivos_en_drive": len(drive_files)}
+
+
+# ── Importar desde Drive ──────────────────────────────────────────────────────
+
+@router.get('/import-from-drive/preview')
+def import_drive_preview(
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    import re as _re
+    from app.config.settings import get_settings
+    from app.utils.gdrive import list_drive_files_in_folder
+    settings = get_settings()
+
+    folder_id = settings.GDRIVE_FACTURAS_FOLDER_ID.strip()
+    if not folder_id:
+        raise HTTPException(400, 'GDRIVE_FACTURAS_FOLDER_ID no configurado')
+
+    drive_files = list_drive_files_in_folder(folder_id)
+    if drive_files is None:
+        raise HTTPException(503, 'No se pudo conectar con Google Drive')
+
+    existing = {r[0] for r in db.execute(text("SELECT xml_filename FROM facturas_electronicas")).fetchall()}
+
+    to_import = [
+        f for f in drive_files
+        if f['name'] not in existing
+        and _re.search(r'\.(xml|pdf)$', f['name'], _re.IGNORECASE)
+    ]
+    already_in_db = len(drive_files) - len(to_import)
+
+    return {
+        "to_import":       [{"id": f["id"], "name": f["name"], "web_url": f["webViewLink"]} for f in to_import],
+        "already_in_db":   already_in_db,
+        "archivos_en_drive": len(drive_files),
+    }
+
+
+@router.post('/import-from-drive/single')
+def import_drive_single(
+    body: dict,
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    from app.utils.gdrive import download_from_drive
+    from app.config.settings import get_settings
+    settings = get_settings()
+
+    file_id  = body.get('file_id', '')
+    filename = body.get('filename', '')
+    web_url  = body.get('web_url', '')
+
+    raw = download_from_drive(file_id)
+    if raw is None:
+        return {"ok": False, "numero": None, "error": "No se pudo descargar de Drive"}
+
+    try:
+        if filename.lower().endswith('.pdf'):
+            from app.services.factura_pdf_parser import parse_dian_pdf
+            parsed = parse_dian_pdf(raw)
+        else:
+            xml_content = _decode_xml(raw)
+            parsed = parse_dian_xml(xml_content)
+
+        result = _save_one_parsed(db, parsed, filename, observaciones='Importado desde Drive')
+        db.commit()
+
+        # Guardar la URL de Drive directamente
+        if web_url:
+            db.execute(text("UPDATE facturas_electronicas SET archivo_url = :url WHERE id = :id"),
+                       {"url": web_url, "id": result['id']})
+            db.commit()
+            result['archivo_url'] = web_url
+
+    except ValueError as e:
+        return {"ok": False, "numero": None, "error": str(e)}
+    except Exception as e:
+        return {"ok": False, "numero": None, "error": str(e)}
+
+    return {"ok": True, "numero": result.get('numero'), "error": None}
 
 
 # ── Listado ───────────────────────────────────────────────────────────────────
