@@ -530,7 +530,7 @@ export default function PagosPage() {
   const [filtroObra, setFiltroObra] = useState('')
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
-  const [filtroAnio, setFiltroAnio] = useState(0)
+  const [filtroAnio, setFiltroAnio] = useState(new Date().getFullYear())
 
   const [showForm, setShowForm] = useState(false)
   const [editPago, setEditPago] = useState<Pago | null>(null)
@@ -656,7 +656,7 @@ export default function PagosPage() {
             {hasFilters && (
               <button onClick={() => {
                 setSearch(''); setFiltroTipo(''); setFiltroMetodo('')
-                setFiltroObra(''); setFechaDesde(''); setFechaHasta(''); setFiltroAnio(0)
+                setFiltroObra(''); setFechaDesde(''); setFechaHasta(''); setFiltroAnio(new Date().getFullYear())
               }} className="text-xs px-3 py-1.5 rounded-lg"
                 style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
                 Limpiar

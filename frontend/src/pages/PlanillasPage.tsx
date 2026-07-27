@@ -382,7 +382,7 @@ export default function PlanillasPage() {
   type DriveFile = { id: string; name: string; web_url: string }
   type ImportLine = { name: string; status: 'pending' | 'ok' | 'skip' | 'error'; detail?: string }
   const [importModal, setImportModal] = useState<{ files: DriveFile[]; lines: ImportLine[]; running: boolean; done: boolean } | null>(null)
-  const [filtroAnio, setFiltroAnio] = useState(0)
+  const [filtroAnio, setFiltroAnio] = useState(new Date().getFullYear())
 
   useEffect(() => {
     configuracionAPI.getDriveFolderUrl()

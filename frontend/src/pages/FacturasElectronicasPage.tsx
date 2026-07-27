@@ -629,7 +629,7 @@ export default function FacturasElectronicasPage() {
   const [filtroEstado, setFiltroEstado] = useState('')
   const [filtroRet, setFiltroRet] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('RECIBIDA')
-  const [filtroAnio, setFiltroAnio] = useState(0)
+  const [filtroAnio, setFiltroAnio] = useState(new Date().getFullYear())
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
@@ -788,7 +788,7 @@ export default function FacturasElectronicasPage() {
         </select>
         {(search || filtroEstado || filtroRet || filtroAnio) && (
           <button
-            onClick={() => { setSearch(''); setFiltroEstado(''); setFiltroRet(''); setFiltroAnio(0) }}
+            onClick={() => { setSearch(''); setFiltroEstado(''); setFiltroRet(''); setFiltroAnio(new Date().getFullYear()) }}
             className="text-xs px-3 py-1.5 rounded-lg"
             style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
           >

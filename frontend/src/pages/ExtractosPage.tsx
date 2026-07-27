@@ -709,7 +709,7 @@ export default function ExtractosPage() {
   const [detalleResumen, setDetalleResumen] = useState<DetalleResumen | null>(null)
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState<ExtractoBancario | null>(null)
-  const [filtroAnio, setFiltroAnio] = useState(0)
+  const [filtroAnio, setFiltroAnio] = useState(new Date().getFullYear())
   const [syncing, setSyncing] = useState(false)
   const [importModal, setImportModal] = useState<{ files: DriveFileE[]; lines: ImportLineE[]; running: boolean; done: boolean } | null>(null)
 
