@@ -12,6 +12,18 @@ function fmt(v?: number | null) {
   return v == null || v === 0 ? '—' : formatCurrency(v)
 }
 
+/** Convierte un enlace de Drive (/view) a URL embebible (/preview) */
+function drivePreviewUrl(url: string): string {
+  const m = url.match(/\/file\/d\/([^/?]+)/)
+  return m ? `https://drive.google.com/file/d/${m[1]}/preview` : url
+}
+
+const DriveIcon = ({ className = 'w-4 h-4' }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <path d="M12.012 1.559L7.008 10.5h10.007L12.012 1.559zM6.004 12.5l-4.5 7.78h8.004L6.004 12.5zm10.004 0L10.504 20.28H22L16.008 12.5z"/>
+  </svg>
+)
+
 const ESTADOS = ['RECIBIDA', 'CONTABILIZADA', 'PAGADA', 'ANULADA'] as const
 type Estado = typeof ESTADOS[number]
 
@@ -230,6 +242,61 @@ function MovimientosCoincidentes({ facturaId, onVinculado }: {
   )
 }
 
+function DriveSection({ url, filename }: { url: string; filename?: string | null }) {
+  const [expanded, setExpanded] = useState(false)
+  const isPdf = /\.pdf$/i.test(filename ?? '') || /\.pdf/i.test(url)
+
+  return (
+    <div className="mt-3 mb-1 rounded-xl overflow-hidden" style={{ border: '1px solid rgba(96,165,250,0.3)', background: 'rgba(96,165,250,0.06)' }}>
+      {/* Cabecera siempre visible */}
+      <div className="flex items-center justify-between gap-3 px-3 py-2">
+        <div className="flex items-center gap-2">
+          <DriveIcon className="w-3.5 h-3.5 flex-shrink-0" />
+          <span className="text-xs font-semibold" style={{ color: '#60a5fa' }}>Archivo en Google Drive</span>
+          {filename && (
+            <span className="text-xs truncate max-w-[160px]" style={{ color: 'var(--text-muted)' }}>{filename}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {isPdf && (
+            <button
+              onClick={() => setExpanded(v => !v)}
+              className="text-xs px-2 py-1 rounded-lg font-medium"
+              style={{ background: expanded ? 'rgba(96,165,250,0.2)' : 'var(--card)', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.3)' }}
+            >
+              {expanded ? 'Ocultar' : 'Vista previa'}
+            </button>
+          )}
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg font-medium"
+            style={{ background: '#60a5fa', color: '#fff' }}
+          >
+            Abrir
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2} className="w-3 h-3">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 8V3h5M8 8 13 3M6 13H3a1 1 0 0 1-1-1V5" />
+            </svg>
+          </a>
+        </div>
+      </div>
+
+      {/* Iframe de vista previa (solo PDFs, al expandir) */}
+      {isPdf && expanded && (
+        <div style={{ height: '520px', borderTop: '1px solid rgba(96,165,250,0.2)' }}>
+          <iframe
+            src={drivePreviewUrl(url)}
+            title="Vista previa Google Drive"
+            className="w-full h-full"
+            allow="autoplay"
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
 function DetalleModal({ facturaId, onClose, onUpdated }: {
   facturaId: string
   onClose: () => void
@@ -403,6 +470,11 @@ function DetalleModal({ facturaId, onClose, onUpdated }: {
                     <span className="font-medium">Ver en portal DIAN</span>
                   </a>
                 </div>
+              )}
+
+              {/* Documento en Drive */}
+              {f.archivo_url && (
+                <DriveSection url={f.archivo_url} filename={f.xml_filename} />
               )}
 
               {/* Validación DIAN */}
@@ -877,13 +949,16 @@ export default function FacturasElectronicasPage() {
                     <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-1.5">
                         {f.archivo_url && (
-                          <a href={f.archivo_url} target="_blank" rel="noopener noreferrer"
-                            title="Ver en Drive"
-                            className="flex items-center opacity-50 hover:opacity-100 transition-opacity"
-                            style={{ color: '#60a5fa' }}>
-                            <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="currentColor">
-                              <path d="M12.012 1.559L7.008 10.5h10.007L12.012 1.559zM6.004 12.5l-4.5 7.78h8.004L6.004 12.5zm10.004 0L10.504 20.28H22L16.008 12.5z"/>
-                            </svg>
+                          <a
+                            href={f.archivo_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Ver en Google Drive"
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex items-center gap-1 text-xs px-1.5 py-1 rounded-lg hover:opacity-100 transition-all"
+                            style={{ color: '#60a5fa', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.2)', opacity: 0.85 }}
+                          >
+                            <DriveIcon className="w-3.5 h-3.5" />
                           </a>
                         )}
                         <button
