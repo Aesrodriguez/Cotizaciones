@@ -1,9 +1,243 @@
-from fastapi import APIRouter, Depends, Query, Response
+import datetime
+from fastapi import APIRouter, Depends, Query, HTTPException, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.api.deps import get_db_session as get_db
 
 router = APIRouter(prefix="/reportes", tags=["reportes"])
+
+MESES_ES = [
+    "", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+]
+
+def _fmt(v) -> str:
+    try:
+        from decimal import Decimal
+        val = Decimal(str(v or 0)).quantize(Decimal("1"))
+        return f"$ {int(val):,}".replace(",", ".")
+    except Exception:
+        return "$ 0"
+
+
+# ─── Reporte mensual ──────────────────────────────────────────────────────────
+
+@router.get("/mensual")
+def get_reporte_mensual(
+    anio: int = Query(0),
+    mes:  int = Query(0, ge=0, le=12),
+    db: Session = Depends(get_db),
+):
+    today = datetime.date.today()
+    if not anio:
+        anio = today.year
+    if not mes:
+        mes = today.month
+
+    params = {"anio": anio, "mes": mes}
+
+    # ── Ingresos: pagos recibidos en contratos ──────────────────────────────
+    ingresos_rows = db.execute(text("""
+        SELECT cp.fecha, cp.valor, cp.descripcion,
+               c.numero AS contrato_num, c.titulo AS contrato_titulo,
+               cl.nombre AS cliente_nombre
+        FROM contrato_pagos cp
+        JOIN contratos c  ON c.id  = cp.contrato_id
+        LEFT JOIN clientes cl ON cl.id = c.cliente_id
+        WHERE cp.deleted_at IS NULL
+          AND EXTRACT(YEAR  FROM cp.fecha) = :anio
+          AND EXTRACT(MONTH FROM cp.fecha) = :mes
+        ORDER BY cp.fecha
+    """), params).fetchall()
+
+    total_ingresos = sum(float(r[1] or 0) for r in ingresos_rows)
+
+    # ── Egresos: módulo de Pagos ────────────────────────────────────────────
+    egresos_rows = db.execute(text("""
+        SELECT fecha, monto, destinatario, tipo, concepto, metodo_pago, referencia
+        FROM pagos
+        WHERE EXTRACT(YEAR  FROM fecha) = :anio
+          AND EXTRACT(MONTH FROM fecha) = :mes
+        ORDER BY fecha
+    """), params).fetchall()
+
+    total_egresos = sum(float(r[1] or 0) for r in egresos_rows)
+
+    # Agrupado por tipo
+    egresos_por_tipo: dict = {}
+    for r in egresos_rows:
+        t = r[3] or "OTRO"
+        egresos_por_tipo[t] = egresos_por_tipo.get(t, 0) + float(r[1] or 0)
+
+    return {
+        "anio": anio,
+        "mes": mes,
+        "mes_nombre": MESES_ES[mes],
+        "resumen": {
+            "total_ingresos": total_ingresos,
+            "total_egresos": total_egresos,
+            "balance": total_ingresos - total_egresos,
+        },
+        "ingresos": [
+            {
+                "fecha": str(r[0]),
+                "valor": float(r[1] or 0),
+                "descripcion": r[2],
+                "contrato_num": r[3],
+                "contrato_titulo": r[4],
+                "cliente": r[5],
+            }
+            for r in ingresos_rows
+        ],
+        "egresos": [
+            {
+                "fecha": str(r[0]),
+                "monto": float(r[1] or 0),
+                "destinatario": r[2],
+                "tipo": r[3],
+                "concepto": r[4],
+                "metodo_pago": r[5],
+                "referencia": r[6],
+            }
+            for r in egresos_rows
+        ],
+        "egresos_por_tipo": [
+            {"tipo": k, "total": v} for k, v in sorted(egresos_por_tipo.items(), key=lambda x: -x[1])
+        ],
+    }
+
+
+@router.post("/mensual/email")
+def enviar_reporte_mensual(
+    body: dict = Body(...),
+    db: Session = Depends(get_db),
+):
+    anio   = int(body.get("anio", datetime.date.today().year))
+    mes    = int(body.get("mes",  datetime.date.today().month))
+    email  = body.get("email", "")
+    if not email:
+        raise HTTPException(400, "Email requerido")
+
+    data = get_reporte_mensual(anio=anio, mes=mes, db=db)
+
+    mes_nombre = MESES_ES[mes]
+    r = data["resumen"]
+    balance_color = "#16a34a" if r["balance"] >= 0 else "#dc2626"
+    balance_signo = "+" if r["balance"] >= 0 else ""
+
+    # Filas de ingresos
+    ing_rows = "".join(
+        f"""<tr>
+              <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#475569;">{i['fecha']}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#1e293b;">{i.get('cliente') or '—'}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#475569;">{i.get('contrato_num') or ''} {i.get('descripcion') or ''}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;text-align:right;font-weight:600;color:#16a34a;">{_fmt(i['valor'])}</td>
+            </tr>"""
+        for i in data["ingresos"]
+    ) or '<tr><td colspan="4" style="padding:12px;text-align:center;color:#94a3b8;font-size:12px;">Sin ingresos este mes</td></tr>'
+
+    # Filas de egresos
+    eg_rows = "".join(
+        f"""<tr>
+              <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#475569;">{e['fecha']}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#1e293b;">{e['destinatario']}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#475569;">{e.get('concepto') or e.get('tipo') or '—'}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;text-align:right;font-weight:600;color:#dc2626;">{_fmt(e['monto'])}</td>
+            </tr>"""
+        for e in data["egresos"]
+    ) or '<tr><td colspan="4" style="padding:12px;text-align:center;color:#94a3b8;font-size:12px;">Sin egresos este mes</td></tr>'
+
+    html = f"""<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f4f6f8;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8;padding:32px 16px;">
+<tr><td align="center">
+<table width="640" cellpadding="0" cellspacing="0"
+       style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+  <!-- Header -->
+  <tr><td style="background:#1e3a8a;padding:20px 36px;">
+    <table width="100%"><tr>
+      <td><img src="https://cotizaciones-web.onrender.com/logo.png" height="56" style="height:56px;width:auto;">
+          <p style="color:#93c5fd;font-size:11px;margin:4px 0 0;">NIT 901.650.581-4</p></td>
+      <td align="right">
+          <p style="color:#fff;font-size:20px;font-weight:900;margin:0;">REPORTE MENSUAL</p>
+          <p style="color:#93c5fd;font-size:14px;margin:4px 0 0;">{mes_nombre} {anio}</p>
+      </td>
+    </tr></table>
+  </td></tr>
+  <!-- KPIs -->
+  <tr><td style="padding:24px 36px;">
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td width="33%" style="text-align:center;padding:16px;background:#f0fdf4;border-radius:8px;">
+          <p style="margin:0;font-size:11px;color:#16a34a;text-transform:uppercase;letter-spacing:1px;">Ingresos</p>
+          <p style="margin:6px 0 0;font-size:18px;font-weight:700;color:#15803d;">{_fmt(r['total_ingresos'])}</p>
+        </td>
+        <td width="4%"></td>
+        <td width="33%" style="text-align:center;padding:16px;background:#fef2f2;border-radius:8px;">
+          <p style="margin:0;font-size:11px;color:#dc2626;text-transform:uppercase;letter-spacing:1px;">Egresos</p>
+          <p style="margin:6px 0 0;font-size:18px;font-weight:700;color:#b91c1c;">{_fmt(r['total_egresos'])}</p>
+        </td>
+        <td width="4%"></td>
+        <td width="26%" style="text-align:center;padding:16px;background:#eff6ff;border-radius:8px;">
+          <p style="margin:0;font-size:11px;color:#1d4ed8;text-transform:uppercase;letter-spacing:1px;">Balance</p>
+          <p style="margin:6px 0 0;font-size:18px;font-weight:700;color:{balance_color};">{balance_signo}{_fmt(r['balance'])}</p>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+  <!-- Ingresos -->
+  <tr><td style="padding:0 36px 24px;">
+    <p style="font-size:13px;font-weight:700;color:#1e293b;margin:0 0 10px;border-left:3px solid #16a34a;padding-left:10px;">Ingresos — Pagos de contratos</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+      <thead><tr style="background:#f8fafc;">
+        <th style="padding:8px 10px;text-align:left;font-size:11px;color:#94a3b8;text-transform:uppercase;">Fecha</th>
+        <th style="padding:8px 10px;text-align:left;font-size:11px;color:#94a3b8;text-transform:uppercase;">Cliente</th>
+        <th style="padding:8px 10px;text-align:left;font-size:11px;color:#94a3b8;text-transform:uppercase;">Descripción</th>
+        <th style="padding:8px 10px;text-align:right;font-size:11px;color:#94a3b8;text-transform:uppercase;">Valor</th>
+      </tr></thead>
+      <tbody>{ing_rows}</tbody>
+      <tfoot><tr style="background:#f0fdf4;">
+        <td colspan="3" style="padding:8px 10px;font-size:12px;font-weight:700;color:#15803d;">Total ingresos</td>
+        <td style="padding:8px 10px;text-align:right;font-size:13px;font-weight:700;color:#15803d;">{_fmt(r['total_ingresos'])}</td>
+      </tr></tfoot>
+    </table>
+  </td></tr>
+  <!-- Egresos -->
+  <tr><td style="padding:0 36px 24px;">
+    <p style="font-size:13px;font-weight:700;color:#1e293b;margin:0 0 10px;border-left:3px solid #dc2626;padding-left:10px;">Egresos — Pagos y gastos</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+      <thead><tr style="background:#f8fafc;">
+        <th style="padding:8px 10px;text-align:left;font-size:11px;color:#94a3b8;text-transform:uppercase;">Fecha</th>
+        <th style="padding:8px 10px;text-align:left;font-size:11px;color:#94a3b8;text-transform:uppercase;">Destinatario</th>
+        <th style="padding:8px 10px;text-align:left;font-size:11px;color:#94a3b8;text-transform:uppercase;">Concepto</th>
+        <th style="padding:8px 10px;text-align:right;font-size:11px;color:#94a3b8;text-transform:uppercase;">Monto</th>
+      </tr></thead>
+      <tbody>{eg_rows}</tbody>
+      <tfoot><tr style="background:#fef2f2;">
+        <td colspan="3" style="padding:8px 10px;font-size:12px;font-weight:700;color:#b91c1c;">Total egresos</td>
+        <td style="padding:8px 10px;text-align:right;font-size:13px;font-weight:700;color:#b91c1c;">{_fmt(r['total_egresos'])}</td>
+      </tr></tfoot>
+    </table>
+  </td></tr>
+  <!-- Footer -->
+  <tr><td style="background:#f8fafc;padding:16px 36px;border-top:1px solid #e2e8f0;text-align:center;">
+    <p style="color:#94a3b8;font-size:11px;margin:0;">Triple A Construcciones SAS · NIT 901.650.581-4<br>
+    Reporte generado automáticamente — {mes_nombre} {anio}</p>
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>"""
+
+    from app.utils.email import _send_email
+    ok = _send_email(
+        to_email=email,
+        subject=f"Reporte Mensual — {mes_nombre} {anio} · Triple A Construcciones",
+        html=html,
+    )
+    if not ok:
+        raise HTTPException(500, "No se pudo enviar el correo. Verifica la configuración de SendGrid.")
+    return {"ok": True, "message": f"Reporte enviado a {email}"}
 
 
 # ─── Alertas ──────────────────────────────────────────────────────────────────

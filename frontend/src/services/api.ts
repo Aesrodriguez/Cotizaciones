@@ -771,12 +771,24 @@ export interface FlujoCajaMes {
   saldo_acumulado: number
 }
 
+export interface ReporteMensual {
+  anio: number; mes: number; mes_nombre: string
+  resumen: { total_ingresos: number; total_egresos: number; balance: number }
+  ingresos: { fecha: string; valor: number; descripcion?: string; contrato_num?: string; contrato_titulo?: string; cliente?: string }[]
+  egresos: { fecha: string; monto: number; destinatario: string; tipo: string; concepto?: string; metodo_pago?: string; referencia?: string }[]
+  egresos_por_tipo: { tipo: string; total: number }[]
+}
+
 export const reportesAPI = {
   getAlertas: () => api.get<{ alertas: Alerta[]; total: number }>('/reportes/alertas', _noToast),
   getRetenciones: (anio?: number) => api.get<{ anio: number; periodos: RetencionesPeriodo[]; totales: Record<string, number> }>('/reportes/retenciones', { params: { anio }, ..._noToast }),
   getFlujoCaja: (anio?: number) => api.get<{ anio: number; meses: FlujoCajaMes[] }>('/reportes/flujo-caja', { params: { anio }, ..._noToast }),
   getObraResumen: (obraId: string) => api.get<Record<string, unknown>>(`/reportes/obras/${obraId}`, _noToast),
   getObraPdfUrl: (obraId: string) => `${api.defaults.baseURL}/reportes/obras/${obraId}/pdf`,
+  getMensual: (anio: number, mes: number) =>
+    api.get<ReporteMensual>('/reportes/mensual', { params: { anio, mes }, ..._noToast }),
+  enviarMensualEmail: (anio: number, mes: number, email: string) =>
+    api.post<{ ok: boolean; message: string }>('/reportes/mensual/email', { anio, mes, email }),
 }
 
 // ─── Planillas PILA ───────────────────────────────────────────────────────────

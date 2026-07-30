@@ -34,6 +34,7 @@ const FlujoCajaPage = lazy(() => import('./pages/FlujoCajaPage'))
 const ObraDetailPage = lazy(() => import('./pages/ObraDetailPage'))
 const PlanillasPage = lazy(() => import('./pages/PlanillasPage'))
 const RegistroTrabajadorPage = lazy(() => import('./pages/RegistroTrabajadorPage'))
+const ReporteMensualPage = lazy(() => import('./pages/ReporteMensualPage'))
 
 function PageLoader() {
   return (
@@ -107,6 +108,7 @@ export default function App() {
             <Route path="flujo-caja" element={<FlujoCajaPage />} />
             <Route path="obras/:id" element={<ObraDetailPage />} />
             <Route path="planillas" element={<PlanillasPage />} />
+            <Route path="reporte-mensual" element={<ReporteMensualPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
