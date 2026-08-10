@@ -314,20 +314,53 @@ async def extraer_comprobante(file: UploadFile = File(...)):
     if not full_text.strip():
         raise HTTPException(422, "No se pudo extraer texto del comprobante.")
 
+    import unicodedata
+
     lines = [l.strip() for l in full_text.splitlines() if l.strip()]
 
-    def after_kw(*keywords: str) -> str | None:
-        """Retorna el texto que sigue a la primera keyword encontrada (misma línea o siguiente)."""
-        for kw in keywords:
-            kl = kw.lower()
-            for i, line in enumerate(lines):
-                if kl in line.lower():
-                    rest = line[line.lower().find(kl) + len(kl):].strip()
-                    if rest:
-                        return rest
-                    if i + 1 < len(lines):
-                        return lines[i + 1]
+    def _n(s: str) -> str:
+        return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().lower()
+
+    # ── Estrategia 1: pares "Etiqueta: Valor" en la misma línea ────────────
+    # Cubre comprobantes de imagen (transferencias Davivienda, Bancolombia, etc.)
+    kv: dict[str, str] = {}
+    for line in lines:
+        m = re.match(r"^(.{2,50}?):\s+(.+)$", line)
+        if m:
+            kv[_n(m.group(1).strip())] = m.group(2).strip()
+
+    def kv_get(*keys: str) -> str | None:
+        for k in keys:
+            v = kv.get(_n(k))
+            if v:
+                return v
         return None
+
+    # ── Estrategia 2: keyword en línea, valor en la siguiente ──────────────
+    # Cubre PDFs PSE (layout dos columnas sin ':')
+    def kw_next(*keywords: str) -> str | None:
+        for kw in keywords:
+            kl = _n(kw)
+            for i, line in enumerate(lines):
+                ln = _n(line)
+                idx = ln.find(kl)
+                if idx < 0:
+                    continue
+                end = idx + len(kl)
+                if end < len(ln) and ln[end].isalpha():
+                    continue  # substring de palabra más larga
+                rest = line[end:].strip().lstrip(":").strip()
+                # Solo aceptar rest si parece un valor (tiene dígitos o $)
+                # Si es solo texto (otra etiqueta del layout de dos columnas), ir a la siguiente línea
+                if rest and (any(c.isdigit() for c in rest) or "$" in rest):
+                    return rest
+                if i + 1 < len(lines):
+                    return lines[i + 1].strip()
+        return None
+
+    def get(*keys: str) -> str | None:
+        """Prueba kv primero (mismo renglón), luego kw_next (renglón siguiente)."""
+        return kv_get(*keys) or kw_next(*keys)
 
     result: dict = {
         "fecha": None, "monto": None, "destinatario": None,
@@ -335,14 +368,13 @@ async def extraer_comprobante(file: UploadFile = File(...)):
     }
 
     # ── Monto ──────────────────────────────────────────────────────────────
-    monto_raw = after_kw("valor del pago", "valor pagado", "total pagado", "monto")
+    monto_raw = get("monto", "valor del pago", "valor pagado", "total pagado")
     if monto_raw:
         m = re.search(r"[\d.]+(?:,\d+)?", monto_raw)
         if m:
             result["monto"] = int(m.group().replace(".", "").split(",")[0])
 
     # ── Fecha ───────────────────────────────────────────────────────────────
-    # Busca DD/MM/YYYY o YYYY-MM-DD
     fecha_m = re.search(r"(\d{1,2})/(\d{1,2})/(\d{4})", full_text)
     if fecha_m:
         d, mo, y = fecha_m.groups()
@@ -353,12 +385,11 @@ async def extraer_comprobante(file: UploadFile = File(...)):
             result["fecha"] = fecha_m2.group()
 
     # ── Referencia ──────────────────────────────────────────────────────────
-    # Cubre: PSE (número de aprobación), transferencias (número de documento), etc.
-    ref_raw = after_kw(
-        "número de aprobación", "no. aprobación", "aprobación",
-        "número de documento", "no. documento",
-        "número de autorización", "autorización",
-        "cod. único cus", "cus",
+    ref_raw = get(
+        "numero de aprobacion", "no. aprobacion", "aprobacion",
+        "numero de documento",  "no. documento",
+        "numero de autorizacion", "autorizacion",
+        "cod. unico cus", "numero de documento equivalente",
     )
     if ref_raw:
         tok = ref_raw.strip().split()[0]
@@ -366,22 +397,49 @@ async def extraer_comprobante(file: UploadFile = File(...)):
             result["referencia"] = tok
 
     # ── Concepto ────────────────────────────────────────────────────────────
-    concepto_raw = after_kw("transacción", "descripción", "motivo", "concepto", "detalle")
+    # kv_get garantiza que solo busca en líneas "Etiqueta: Valor" exactas
+    concepto_raw = (
+        kv_get("transaccion", "descripcion", "motivo", "concepto", "detalle")
+        or kw_next("motivo", "concepto")
+    )
     if concepto_raw:
         result["concepto"] = concepto_raw[:150].strip()
 
     # ── Destinatario ────────────────────────────────────────────────────────
-    # Prioridad: nombre del destinatario en tabla > motivo > servicio
-    dest_raw = after_kw(
-        "nombre destinatario", "nombre del destinatario",
-        "motivo",
-        "beneficiario", "destinatario", "pagado a", "entidad receptora",
-    )
-    if dest_raw:
-        result["destinatario"] = dest_raw[:100].strip()
+    tl = full_text.lower()
+    if "pse" in tl:
+        # PSE layout: "Número de aprobación  Motivo\n00075803  Gas Natural..."
+        # La fila de datos tiene: primer_token=aprobación, resto=motivo
+        for i, line in enumerate(lines):
+            if _n("numero de aprobacion") in _n(line) and _n("motivo") in _n(line):
+                if i + 1 < len(lines):
+                    parts = lines[i + 1].split(None, 1)
+                    if parts and re.match(r"\d{4,}", parts[0]):
+                        if not result["referencia"]:
+                            result["referencia"] = parts[0]
+                        if len(parts) > 1:
+                            result["destinatario"] = parts[1].strip()[:100]
+                break
+        # Fallback si no encontró el patrón de dos columnas
+        if not result["destinatario"]:
+            result["destinatario"] = (get("motivo") or "")[:100].strip() or None
+        # En PSE el concepto es el mismo motivo ya extraído
+        if result["destinatario"]:
+            result["concepto"] = result["destinatario"]
+    else:
+        # Transferencia: nombre en fila de tabla → ID_número NOMBRE $monto
+        nm = re.search(
+            r"\b(\d{6,12})\s+([A-Za-z\xc0-\xff][^\d$\n]{2,50}?)\s*\$",
+            full_text,
+        )
+        if nm:
+            result["destinatario"] = nm.group(2).strip()
+        else:
+            fb = get("beneficiario", "destinatario", "pagado a", "entidad receptora")
+            if fb:
+                result["destinatario"] = fb[:100].strip()
 
     # ── Método de pago ──────────────────────────────────────────────────────
-    tl = full_text.lower()
     if "pse" in tl:
         result["metodo_pago"] = "PSE"
     elif "nequi" in tl:
@@ -394,9 +452,8 @@ async def extraer_comprobante(file: UploadFile = File(...)):
         result["metodo_pago"] = "EFECTIVO"
     elif "cheque" in tl:
         result["metodo_pago"] = "CHEQUE"
-    # Transferencia bancaria: cuenta de ahorros / corriente entre bancos
-    elif any(x in tl for x in ("cuenta de ahorros", "cuenta corriente", "pago de nómina",
-                                "pago de nomina", "transferencia interbancaria")):
+    elif any(x in tl for x in ("cuenta de ahorros", "cuenta corriente",
+                                "pago de nomina", "pago de nómina")):
         result["metodo_pago"] = "TRANSFERENCIA"
     else:
         result["metodo_pago"] = "OTRO"
