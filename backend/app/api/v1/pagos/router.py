@@ -257,6 +257,26 @@ async def upload_soporte(
     return {"soporte_url": url, "soporte_filename": display_filename}
 
 
+@router.get("/test-drive")
+def test_drive():
+    """Diagnóstico de conexión con Google Drive."""
+    try:
+        from app.utils.gdrive import _build_service
+        service, folder_id = _build_service()
+        if not service:
+            return {"ok": False, "error": "No se pudo autenticar con Google Drive — revisa GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN en las variables de entorno"}
+        # Intentar listar la carpeta de soportes
+        soportes_folder = get_settings().GDRIVE_SOPORTES_FOLDER_ID
+        result = service.files().list(
+            q=f"'{soportes_folder}' in parents and trashed=false",
+            fields="files(id,name)",
+            pageSize=1,
+        ).execute()
+        return {"ok": True, "folder_id": soportes_folder, "files_count": len(result.get("files", []))}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 @router.delete("/{pid}/soporte")
 def delete_soporte(pid: str, db: Session = Depends(get_db)):
     """Elimina el soporte de pago (solo borra la referencia, no el archivo de Drive)."""
