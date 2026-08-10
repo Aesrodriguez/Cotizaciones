@@ -1,9 +1,12 @@
 import re
+import datetime as _dt
+from datetime import date as _date
 from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.api.deps import get_db_session as get_db
-from app.utils.gdrive import upload_to_drive
+from app.config.settings import get_settings
+from app.utils.gdrive import upload_to_subfolder, make_month_subfolder_name
 
 router = APIRouter(prefix="/pagos", tags=["pagos"])
 
@@ -232,7 +235,15 @@ async def upload_soporte(
 
     mime = file.content_type or "application/octet-stream"
 
-    url = upload_to_drive(content, drive_filename, mime)
+    # Subcarpeta: año-mes del pago (ej. "2026-08 Agosto")
+    soportes_folder = get_settings().GDRIVE_SOPORTES_FOLDER_ID
+    try:
+        fecha_date = _dt.date.fromisoformat(fecha_str) if fecha_str != "sin-fecha" else _date.today()
+    except ValueError:
+        fecha_date = _date.today()
+    subfolder = make_month_subfolder_name(fecha_date.year, fecha_date.month)
+
+    url = upload_to_subfolder(soportes_folder, subfolder, content, drive_filename, mime)
     if not url:
         raise HTTPException(500, "No se pudo subir a Google Drive — verifique la configuración")
 

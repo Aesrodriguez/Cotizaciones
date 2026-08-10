@@ -96,6 +96,35 @@ def download_from_drive(file_id: str) -> Optional[bytes]:
         return None
 
 
+def get_or_create_subfolder(service, parent_id: str, folder_name: str) -> Optional[str]:
+    """
+    Busca una subcarpeta por nombre dentro de parent_id.
+    Si no existe, la crea. Retorna el folder_id de la subcarpeta.
+    """
+    try:
+        q = (
+            f"'{parent_id}' in parents "
+            f"and name = '{folder_name}' "
+            f"and mimeType = 'application/vnd.google-apps.folder' "
+            f"and trashed = false"
+        )
+        result = service.files().list(q=q, fields="files(id,name)", pageSize=1).execute()
+        files = result.get("files", [])
+        if files:
+            return files[0]["id"]
+        # Crear subcarpeta
+        meta = {
+            "name": folder_name,
+            "mimeType": "application/vnd.google-apps.folder",
+            "parents": [parent_id],
+        }
+        created = service.files().create(body=meta, fields="id").execute()
+        return created["id"]
+    except Exception as exc:
+        logger.warning("get_or_create_subfolder failed (%s): %s", folder_name, exc)
+        return None
+
+
 def upload_to_drive(content: bytes, filename: str, mime_type: str, folder_id_override: Optional[str] = None) -> Optional[str]:
     """
     Sube `content` a la carpeta de Google Drive configurada usando OAuth2.
@@ -125,6 +154,56 @@ def upload_to_drive(content: bytes, filename: str, mime_type: str, folder_id_ove
     except Exception as exc:
         logger.warning('Google Drive upload failed: %s', exc)
         return None
+
+
+_MESES_ES = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+]
+
+
+def upload_to_subfolder(
+    parent_id: str,
+    subfolder_name: str,
+    content: bytes,
+    filename: str,
+    mime_type: str,
+) -> Optional[str]:
+    """
+    Sube `content` dentro de una subcarpeta de Drive.
+    Si la subcarpeta no existe la crea. Retorna webViewLink o None.
+    """
+    try:
+        from googleapiclient.http import MediaIoBaseUpload
+
+        service, _ = _build_service()
+        if not service:
+            return None
+
+        folder_id = get_or_create_subfolder(service, parent_id, subfolder_name)
+        if not folder_id:
+            logger.warning("No se pudo obtener/crear subcarpeta %s en %s", subfolder_name, parent_id)
+            return None
+
+        media = MediaIoBaseUpload(io.BytesIO(content), mimetype=mime_type, resumable=False)
+        created = service.files().create(
+            body={"name": filename, "parents": [folder_id]},
+            media_body=media,
+            fields="id,webViewLink",
+        ).execute()
+
+        url = created.get("webViewLink")
+        logger.info("Drive upload OK (subcarpeta=%s): %s → %s", subfolder_name, filename, url)
+        return url
+    except Exception as exc:
+        logger.warning("upload_to_subfolder failed: %s", exc)
+        return None
+
+
+def make_month_subfolder_name(year: int, month: int) -> str:
+    """Retorna nombre de subcarpeta tipo '2026-08 Agosto'."""
+    mes = _MESES_ES[month - 1] if 1 <= month <= 12 else str(month)
+    return f"{year}-{month:02d} {mes}"
 
 
 def list_drive_files_in_folder(folder_id: str) -> Optional[list]:

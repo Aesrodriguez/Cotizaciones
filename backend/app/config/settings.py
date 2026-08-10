@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     GDRIVE_FOLDER_ID: str = Field(default="")
     GDRIVE_EXTRACTOS_FOLDER_ID: str = Field(default="")
     GDRIVE_FACTURAS_FOLDER_ID: str = Field(default="")
+    GDRIVE_SOPORTES_FOLDER_ID: str = Field(default="154tbJeqyDyX9K8D9tIa7hbDZIIteNRZK")
 
     # Email — SendGrid API (HTTPS, sin bloqueo de Render)
     SENDGRID_API_KEY: str = Field(default="")
