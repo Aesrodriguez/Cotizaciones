@@ -236,7 +236,9 @@ function PagoFormModal({ initial, obras, onClose, onSaved }: {
   const [saving, setSaving] = useState(false)
   const [soporteFile, setSoporteFile] = useState<File | null>(null)
   const [savingStep, setSavingStep] = useState<'pago' | 'soporte' | null>(null)
+  const [extrayendo, setExtrayendo] = useState(false)
   const soporteRef = useRef<HTMLInputElement>(null)
+  const leerRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     // Cargar facturas RECIBIDAS para vincular
@@ -295,6 +297,32 @@ function PagoFormModal({ initial, obras, onClose, onSaved }: {
     return []
   })()
 
+  const leerComprobante = async (file: File) => {
+    setExtrayendo(true)
+    setSoporteFile(file)
+    try {
+      const r = await pagosAPI.extraerComprobante(file)
+      const d = r.data
+      setForm(p => ({
+        ...p,
+        ...(d.fecha       ? { fecha: d.fecha } : {}),
+        ...(d.monto       ? { monto: String(d.monto) } : {}),
+        ...(d.destinatario ? { destinatario: d.destinatario } : {}),
+        ...(d.referencia  ? { referencia: d.referencia } : {}),
+        ...(d.metodo_pago && METODOS.includes(d.metodo_pago as MetodoPago)
+          ? { metodo_pago: d.metodo_pago }
+          : {}),
+        ...(d.concepto    ? { concepto: d.concepto } : {}),
+      }))
+      toast.success('Información extraída del comprobante — revisa y ajusta si es necesario')
+    } catch {
+      toast.error('No se pudo leer el comprobante — completa los campos manualmente')
+    } finally {
+      setExtrayendo(false)
+      if (leerRef.current) leerRef.current.value = ''
+    }
+  }
+
   const f = (k: keyof PagoFormData) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm(p => ({ ...p, [k]: e.target.value }))
 
@@ -349,6 +377,32 @@ function PagoFormModal({ initial, obras, onClose, onSaved }: {
   return (
     <Modal title={isEdit ? 'Editar pago' : 'Registrar pago'} onClose={onClose} wide>
       <div className="space-y-3">
+
+        {/* ── Leer comprobante ── */}
+        <input
+          ref={leerRef}
+          type="file"
+          accept=".pdf,.png,.jpg,.jpeg,.webp"
+          className="hidden"
+          onChange={e => { const f = e.target.files?.[0]; if (f) leerComprobante(f) }}
+        />
+        <button
+          type="button"
+          onClick={() => leerRef.current?.click()}
+          disabled={extrayendo}
+          className="flex items-center justify-center gap-2 w-full px-3 py-3 rounded-xl text-sm font-semibold transition-all"
+          style={{
+            background: extrayendo ? 'rgba(200,241,53,0.08)' : 'rgba(200,241,53,0.12)',
+            color: '#c8f135',
+            border: '1.5px dashed rgba(200,241,53,0.4)',
+          }}
+        >
+          {extrayendo
+            ? <><span className="animate-spin">⏳</span> Analizando comprobante…</>
+            : <><span>📄</span> Leer comprobante — autocompletar campos</>
+          }
+        </button>
+
         {/* Tipo (pills) */}
         <Field label="Tipo de pago">
           <div className="flex flex-wrap gap-2">

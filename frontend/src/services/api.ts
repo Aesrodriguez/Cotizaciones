@@ -696,6 +696,18 @@ export const pagosAPI = {
     return api.post<{ soporte_url: string; soporte_filename: string }>(`/pagos/${id}/soporte`, form)
   },
   deleteSoporte: (id: string) => api.delete<{ ok: boolean }>(`/pagos/${id}/soporte`),
+  extraerComprobante: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post<{
+      fecha: string | null
+      monto: number | null
+      destinatario: string | null
+      referencia: string | null
+      metodo_pago: string | null
+      concepto: string | null
+    }>('/pagos/extraer-comprobante', form)
+  },
 }
 
 // ─── Equipos ──────────────────────────────────────────────────────────────────

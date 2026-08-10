@@ -257,6 +257,73 @@ async def upload_soporte(
     return {"soporte_url": url, "soporte_filename": display_filename}
 
 
+@router.post("/extraer-comprobante")
+async def extraer_comprobante(file: UploadFile = File(...)):
+    """Analiza un comprobante de pago (PDF/imagen) con Claude Vision y extrae los campos."""
+    import base64, json
+    try:
+        import anthropic as _anthropic
+    except ImportError:
+        raise HTTPException(503, "Librería anthropic no instalada")
+
+    settings = get_settings()
+    if not settings.ANTHROPIC_API_KEY:
+        raise HTTPException(503, "ANTHROPIC_API_KEY no configurada — agrégala en las variables de entorno de Render")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(400, "Archivo vacío")
+
+    mime = (file.content_type or "application/octet-stream").lower()
+    b64 = base64.standard_b64encode(content).decode()
+
+    # Claude soporta PDFs como "document" e imágenes como "image"
+    if mime == "application/pdf":
+        file_block = {
+            "type": "document",
+            "source": {"type": "base64", "media_type": "application/pdf", "data": b64},
+        }
+    else:
+        safe_mime = mime if mime in ("image/jpeg", "image/png", "image/gif", "image/webp") else "image/jpeg"
+        file_block = {
+            "type": "image",
+            "source": {"type": "base64", "media_type": safe_mime, "data": b64},
+        }
+
+    prompt = (
+        "Extrae la información de este comprobante de pago colombiano. "
+        "Devuelve ÚNICAMENTE un objeto JSON válido sin texto adicional ni bloques markdown:\n"
+        '{"fecha":"YYYY-MM-DD o null","monto":número entero sin puntos,'
+        '"destinatario":"empresa o entidad a quien se pagó",'
+        '"referencia":"número de aprobación o transacción",'
+        '"metodo_pago":"PSE|TRANSFERENCIA|EFECTIVO|NEQUI|DAVIPLATA|CHEQUE|OTRO",'
+        '"concepto":"descripción breve del motivo del pago"}\n'
+        "Si un campo no se puede determinar, usa null. "
+        "El monto debe ser un número entero (ej: 28250, no '28.250' ni '$28.250,00')."
+    )
+
+    client = _anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+    try:
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=512,
+            messages=[{"role": "user", "content": [file_block, {"type": "text", "text": prompt}]}],
+        )
+        text = response.content[0].text.strip()
+        # Remover bloque ```json ... ``` si Claude lo incluyó
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+            text = text.strip()
+        data = json.loads(text)
+        return data
+    except json.JSONDecodeError as e:
+        raise HTTPException(422, f"No se pudo parsear la respuesta de Claude: {e}")
+    except Exception as e:
+        raise HTTPException(500, f"Error al analizar comprobante: {e}")
+
+
 @router.get("/test-drive")
 def test_drive():
     """Diagnóstico de conexión con Google Drive."""
