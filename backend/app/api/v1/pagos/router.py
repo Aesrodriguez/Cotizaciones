@@ -335,15 +335,10 @@ async def extraer_comprobante(file: UploadFile = File(...)):
     if concepto_raw:
         result["concepto"] = concepto_raw[:150].strip()
 
-    # ── Destinatario → Referencia 3 ─────────────────────────────────────────
-    dest_raw = after_kw("referencia 3", "referencia3")
+    # ── Destinatario → Motivo (nombre del servicio o empresa pagada) ─────────
+    dest_raw = after_kw("motivo", "beneficiario", "destinatario", "pagado a", "entidad receptora")
     if dest_raw:
-        result["destinatario"] = dest_raw.strip().split()[0]
-    if not result["destinatario"]:
-        # Fallback para otros formatos de comprobante
-        fb = after_kw("beneficiario", "destinatario", "pagado a", "entidad receptora")
-        if fb:
-            result["destinatario"] = fb[:100].strip()
+        result["destinatario"] = dest_raw[:100].strip()
 
     # ── Método de pago ──────────────────────────────────────────────────────
     tl = full_text.lower()
