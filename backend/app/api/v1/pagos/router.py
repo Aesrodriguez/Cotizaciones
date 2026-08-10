@@ -319,10 +319,10 @@ async def extraer_comprobante(file: UploadFile = File(...)):
         if fecha_m2:
             result["fecha"] = fecha_m2.group()
 
-    # ── Referencia ──────────────────────────────────────────────────────────
+    # ── Referencia → Número de aprobación ──────────────────────────────────
     ref_raw = after_kw(
         "número de aprobación", "no. aprobación", "aprobación",
-        "número de autorización", "autorización", "cod. único cus", "cus",
+        "número de autorización", "autorización",
         "número de transacción", "transacción",
     )
     if ref_raw:
@@ -330,18 +330,20 @@ async def extraer_comprobante(file: UploadFile = File(...)):
         if re.match(r"[\dA-Za-z]{4,}", tok):
             result["referencia"] = tok
 
-    # ── Concepto ────────────────────────────────────────────────────────────
-    concepto_raw = after_kw("motivo", "concepto", "descripción", "detalle", "servicio")
+    # ── Concepto → Motivo ───────────────────────────────────────────────────
+    concepto_raw = after_kw("motivo", "concepto", "descripción", "detalle")
     if concepto_raw:
         result["concepto"] = concepto_raw[:150].strip()
 
-    # ── Destinatario ────────────────────────────────────────────────────────
-    dest_raw = after_kw(
-        "destino del pago", "beneficiario", "destinatario",
-        "empresa", "entidad receptora", "pagado a",
-    )
+    # ── Destinatario → Referencia 3 ─────────────────────────────────────────
+    dest_raw = after_kw("referencia 3", "referencia3")
     if dest_raw:
-        result["destinatario"] = dest_raw[:100].strip()
+        result["destinatario"] = dest_raw.strip().split()[0]
+    if not result["destinatario"]:
+        # Fallback para otros formatos de comprobante
+        fb = after_kw("beneficiario", "destinatario", "pagado a", "entidad receptora")
+        if fb:
+            result["destinatario"] = fb[:100].strip()
 
     # ── Método de pago ──────────────────────────────────────────────────────
     tl = full_text.lower()
