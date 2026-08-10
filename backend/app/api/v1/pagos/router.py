@@ -352,24 +352,31 @@ async def extraer_comprobante(file: UploadFile = File(...)):
         if fecha_m2:
             result["fecha"] = fecha_m2.group()
 
-    # ── Referencia → Número de aprobación ──────────────────────────────────
+    # ── Referencia ──────────────────────────────────────────────────────────
+    # Cubre: PSE (número de aprobación), transferencias (número de documento), etc.
     ref_raw = after_kw(
         "número de aprobación", "no. aprobación", "aprobación",
+        "número de documento", "no. documento",
         "número de autorización", "autorización",
-        "número de transacción", "transacción",
+        "cod. único cus", "cus",
     )
     if ref_raw:
         tok = ref_raw.strip().split()[0]
         if re.match(r"[\dA-Za-z]{4,}", tok):
             result["referencia"] = tok
 
-    # ── Concepto → Motivo ───────────────────────────────────────────────────
-    concepto_raw = after_kw("motivo", "concepto", "descripción", "detalle")
+    # ── Concepto ────────────────────────────────────────────────────────────
+    concepto_raw = after_kw("transacción", "descripción", "motivo", "concepto", "detalle")
     if concepto_raw:
         result["concepto"] = concepto_raw[:150].strip()
 
-    # ── Destinatario → Motivo (nombre del servicio o empresa pagada) ─────────
-    dest_raw = after_kw("motivo", "beneficiario", "destinatario", "pagado a", "entidad receptora")
+    # ── Destinatario ────────────────────────────────────────────────────────
+    # Prioridad: nombre del destinatario en tabla > motivo > servicio
+    dest_raw = after_kw(
+        "nombre destinatario", "nombre del destinatario",
+        "motivo",
+        "beneficiario", "destinatario", "pagado a", "entidad receptora",
+    )
     if dest_raw:
         result["destinatario"] = dest_raw[:100].strip()
 
@@ -387,6 +394,10 @@ async def extraer_comprobante(file: UploadFile = File(...)):
         result["metodo_pago"] = "EFECTIVO"
     elif "cheque" in tl:
         result["metodo_pago"] = "CHEQUE"
+    # Transferencia bancaria: cuenta de ahorros / corriente entre bancos
+    elif any(x in tl for x in ("cuenta de ahorros", "cuenta corriente", "pago de nómina",
+                                "pago de nomina", "transferencia interbancaria")):
+        result["metodo_pago"] = "TRANSFERENCIA"
     else:
         result["metodo_pago"] = "OTRO"
 
