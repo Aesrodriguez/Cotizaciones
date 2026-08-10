@@ -259,69 +259,108 @@ async def upload_soporte(
 
 @router.post("/extraer-comprobante")
 async def extraer_comprobante(file: UploadFile = File(...)):
-    """Analiza un comprobante de pago (PDF/imagen) con Claude Vision y extrae los campos."""
-    import base64, json
-    try:
-        import anthropic as _anthropic
-    except ImportError:
-        raise HTTPException(503, "Librería anthropic no instalada")
-
-    settings = get_settings()
-    if not settings.ANTHROPIC_API_KEY:
-        raise HTTPException(503, "ANTHROPIC_API_KEY no configurada — agrégala en las variables de entorno de Render")
+    """Extrae campos de un comprobante de pago PDF usando pdfplumber (sin API externa)."""
+    import pdfplumber
+    import io as _io
 
     content = await file.read()
     if not content:
         raise HTTPException(400, "Archivo vacío")
 
-    mime = (file.content_type or "application/octet-stream").lower()
-    b64 = base64.standard_b64encode(content).decode()
+    fname = (file.filename or "").lower()
+    mime  = (file.content_type or "").lower()
+    if "pdf" not in mime and not fname.endswith(".pdf"):
+        raise HTTPException(415, "Solo se soportan archivos PDF. Descarga el comprobante en PDF desde tu banco.")
 
-    # Claude soporta PDFs como "document" e imágenes como "image"
-    if mime == "application/pdf":
-        file_block = {
-            "type": "document",
-            "source": {"type": "base64", "media_type": "application/pdf", "data": b64},
-        }
-    else:
-        safe_mime = mime if mime in ("image/jpeg", "image/png", "image/gif", "image/webp") else "image/jpeg"
-        file_block = {
-            "type": "image",
-            "source": {"type": "base64", "media_type": safe_mime, "data": b64},
-        }
-
-    prompt = (
-        "Extrae la información de este comprobante de pago colombiano. "
-        "Devuelve ÚNICAMENTE un objeto JSON válido sin texto adicional ni bloques markdown:\n"
-        '{"fecha":"YYYY-MM-DD o null","monto":número entero sin puntos,'
-        '"destinatario":"empresa o entidad a quien se pagó",'
-        '"referencia":"número de aprobación o transacción",'
-        '"metodo_pago":"PSE|TRANSFERENCIA|EFECTIVO|NEQUI|DAVIPLATA|CHEQUE|OTRO",'
-        '"concepto":"descripción breve del motivo del pago"}\n'
-        "Si un campo no se puede determinar, usa null. "
-        "El monto debe ser un número entero (ej: 28250, no '28.250' ni '$28.250,00')."
-    )
-
-    client = _anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
     try:
-        response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=512,
-            messages=[{"role": "user", "content": [file_block, {"type": "text", "text": prompt}]}],
-        )
-        text = response.content[0].text.strip()
-        # Remover bloque ```json ... ``` si Claude lo incluyó
-        if text.startswith("```"):
-            text = text.split("```")[1]
-            if text.startswith("json"):
-                text = text[4:]
-            text = text.strip()
-        data = json.loads(text)
-        return data
-    except json.JSONDecodeError as e:
-        raise HTTPException(422, f"No se pudo parsear la respuesta de Claude: {e}")
+        with pdfplumber.open(_io.BytesIO(content)) as pdf:
+            full_text = "\n".join(p.extract_text() or "" for p in pdf.pages)
     except Exception as e:
-        raise HTTPException(500, f"Error al analizar comprobante: {e}")
+        raise HTTPException(422, f"No se pudo leer el PDF: {e}")
+
+    if not full_text.strip():
+        raise HTTPException(422, "El PDF no contiene texto seleccionable. Usa el PDF original del banco (no una foto escaneada).")
+
+    lines = [l.strip() for l in full_text.splitlines() if l.strip()]
+
+    def after_kw(*keywords: str) -> str | None:
+        """Retorna el texto que sigue a la primera keyword encontrada (misma línea o siguiente)."""
+        for kw in keywords:
+            kl = kw.lower()
+            for i, line in enumerate(lines):
+                if kl in line.lower():
+                    rest = line[line.lower().find(kl) + len(kl):].strip()
+                    if rest:
+                        return rest
+                    if i + 1 < len(lines):
+                        return lines[i + 1]
+        return None
+
+    result: dict = {
+        "fecha": None, "monto": None, "destinatario": None,
+        "referencia": None, "metodo_pago": None, "concepto": None,
+    }
+
+    # ── Monto ──────────────────────────────────────────────────────────────
+    monto_raw = after_kw("valor del pago", "valor pagado", "total pagado", "monto")
+    if monto_raw:
+        m = re.search(r"[\d.]+(?:,\d+)?", monto_raw)
+        if m:
+            result["monto"] = int(m.group().replace(".", "").split(",")[0])
+
+    # ── Fecha ───────────────────────────────────────────────────────────────
+    # Busca DD/MM/YYYY o YYYY-MM-DD
+    fecha_m = re.search(r"(\d{1,2})/(\d{1,2})/(\d{4})", full_text)
+    if fecha_m:
+        d, mo, y = fecha_m.groups()
+        result["fecha"] = f"{y}-{mo.zfill(2)}-{d.zfill(2)}"
+    else:
+        fecha_m2 = re.search(r"(\d{4})-(\d{2})-(\d{2})", full_text)
+        if fecha_m2:
+            result["fecha"] = fecha_m2.group()
+
+    # ── Referencia ──────────────────────────────────────────────────────────
+    ref_raw = after_kw(
+        "número de aprobación", "no. aprobación", "aprobación",
+        "número de autorización", "autorización", "cod. único cus", "cus",
+        "número de transacción", "transacción",
+    )
+    if ref_raw:
+        tok = ref_raw.strip().split()[0]
+        if re.match(r"[\dA-Za-z]{4,}", tok):
+            result["referencia"] = tok
+
+    # ── Concepto ────────────────────────────────────────────────────────────
+    concepto_raw = after_kw("motivo", "concepto", "descripción", "detalle", "servicio")
+    if concepto_raw:
+        result["concepto"] = concepto_raw[:150].strip()
+
+    # ── Destinatario ────────────────────────────────────────────────────────
+    dest_raw = after_kw(
+        "destino del pago", "beneficiario", "destinatario",
+        "empresa", "entidad receptora", "pagado a",
+    )
+    if dest_raw:
+        result["destinatario"] = dest_raw[:100].strip()
+
+    # ── Método de pago ──────────────────────────────────────────────────────
+    tl = full_text.lower()
+    if "pse" in tl:
+        result["metodo_pago"] = "PSE"
+    elif "nequi" in tl:
+        result["metodo_pago"] = "NEQUI"
+    elif "daviplata" in tl:
+        result["metodo_pago"] = "DAVIPLATA"
+    elif "transferencia" in tl:
+        result["metodo_pago"] = "TRANSFERENCIA"
+    elif "efectivo" in tl:
+        result["metodo_pago"] = "EFECTIVO"
+    elif "cheque" in tl:
+        result["metodo_pago"] = "CHEQUE"
+    else:
+        result["metodo_pago"] = "OTRO"
+
+    return result
 
 
 @router.get("/test-drive")

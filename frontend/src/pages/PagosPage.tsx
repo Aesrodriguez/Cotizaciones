@@ -382,7 +382,7 @@ function PagoFormModal({ initial, obras, onClose, onSaved }: {
         <input
           ref={leerRef}
           type="file"
-          accept=".pdf,.png,.jpg,.jpeg,.webp"
+          accept=".pdf,application/pdf"
           className="hidden"
           onChange={e => { const f = e.target.files?.[0]; if (f) leerComprobante(f) }}
         />
@@ -398,8 +398,8 @@ function PagoFormModal({ initial, obras, onClose, onSaved }: {
           }}
         >
           {extrayendo
-            ? <><span className="animate-spin">⏳</span> Analizando comprobante…</>
-            : <><span>📄</span> Leer comprobante — autocompletar campos</>
+            ? <><span className="animate-spin inline-block">⏳</span> Analizando comprobante…</>
+            : <><span>📄</span> Leer comprobante PDF — autocompletar campos</>
           }
         </button>
 

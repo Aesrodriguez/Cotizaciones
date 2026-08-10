@@ -47,9 +47,6 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = Field(default="")
     FRONTEND_URL: str = Field(default="https://cotizaciones-web.onrender.com")
 
-    # Anthropic — extracción de comprobantes con Claude Vision
-    ANTHROPIC_API_KEY: str = Field(default="")
-
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
