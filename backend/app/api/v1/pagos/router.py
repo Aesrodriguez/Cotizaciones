@@ -259,7 +259,9 @@ async def upload_soporte(
 
 @router.post("/extraer-comprobante")
 async def extraer_comprobante(file: UploadFile = File(...)):
-    """Extrae campos de un comprobante de pago PDF usando pdfplumber (sin API externa)."""
+    """Extrae campos de un comprobante de pago.
+    PDF → pdfplumber. Imagen (PNG/JPG/WEBP) → Google Cloud Vision API.
+    """
     import pdfplumber
     import io as _io
 
@@ -269,17 +271,48 @@ async def extraer_comprobante(file: UploadFile = File(...)):
 
     fname = (file.filename or "").lower()
     mime  = (file.content_type or "").lower()
-    if "pdf" not in mime and not fname.endswith(".pdf"):
-        raise HTTPException(415, "Solo se soportan archivos PDF. Descarga el comprobante en PDF desde tu banco.")
+    is_pdf = "pdf" in mime or fname.endswith(".pdf")
+    is_img = any(mime.endswith(x) or fname.endswith(f".{x}")
+                 for x in ("png", "jpg", "jpeg", "webp", "gif", "bmp"))
 
-    try:
-        with pdfplumber.open(_io.BytesIO(content)) as pdf:
-            full_text = "\n".join(p.extract_text() or "" for p in pdf.pages)
-    except Exception as e:
-        raise HTTPException(422, f"No se pudo leer el PDF: {e}")
+    if not is_pdf and not is_img:
+        raise HTTPException(415, "Sube un PDF o una imagen (PNG, JPG, WEBP).")
+
+    full_text = ""
+
+    if is_pdf:
+        try:
+            with pdfplumber.open(_io.BytesIO(content)) as pdf:
+                full_text = "\n".join(p.extract_text() or "" for p in pdf.pages)
+        except Exception as e:
+            raise HTTPException(422, f"No se pudo leer el PDF: {e}")
+        if not full_text.strip():
+            raise HTTPException(422, "El PDF no contiene texto seleccionable. Sube el comprobante como imagen (captura de pantalla).")
+
+    else:  # imagen → Google Cloud Vision
+        import json as _json
+        vision_key = get_settings().GOOGLE_VISION_KEY
+        if not vision_key:
+            raise HTTPException(503, "GOOGLE_VISION_KEY no configurada en Render")
+        try:
+            from google.cloud import vision as _vision
+            from google.oauth2 import service_account as _sa
+            creds = _sa.Credentials.from_service_account_info(
+                _json.loads(vision_key),
+                scopes=["https://www.googleapis.com/auth/cloud-platform"],
+            )
+            client = _vision.ImageAnnotatorClient(credentials=creds)
+            response = client.document_text_detection(image=_vision.Image(content=content))
+            if response.error.message:
+                raise HTTPException(502, f"Google Vision: {response.error.message}")
+            full_text = response.full_text_annotation.text or ""
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Error procesando imagen: {e}")
 
     if not full_text.strip():
-        raise HTTPException(422, "El PDF no contiene texto seleccionable. Usa el PDF original del banco (no una foto escaneada).")
+        raise HTTPException(422, "No se pudo extraer texto del comprobante.")
 
     lines = [l.strip() for l in full_text.splitlines() if l.strip()]
 

@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     GDRIVE_FACTURAS_FOLDER_ID: str = Field(default="")
     GDRIVE_SOPORTES_FOLDER_ID: str = Field(default="154tbJeqyDyX9K8D9tIa7hbDZIIteNRZK")
 
+    # Google Cloud Vision — OCR de imágenes (cuenta de servicio JSON)
+    GOOGLE_VISION_KEY: str = Field(default="")
+
     # Email — SendGrid API (HTTPS, sin bloqueo de Render)
     SENDGRID_API_KEY: str = Field(default="")
     EMAIL_FROM: str = Field(default="Triple A Construcciones <tripleaconstruccionessas@gmail.com>")

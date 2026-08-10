@@ -19,3 +19,4 @@ openpyxl==3.1.2
 pdfplumber==0.11.4
 google-api-python-client==2.139.0
 google-auth==2.34.0
+google-cloud-vision==3.7.2
