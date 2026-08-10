@@ -365,14 +365,21 @@ async def extraer_comprobante(file: UploadFile = File(...)):
     result: dict = {
         "fecha": None, "monto": None, "destinatario": None,
         "referencia": None, "metodo_pago": None, "concepto": None,
+        "cedula": None,
     }
 
     # ── Monto ──────────────────────────────────────────────────────────────
-    monto_raw = get("monto", "valor del pago", "valor pagado", "total pagado")
+    monto_raw = get("monto", "valor del pago", "valor pagado", "total pagado", "valor")
     if monto_raw:
         m = re.search(r"[\d.]+(?:,\d+)?", monto_raw)
         if m:
             result["monto"] = int(m.group().replace(".", "").split(",")[0])
+    # Fallback: mayor valor monetario en el texto (busca $XX.XXX o $ XX.XXX)
+    if not result["monto"]:
+        amounts = re.findall(r"\$\s*([\d.]+(?:,\d+)?)", full_text)
+        parsed = [int(a.replace(".", "").split(",")[0]) for a in amounts if len(a.replace(".", "").split(",")[0]) >= 3]
+        if parsed:
+            result["monto"] = max(parsed)
 
     # ── Fecha ───────────────────────────────────────────────────────────────
     fecha_m = re.search(r"(\d{1,2})/(\d{1,2})/(\d{4})", full_text)
@@ -434,6 +441,7 @@ async def extraer_comprobante(file: UploadFile = File(...)):
         )
         if nm:
             result["destinatario"] = nm.group(2).strip()
+            result["cedula"] = nm.group(1)   # Cédula del destinatario para buscar en DB
         else:
             fb = get("beneficiario", "destinatario", "pagado a", "entidad receptora")
             if fb:

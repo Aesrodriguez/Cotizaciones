@@ -706,6 +706,7 @@ export const pagosAPI = {
       referencia: string | null
       metodo_pago: string | null
       concepto: string | null
+      cedula: string | null
     }>('/pagos/extraer-comprobante', form)
   },
 }

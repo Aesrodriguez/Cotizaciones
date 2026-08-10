@@ -232,7 +232,7 @@ function PagoFormModal({ initial, obras, onClose, onSaved }: {
     } : { ...EMPTY_FORM }
   )
   const [facturas, setFacturas] = useState<{ id: string; numero: string; proveedor_nombre: string | null; total_pagar: number }[]>([])
-  const [trabajadores, setTrabajadores] = useState<{ id: string; nombres: string; apellidos: string; cargo?: string; tipo?: string }[]>([])
+  const [trabajadores, setTrabajadores] = useState<{ id: string; nombres: string; apellidos: string; cargo?: string; tipo?: string; cedula?: string }[]>([])
   const [saving, setSaving] = useState(false)
   const [soporteFile, setSoporteFile] = useState<File | null>(null)
   const [savingStep, setSavingStep] = useState<'pago' | 'soporte' | null>(null)
@@ -251,7 +251,7 @@ function PagoFormModal({ initial, obras, onClose, onSaved }: {
     }).catch(() => {})
     // Cargar trabajadores
     trabajadoresAPI.getAll({ limit: 200 }).then(r => setTrabajadores(
-      r.data.data.map(t => ({ id: t.id, nombres: t.nombres, apellidos: t.apellidos, cargo: t.cargo, tipo: t.tipo }))
+      r.data.data.map(t => ({ id: t.id, nombres: t.nombres, apellidos: t.apellidos, cargo: t.cargo, tipo: t.tipo, cedula: t.cedula }))
     )).catch(() => {})
   }, [])
 
@@ -303,18 +303,35 @@ function PagoFormModal({ initial, obras, onClose, onSaved }: {
     try {
       const r = await pagosAPI.extraerComprobante(file)
       const d = r.data
+
+      // Buscar trabajador/proveedor por cédula si viene en el comprobante
+      let tipoDetectado: TipoPago | null = null
+      let trabajadorId = ''
+      if (d.cedula) {
+        const match = trabajadores.find(t => t.cedula === d.cedula)
+        if (match) {
+          tipoDetectado = match.tipo === 'Proveedor' ? 'PROVEEDOR' : 'TRABAJADOR'
+          trabajadorId = match.id
+          toast.success(`Encontrado: ${match.nombres} ${match.apellidos} (${tipoDetectado})`)
+        }
+      }
+
       setForm(p => ({
         ...p,
-        ...(d.fecha       ? { fecha: d.fecha } : {}),
-        ...(d.monto       ? { monto: String(d.monto) } : {}),
+        ...(d.fecha        ? { fecha: d.fecha } : {}),
+        ...(d.monto        ? { monto: String(d.monto) } : {}),
         ...(d.destinatario ? { destinatario: d.destinatario } : {}),
-        ...(d.referencia  ? { referencia: d.referencia } : {}),
+        ...(d.referencia   ? { referencia: d.referencia } : {}),
         ...(d.metodo_pago && METODOS.includes(d.metodo_pago as MetodoPago)
-          ? { metodo_pago: d.metodo_pago }
-          : {}),
-        ...(d.concepto    ? { concepto: d.concepto } : {}),
+          ? { metodo_pago: d.metodo_pago } : {}),
+        ...(d.concepto     ? { concepto: d.concepto } : {}),
+        ...(tipoDetectado  ? { tipo: tipoDetectado } : {}),
+        ...(trabajadorId   ? { trabajador_id: trabajadorId } : {}),
       }))
-      toast.success('Información extraída del comprobante — revisa y ajusta si es necesario')
+
+      if (!d.cedula || !trabajadores.find(t => t.cedula === d.cedula)) {
+        toast.success('Información extraída — revisa y ajusta si es necesario')
+      }
     } catch {
       toast.error('No se pudo leer el comprobante — completa los campos manualmente')
     } finally {
