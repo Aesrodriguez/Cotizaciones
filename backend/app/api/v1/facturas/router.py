@@ -300,8 +300,8 @@ async def upload_factura(
         import pdfplumber
         try:
             with pdfplumber.open(io.BytesIO(raw)) as pdf:
-                text = '\n'.join(page.extract_text() or '' for page in pdf.pages)
-            if not is_dian_pdf_text(text):
+                pdf_text = '\n'.join(page.extract_text() or '' for page in pdf.pages)
+            if not is_dian_pdf_text(pdf_text):
                 raise HTTPException(422, "El PDF no parece ser una factura electrónica DIAN")
             parsed = parse_dian_pdf(raw)
             filename_save = file.filename or 'factura.pdf'
