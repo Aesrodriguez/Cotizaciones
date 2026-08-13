@@ -310,6 +310,9 @@ export function DetalleModal({ facturaId, onClose, onUpdated }: {
   const [copied, setCopied] = useState(false)
   const [editingOrigen, setEditingOrigen] = useState(false)
   const [origenInput, setOrigenInput] = useState('')
+  const [origenSearch, setOrigenSearch] = useState('')
+  const [origenOpciones, setOrigenOpciones] = useState<FacturaElectronica[]>([])
+  const [cargandoOpciones, setCargandoOpciones] = useState(false)
   const [savingOrigen, setSavingOrigen] = useState(false)
 
   const reloadFactura = useCallback(() => {
@@ -350,6 +353,20 @@ export function DetalleModal({ facturaId, onClose, onUpdated }: {
     } catch (err: any) {
       toast.error(err?.response?.data?.detail ?? 'No se encontró esa factura')
     } finally { setSavingOrigen(false) }
+  }
+
+  const abrirSelectorOrigen = async () => {
+    setEditingOrigen(true)
+    setOrigenSearch('')
+    setCargandoOpciones(true)
+    try {
+      const r = await facturasAPI.getAll({ limit: 200, search: '' })
+      const lista = (r.data.data as FacturaElectronica[]).filter(
+        (f) => f.id !== factura?.id && !/^NC\d/i.test(f.numero) && f.tipo_documento !== 'Nota crédito'
+      )
+      setOrigenOpciones(lista)
+    } catch { toast.error('Error cargando facturas') }
+    finally { setCargandoOpciones(false) }
   }
 
   const changeEstado = async (e: Estado) => {
@@ -684,46 +701,86 @@ export function DetalleModal({ facturaId, onClose, onUpdated }: {
                   {!editingOrigen ? (
                     <div className="flex items-center gap-3 py-2" style={{ borderBottom: '1px solid var(--border)' }}>
                       {f.factura_origen_numero ? (
-                        <span className="flex-1 text-xs font-mono font-semibold" style={{ color: '#ef4444' }}>
-                          {f.factura_origen_numero}
+                        <div className="flex-1">
+                          <span className="text-xs font-mono font-bold" style={{ color: '#ef4444' }}>{f.factura_origen_numero}</span>
                           {f.factura_origen_id && (
-                            <span className="ml-2 text-xs font-normal" style={{ color: 'var(--text-muted)' }}>(vinculada · marcada ANULADA)</span>
+                            <span className="ml-2 text-xs" style={{ color: 'var(--text-muted)' }}>· marcada ANULADA</span>
                           )}
-                        </span>
+                        </div>
                       ) : (
                         <span className="flex-1 text-xs" style={{ color: 'var(--text-muted)' }}>Sin vincular</span>
                       )}
-                      <button
-                        onClick={() => { setOrigenInput(f.factura_origen_numero ?? ''); setEditingOrigen(true) }}
-                        className="text-xs px-3 py-1 rounded-lg font-medium"
-                        style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
-                      >{f.factura_origen_numero ? 'Cambiar' : 'Asignar'}</button>
+                      <div className="flex gap-2 flex-shrink-0">
+                        <button
+                          onClick={abrirSelectorOrigen}
+                          className="text-xs px-3 py-1 rounded-lg font-medium"
+                          style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }}
+                        >{f.factura_origen_numero ? 'Cambiar' : 'Asignar'}</button>
+                        {f.factura_origen_numero && (
+                          <button
+                            onClick={async () => { setSavingOrigen(true); try { const r = await facturasAPI.update(f.id, { factura_origen_numero: null }); setFactura(r.data); toast.success('Vinculación eliminada'); onUpdated() } catch { toast.error('Error') } finally { setSavingOrigen(false) } }}
+                            disabled={savingOrigen}
+                            className="text-xs px-2 py-1 rounded-lg opacity-60 hover:opacity-100"
+                            style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                            title="Quitar vinculación"
+                          >✕</button>
+                        )}
+                      </div>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 py-2">
+                    <div className="py-2 space-y-2">
                       <input
-                        className="input text-xs flex-1 font-mono"
-                        placeholder="Número de factura (ej: FVA48)"
-                        value={origenInput}
-                        onChange={(e) => setOrigenInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') saveOrigen(); if (e.key === 'Escape') setEditingOrigen(false) }}
+                        className="input text-xs w-full"
+                        placeholder="Buscar por número o proveedor…"
+                        value={origenSearch}
+                        onChange={(e) => setOrigenSearch(e.target.value)}
                         autoFocus
                       />
-                      <button
-                        onClick={saveOrigen}
-                        disabled={savingOrigen}
-                        className="text-xs px-3 py-1.5 rounded-lg font-semibold"
-                        style={{ background: '#ef4444', color: '#fff' }}
-                      >{savingOrigen ? '…' : 'Vincular'}</button>
-                      {f.factura_origen_numero && (
-                        <button
-                          onClick={async () => { setOrigenInput(''); setSavingOrigen(true); try { const r = await facturasAPI.update(f.id, { factura_origen_numero: null }); setFactura(r.data); setEditingOrigen(false); toast.success('Vinculación eliminada'); onUpdated() } catch { toast.error('Error') } finally { setSavingOrigen(false) } }}
-                          disabled={savingOrigen}
-                          className="text-xs px-2 py-1.5 rounded-lg"
-                          style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
-                          title="Quitar vinculación"
-                        >✕</button>
-                      )}
+                      <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)', maxHeight: '260px', overflowY: 'auto' }}>
+                        {cargandoOpciones ? (
+                          <div className="px-4 py-3 text-xs" style={{ color: 'var(--text-muted)' }}>Cargando facturas…</div>
+                        ) : (() => {
+                          const q = origenSearch.toLowerCase()
+                          const filtradas = origenOpciones.filter(op =>
+                            !q || op.numero.toLowerCase().includes(q) || (op.proveedor_nombre ?? '').toLowerCase().includes(q)
+                          )
+                          return filtradas.length === 0 ? (
+                            <div className="px-4 py-3 text-xs" style={{ color: 'var(--text-muted)' }}>Sin resultados</div>
+                          ) : filtradas.map((op) => (
+                            <button
+                              key={op.id}
+                              disabled={savingOrigen}
+                              onClick={async () => {
+                                setSavingOrigen(true)
+                                try {
+                                  const r = await facturasAPI.update(f.id, { factura_origen_numero: op.numero })
+                                  setFactura(r.data)
+                                  setEditingOrigen(false)
+                                  toast.success(`Vinculada a ${op.numero} — marcada ANULADA`)
+                                  onUpdated()
+                                } catch (err: any) {
+                                  toast.error(err?.response?.data?.detail ?? 'Error al vincular')
+                                } finally { setSavingOrigen(false) }
+                              }}
+                              className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors hover:opacity-80"
+                              style={{ borderBottom: '1px solid var(--border)', background: op.numero === f.factura_origen_numero ? 'rgba(239,68,68,0.08)' : 'var(--card)' }}
+                            >
+                              <span className="font-mono text-xs font-bold w-24 flex-shrink-0" style={{ color: op.estado === 'ANULADA' ? 'var(--text-muted)' : 'var(--lime)' }}>
+                                {op.numero}
+                              </span>
+                              <span className="flex-1 text-xs truncate" style={{ color: 'var(--text)' }}>{op.proveedor_nombre ?? '—'}</span>
+                              <span className="text-xs font-mono flex-shrink-0" style={{ color: 'var(--text-muted)' }}>{op.fecha_emision}</span>
+                              <span className="text-xs font-mono font-semibold flex-shrink-0" style={{ color: 'var(--lime)' }}>{fmt(op.total_pagar)}</span>
+                              {op.tipo === 'EMITIDA' && (
+                                <span className="text-xs px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: 'rgba(168,85,247,0.12)', color: '#a855f7' }}>E</span>
+                              )}
+                              {op.estado === 'ANULADA' && (
+                                <span className="text-xs px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}>ANULADA</span>
+                              )}
+                            </button>
+                          ))
+                        })()}
+                      </div>
                       <button onClick={() => setEditingOrigen(false)} className="text-xs opacity-50 hover:opacity-100" style={{ color: 'var(--text)' }}>Cancelar</button>
                     </div>
                   )}
