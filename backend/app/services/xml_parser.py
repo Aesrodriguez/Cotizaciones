@@ -302,6 +302,15 @@ def parse_dian_xml(xml_content: str) -> dict:
     pago_code = _text(inv, 'cac:PaymentMeans/cbc:PaymentMeansCode')
     forma_pago = _FORMA_PAGO.get(pago_code, pago_code or '')
 
+    # ── Factura de referencia (para Notas Crédito/Débito) ────────────────────
+    factura_origen_numero: str | None = None
+    _ref = (
+        _text(inv, 'cac:BillingReference/cac:InvoiceDocumentReference/cbc:ID')
+        or _text(inv, 'cac:DiscrepancyResponse/cbc:ReferenceID')
+    )
+    if _ref:
+        factura_origen_numero = _ref.strip()[:100] or None
+
     # ── Partes ────────────────────────────────────────────────────────────────
     supplier = _party(inv.find('cac:AccountingSupplierParty', _NS))
     customer = _party(inv.find('cac:AccountingCustomerParty', _NS))
@@ -404,6 +413,7 @@ def parse_dian_xml(xml_content: str) -> dict:
         'autorizacion_hasta':      auth_hasta,
         'prefijo':                 prefijo[:20] if prefijo else None,
         'qr_url':                  qr_url or None,
+        'factura_origen_numero':   factura_origen_numero,
         # Líneas
         'items':                   items,
     }

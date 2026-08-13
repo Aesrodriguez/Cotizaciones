@@ -840,13 +840,31 @@ export default function FacturasElectronicasPage() {
       </div>
 
       {resumen && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <KPI label="Total facturas" value={String(total)} sub={`${resumen.con_retencion} con retención`} />
-          <KPI label="Subtotal" value={formatCurrency(resumen.subtotal_total)} sub={filtroTipo === '' ? 'Solo recibidas' : undefined} />
-          <KPI label="IVA total" value={formatCurrency(resumen.iva_total)} sub={filtroTipo === '' ? 'Solo recibidas' : undefined} />
-          <KPI label="Retefuente" value={formatCurrency(resumen.retefuente_total)} sub="Retención en la fuente" />
-          <KPI label="ReteIVA + ReteICA" value={formatCurrency(resumen.reteiva_total + resumen.reteica_total)} />
-          <KPI label="Total a pagar" value={formatCurrency(resumen.pagar_total)} sub={filtroTipo === '' ? 'Solo recibidas' : 'Neto después de retenciones'} />
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <KPI label="Total documentos" value={String(total)} sub={`${resumen.con_retencion} con retención`} />
+            <KPI label="Subtotal" value={formatCurrency(resumen.subtotal_total)} />
+            <KPI label="IVA total" value={formatCurrency(resumen.iva_total)} />
+            <KPI label="Retefuente" value={formatCurrency(resumen.retefuente_total)} sub="Retención en la fuente" />
+            <KPI label="ReteIVA + ReteICA" value={formatCurrency(resumen.reteiva_total + resumen.reteica_total)} />
+            <KPI label="Total a pagar" value={formatCurrency(resumen.pagar_total)} sub="Neto después de retenciones" />
+          </div>
+          {resumen.nc_count > 0 && (
+            <div className="flex flex-wrap items-center gap-4 px-4 py-2.5 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)' }}>
+              <span className="font-semibold text-xs" style={{ color: '#ef4444' }}>
+                {resumen.nc_count} nota{resumen.nc_count !== 1 ? 's' : ''} crédito
+              </span>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                Subtotal NC: <span className="font-mono font-semibold" style={{ color: '#ef4444' }}>− {formatCurrency(resumen.nc_subtotal)}</span>
+              </span>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                IVA NC: <span className="font-mono font-semibold" style={{ color: '#ef4444' }}>− {formatCurrency(resumen.nc_iva)}</span>
+              </span>
+              <span className="ml-auto text-xs font-semibold" style={{ color: 'var(--text)' }}>
+                Neto (facturas − NC): <span className="font-mono" style={{ color: 'var(--lime)' }}>{formatCurrency(resumen.pagar_total - resumen.nc_pagar)}</span>
+              </span>
+            </div>
+          )}
         </div>
       )}
 
@@ -915,28 +933,47 @@ export default function FacturasElectronicasPage() {
                 </tr>
               ) : facturas.map((f) => {
                 const ret = (f.retefuente ?? 0) + (f.reteiva ?? 0) + (f.reteica ?? 0)
+                const isNC = f.tipo_documento === 'Nota crédito' || /^NC\d/i.test(f.numero)
+                const isAnulada = f.estado === 'ANULADA'
                 return (
                   <tr
                     key={f.id}
                     className="transition-colors cursor-pointer"
-                    style={{ borderBottom: '1px solid var(--border)' }}
+                    style={{ borderBottom: '1px solid var(--border)', opacity: isAnulada ? 0.55 : 1 }}
                     onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface)')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = '')}
                     onClick={() => setSelectedId(f.id)}
                   >
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-mono text-xs font-bold" style={{ color: 'var(--lime)' }}>{f.numero}</span>
-                        {f.dian_validado && (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span
+                          className="font-mono text-xs font-bold"
+                          style={{
+                            color: isNC ? '#ef4444' : 'var(--lime)',
+                            textDecoration: isAnulada ? 'line-through' : undefined,
+                          }}
+                        >{f.numero}</span>
+                        {f.dian_validado && !isNC && (
                           <span className="text-xs" style={{ color: 'var(--lime)', opacity: 0.7 }} title="Validado DIAN">✓</span>
                         )}
-                        {f.tipo === 'EMITIDA' && (
+                        {isNC && (
+                          <span
+                            className="text-xs font-semibold px-1.5 py-0.5 rounded-md"
+                            style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }}
+                          >Nota crédito</span>
+                        )}
+                        {!isNC && f.tipo === 'EMITIDA' && (
                           <span
                             className="text-xs font-semibold px-1.5 py-0.5 rounded-md"
                             style={{ background: 'rgba(168,85,247,0.15)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.3)' }}
                           >Emitida</span>
                         )}
                       </div>
+                      {isNC && f.factura_origen_numero && (
+                        <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                          Anula: <span className="font-mono font-semibold">{f.factura_origen_numero}</span>
+                        </p>
+                      )}
                     </td>
                     <td className="px-4 py-3 font-mono text-xs" style={{ color: 'var(--text-muted)' }}>{f.fecha_emision}</td>
                     <td className="px-4 py-3 max-w-[180px]">
@@ -955,7 +992,9 @@ export default function FacturasElectronicasPage() {
                         <span className="text-xs" style={{ color: 'var(--text-muted)' }}>—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right font-mono text-xs font-bold" style={{ color: 'var(--lime)' }}>{fmt(f.total_pagar)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-xs font-bold" style={{ color: isNC ? '#ef4444' : 'var(--lime)' }}>
+                      {isNC ? '− ' : ''}{fmt(f.total_pagar)}
+                    </td>
                     <td className="px-4 py-3 text-right">
                       <EstadoBadge estado={f.estado} />
                     </td>

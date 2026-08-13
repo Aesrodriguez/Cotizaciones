@@ -49,6 +49,9 @@ class FacturaElectronica(Base):
     qr_url                 = Column(Text)
     tipo                   = Column(VARCHAR(10), nullable=False, server_default='RECIBIDA')  # RECIBIDA | EMITIDA
     archivo_url            = Column(VARCHAR(500))
+    # Nota crédito: referencia a la factura que anula
+    factura_origen_id      = Column(UUID(as_uuid=True), ForeignKey("facturas_electronicas.id", ondelete="SET NULL"), nullable=True)
+    factura_origen_numero  = Column(VARCHAR(100), nullable=True)
     created_at             = Column(TIMESTAMP, nullable=False, server_default=sa.text("NOW()"))
     updated_at             = Column(TIMESTAMP, nullable=False, server_default=sa.text("NOW()"), onupdate=sa.text("NOW()"))
 

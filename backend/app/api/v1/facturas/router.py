@@ -81,6 +81,8 @@ def _to_dict(f: FacturaElectronica, items: list | None = None) -> dict:
         "qr_url":                 f.qr_url,
         "tipo":                   f.tipo or 'RECIBIDA',
         "archivo_url":            f.archivo_url,
+        "factura_origen_id":      str(f.factura_origen_id) if f.factura_origen_id else None,
+        "factura_origen_numero":  f.factura_origen_numero,
         "items":                  items or [],
     }
     return d
@@ -207,6 +209,23 @@ def _save_one_parsed(db: Session, parsed: dict, filename: str,
             catalogo_item_id=catalogo_id,
             **item,
         ))
+
+    # Si es nota crédito, vincular a la factura original y anularla
+    origen_num = factura.factura_origen_numero
+    if origen_num:
+        origen = db.execute(text("""
+            SELECT id, total_pagar FROM facturas_electronicas
+            WHERE numero = :num AND id != :self_id
+            LIMIT 1
+        """), {"num": origen_num, "self_id": factura.id}).fetchone()
+        if origen:
+            factura.factura_origen_id = origen[0]
+            db.execute(text("""
+                UPDATE facturas_electronicas
+                SET estado = 'ANULADA'
+                WHERE id = :id AND estado NOT IN ('ANULADA')
+            """), {"id": str(origen[0])})
+            db.flush()
 
     return _to_dict(factura, _serialize_items(items_data))
 
@@ -603,7 +622,8 @@ def list_facturas(
                total_bruto, total_pagar, tiene_retencion, estado,
                xml_filename, observaciones, created_at,
                cufe, tipo_documento, forma_pago, dian_validado,
-               proveedor_ciudad, adquiriente_ciudad, tipo
+               proveedor_ciudad, adquiriente_ciudad, tipo,
+               factura_origen_id, factura_origen_numero
         FROM facturas_electronicas {where}
         ORDER BY fecha_emision DESC, created_at DESC
         LIMIT :limit OFFSET :offset
@@ -624,15 +644,25 @@ def list_facturas(
             "dian_validado": bool(r[22]) if r[22] is not None else False,
             "proveedor_ciudad": r[23], "adquiriente_ciudad": r[24],
             "tipo": r[25] or 'RECIBIDA',
+            "factura_origen_id": str(r[26]) if r[26] else None,
+            "factura_origen_numero": r[27],
             "items": [],
         })
 
+    _is_nc = "(tipo_documento = 'Nota crédito' OR (tipo_documento IS NULL AND numero ~* '^NC[0-9]'))"
     sums = db.execute(text(f"""
         SELECT
-            SUM(subtotal), SUM(iva),
-            SUM(retefuente), SUM(reteiva), SUM(reteica),
-            SUM(total_pagar),
-            COUNT(*) FILTER (WHERE tiene_retencion = TRUE)
+            SUM(CASE WHEN NOT {_is_nc} THEN subtotal    ELSE 0 END),
+            SUM(CASE WHEN NOT {_is_nc} THEN iva         ELSE 0 END),
+            SUM(CASE WHEN NOT {_is_nc} THEN retefuente  ELSE 0 END),
+            SUM(CASE WHEN NOT {_is_nc} THEN reteiva     ELSE 0 END),
+            SUM(CASE WHEN NOT {_is_nc} THEN reteica     ELSE 0 END),
+            SUM(CASE WHEN NOT {_is_nc} THEN total_pagar ELSE 0 END),
+            COUNT(*) FILTER (WHERE tiene_retencion = TRUE AND NOT {_is_nc}),
+            SUM(CASE WHEN     {_is_nc} THEN subtotal    ELSE 0 END),
+            SUM(CASE WHEN     {_is_nc} THEN iva         ELSE 0 END),
+            SUM(CASE WHEN     {_is_nc} THEN total_pagar ELSE 0 END),
+            COUNT(*) FILTER (WHERE {_is_nc})
         FROM facturas_electronicas {where}
     """), params).fetchone()
 
@@ -650,6 +680,10 @@ def list_facturas(
             "reteica_total":    float(sums[4] or 0),
             "pagar_total":      float(sums[5] or 0),
             "con_retencion":    int(sums[6] or 0),
+            "nc_subtotal":      float(sums[7] or 0),
+            "nc_iva":           float(sums[8] or 0),
+            "nc_pagar":         float(sums[9] or 0),
+            "nc_count":         int(sums[10] or 0),
         }
     }
 

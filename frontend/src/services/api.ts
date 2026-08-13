@@ -289,6 +289,8 @@ export interface FacturaElectronica {
   qr_url: string | null
   tipo: 'RECIBIDA' | 'EMITIDA'
   archivo_url: string | null
+  factura_origen_id: string | null
+  factura_origen_numero: string | null
   items: FacturaElectronicaItem[]
 }
 
@@ -300,6 +302,10 @@ export interface FacturasResumen {
   reteica_total: number
   pagar_total: number
   con_retencion: number
+  nc_subtotal: number
+  nc_iva: number
+  nc_pagar: number
+  nc_count: number
 }
 
 export const facturasAPI = {
