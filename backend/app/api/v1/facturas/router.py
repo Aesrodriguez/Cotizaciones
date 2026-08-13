@@ -627,15 +627,13 @@ def list_facturas(
             "items": [],
         })
 
-    # El resumen solo suma RECIBIDAS (facturas de proveedores externos)
-    where_recibidas = where + " AND tipo = 'RECIBIDA'"
     sums = db.execute(text(f"""
         SELECT
             SUM(subtotal), SUM(iva),
             SUM(retefuente), SUM(reteiva), SUM(reteica),
             SUM(total_pagar),
             COUNT(*) FILTER (WHERE tiene_retencion = TRUE)
-        FROM facturas_electronicas {where_recibidas}
+        FROM facturas_electronicas {where}
     """), params).fetchone()
 
     return {
