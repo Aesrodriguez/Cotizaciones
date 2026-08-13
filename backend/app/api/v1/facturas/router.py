@@ -649,22 +649,37 @@ def list_facturas(
             "items": [],
         })
 
-    _is_nc = "(tipo_documento = 'Nota crédito' OR (tipo_documento IS NULL AND numero ~* '^NC[0-9]'))"
+    # NC = nota crédito; ANULADA = excluida de todos los cálculos
+    _is_nc      = "(tipo_documento = 'Nota crédito' OR (tipo_documento IS NULL AND numero ~* '^NC[0-9]'))"
+    _activa     = f"(estado != 'ANULADA' AND NOT {_is_nc})"
+    _nc_activa  = f"(estado != 'ANULADA' AND {_is_nc})"
     sums = db.execute(text(f"""
         SELECT
-            SUM(CASE WHEN NOT {_is_nc} THEN subtotal    ELSE 0 END),
-            SUM(CASE WHEN NOT {_is_nc} THEN iva         ELSE 0 END),
-            SUM(CASE WHEN NOT {_is_nc} THEN retefuente  ELSE 0 END),
-            SUM(CASE WHEN NOT {_is_nc} THEN reteiva     ELSE 0 END),
-            SUM(CASE WHEN NOT {_is_nc} THEN reteica     ELSE 0 END),
-            SUM(CASE WHEN NOT {_is_nc} THEN total_pagar ELSE 0 END),
-            COUNT(*) FILTER (WHERE tiene_retencion = TRUE AND NOT {_is_nc}),
-            SUM(CASE WHEN     {_is_nc} THEN subtotal    ELSE 0 END),
-            SUM(CASE WHEN     {_is_nc} THEN iva         ELSE 0 END),
-            SUM(CASE WHEN     {_is_nc} THEN total_pagar ELSE 0 END),
-            COUNT(*) FILTER (WHERE {_is_nc})
+            -- Facturas activas (sin NC, sin ANULADAS)
+            COALESCE(SUM(CASE WHEN {_activa}    THEN subtotal    END), 0),
+            COALESCE(SUM(CASE WHEN {_activa}    THEN iva         END), 0),
+            COALESCE(SUM(CASE WHEN {_activa}    THEN retefuente  END), 0),
+            COALESCE(SUM(CASE WHEN {_activa}    THEN reteiva     END), 0),
+            COALESCE(SUM(CASE WHEN {_activa}    THEN reteica     END), 0),
+            COALESCE(SUM(CASE WHEN {_activa}    THEN total_pagar END), 0),
+            COUNT(*) FILTER (WHERE {_activa} AND tiene_retencion),
+            -- Notas crédito activas
+            COALESCE(SUM(CASE WHEN {_nc_activa} THEN subtotal    END), 0),
+            COALESCE(SUM(CASE WHEN {_nc_activa} THEN iva         END), 0),
+            COALESCE(SUM(CASE WHEN {_nc_activa} THEN total_pagar END), 0),
+            COUNT(*) FILTER (WHERE {_nc_activa})
         FROM facturas_electronicas {where}
     """), params).fetchone()
+
+    fac_subtotal = float(sums[0])
+    fac_iva      = float(sums[1])
+    fac_retefuente = float(sums[2])
+    fac_reteiva  = float(sums[3])
+    fac_reteica  = float(sums[4])
+    fac_pagar    = float(sums[5])
+    nc_subtotal  = float(sums[7])
+    nc_iva       = float(sums[8])
+    nc_pagar     = float(sums[9])
 
     return {
         "data": data,
@@ -673,17 +688,23 @@ def list_facturas(
         "limit": limit,
         "pages": math.ceil(int(total) / limit) if total else 1,
         "resumen": {
-            "subtotal_total":   float(sums[0] or 0),
-            "iva_total":        float(sums[1] or 0),
-            "retefuente_total": float(sums[2] or 0),
-            "reteiva_total":    float(sums[3] or 0),
-            "reteica_total":    float(sums[4] or 0),
-            "pagar_total":      float(sums[5] or 0),
-            "con_retencion":    int(sums[6] or 0),
-            "nc_subtotal":      float(sums[7] or 0),
-            "nc_iva":           float(sums[8] or 0),
-            "nc_pagar":         float(sums[9] or 0),
-            "nc_count":         int(sums[10] or 0),
+            # Facturas activas (base)
+            "subtotal_total":   fac_subtotal,
+            "iva_total":        fac_iva,
+            "retefuente_total": fac_retefuente,
+            "reteiva_total":    fac_reteiva,
+            "reteica_total":    fac_reteica,
+            "pagar_total":      fac_pagar,
+            "con_retencion":    int(sums[6]),
+            # Notas crédito
+            "nc_subtotal":      nc_subtotal,
+            "nc_iva":           nc_iva,
+            "nc_pagar":         nc_pagar,
+            "nc_count":         int(sums[10]),
+            # Neto contable = facturas − NC
+            "neto_subtotal":    fac_subtotal  - nc_subtotal,
+            "neto_iva":         fac_iva       - nc_iva,
+            "neto_pagar":       fac_pagar     - nc_pagar,
         }
     }
 

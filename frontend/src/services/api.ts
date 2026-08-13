@@ -306,6 +306,9 @@ export interface FacturasResumen {
   nc_iva: number
   nc_pagar: number
   nc_count: number
+  neto_subtotal: number
+  neto_iva: number
+  neto_pagar: number
 }
 
 export const facturasAPI = {

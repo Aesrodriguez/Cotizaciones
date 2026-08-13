@@ -968,29 +968,36 @@ export default function FacturasElectronicasPage() {
       </div>
 
       {resumen && (
-        <div className="space-y-3">
+        <div className="space-y-2">
+          {/* Fila 1: facturas activas (sin NC, sin ANULADAS) */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <KPI label="Total documentos" value={String(total)} sub={`${resumen.con_retencion} con retención`} />
+            <KPI label="Facturas activas" value={String(total - resumen.nc_count)} sub={`${resumen.con_retencion} con retención`} />
             <KPI label="Subtotal" value={formatCurrency(resumen.subtotal_total)} />
-            <KPI label="IVA total" value={formatCurrency(resumen.iva_total)} />
+            <KPI label="IVA" value={formatCurrency(resumen.iva_total)} />
             <KPI label="Retefuente" value={formatCurrency(resumen.retefuente_total)} sub="Retención en la fuente" />
             <KPI label="ReteIVA + ReteICA" value={formatCurrency(resumen.reteiva_total + resumen.reteica_total)} />
-            <KPI label="Total a pagar" value={formatCurrency(resumen.pagar_total)} sub="Neto después de retenciones" />
+            <KPI label="Total a pagar" value={formatCurrency(resumen.pagar_total)} />
           </div>
+          {/* Fila 2: NC como deducción (solo si hay) */}
           {resumen.nc_count > 0 && (
-            <div className="flex flex-wrap items-center gap-4 px-4 py-2.5 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)' }}>
-              <span className="font-semibold text-xs" style={{ color: '#ef4444' }}>
-                {resumen.nc_count} nota{resumen.nc_count !== 1 ? 's' : ''} crédito
-              </span>
-              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                Subtotal NC: <span className="font-mono font-semibold" style={{ color: '#ef4444' }}>− {formatCurrency(resumen.nc_subtotal)}</span>
-              </span>
-              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                IVA NC: <span className="font-mono font-semibold" style={{ color: '#ef4444' }}>− {formatCurrency(resumen.nc_iva)}</span>
-              </span>
-              <span className="ml-auto text-xs font-semibold" style={{ color: 'var(--text)' }}>
-                Neto (facturas − NC): <span className="font-mono" style={{ color: 'var(--lime)' }}>{formatCurrency(resumen.pagar_total - resumen.nc_pagar)}</span>
-              </span>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="rounded-2xl px-4 py-3 flex flex-col gap-0.5" style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                <span className="text-xs font-semibold" style={{ color: '#ef4444' }}>{resumen.nc_count} nota{resumen.nc_count !== 1 ? 's' : ''} crédito</span>
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Deducción</span>
+              </div>
+              <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Subtotal NC</span>
+                <p className="font-mono text-sm font-bold" style={{ color: '#ef4444' }}>− {formatCurrency(resumen.nc_subtotal)}</p>
+              </div>
+              <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>IVA NC</span>
+                <p className="font-mono text-sm font-bold" style={{ color: '#ef4444' }}>− {formatCurrency(resumen.nc_iva)}</p>
+              </div>
+              <div className="col-span-2 sm:col-span-3 lg:col-span-3 grid grid-cols-3 gap-3">
+                <KPI label="Neto subtotal" value={formatCurrency(resumen.neto_subtotal)} />
+                <KPI label="Neto IVA" value={formatCurrency(resumen.neto_iva)} />
+                <KPI label="Neto a pagar" value={formatCurrency(resumen.neto_pagar)} />
+              </div>
             </div>
           )}
         </div>
