@@ -737,6 +737,34 @@ def update_factura(
         raise HTTPException(404)
     if "observaciones" in body:
         f.observaciones = body["observaciones"]
+    if "factura_origen_numero" in body:
+        nuevo_num = (body["factura_origen_numero"] or "").strip() or None
+        # Si cambia la vinculación, revertir ANULADA en la factura anterior
+        if f.factura_origen_id and nuevo_num != f.factura_origen_numero:
+            db.execute(text("""
+                UPDATE facturas_electronicas
+                SET estado = CASE
+                    WHEN estado = 'ANULADA' THEN 'RECIBIDA'
+                    ELSE estado
+                END
+                WHERE id = :id
+            """), {"id": str(f.factura_origen_id)})
+        f.factura_origen_numero = nuevo_num
+        f.factura_origen_id = None
+        if nuevo_num:
+            origen = db.execute(text("""
+                SELECT id FROM facturas_electronicas
+                WHERE numero = :num AND id != :self_id
+                LIMIT 1
+            """), {"num": nuevo_num, "self_id": str(factura_id)}).fetchone()
+            if not origen:
+                raise HTTPException(404, f"No se encontró la factura '{nuevo_num}'")
+            f.factura_origen_id = origen[0]
+            db.execute(text("""
+                UPDATE facturas_electronicas
+                SET estado = 'ANULADA'
+                WHERE id = :id AND estado NOT IN ('ANULADA')
+            """), {"id": str(origen[0])})
     db.commit()
     items = _load_items(db, f.id)
     return _to_dict(f, items)

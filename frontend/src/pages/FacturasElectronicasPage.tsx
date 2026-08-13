@@ -308,6 +308,9 @@ export function DetalleModal({ facturaId, onClose, onUpdated }: {
   const [savingObs, setSavingObs] = useState(false)
   const [changingEstado, setChangingEstado] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [editingOrigen, setEditingOrigen] = useState(false)
+  const [origenInput, setOrigenInput] = useState('')
+  const [savingOrigen, setSavingOrigen] = useState(false)
 
   const reloadFactura = useCallback(() => {
     facturasAPI.getById(facturaId).then((r) => {
@@ -333,6 +336,20 @@ export function DetalleModal({ facturaId, onClose, onUpdated }: {
       toast.success('Observaciones guardadas')
       onUpdated()
     } finally { setSavingObs(false) }
+  }
+
+  const saveOrigen = async () => {
+    if (!factura) return
+    setSavingOrigen(true)
+    try {
+      const r = await facturasAPI.update(factura.id, { factura_origen_numero: origenInput.trim() || null })
+      setFactura(r.data)
+      setEditingOrigen(false)
+      toast.success(origenInput.trim() ? `Vinculada a ${origenInput.trim()} — marcada ANULADA` : 'Vinculación eliminada')
+      onUpdated()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? 'No se encontró esa factura')
+    } finally { setSavingOrigen(false) }
   }
 
   const changeEstado = async (e: Estado) => {
@@ -372,6 +389,7 @@ export function DetalleModal({ facturaId, onClose, onUpdated }: {
 
   const f = factura
   const totalRet = f ? (f.retefuente ?? 0) + (f.reteiva ?? 0) + (f.reteica ?? 0) : 0
+  const isNCModal = f ? (f.tipo_documento === 'Nota crédito' || /^NC\d/i.test(f.numero)) : false
 
   return (
     <div
@@ -657,6 +675,59 @@ export function DetalleModal({ facturaId, onClose, onUpdated }: {
                   style={{ background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.25)', color: '#16a34a' }}>
                   ✓ Esta factura ya está marcada como PAGADA
                 </div>
+              )}
+
+              {/* Nota crédito — vinculación a factura original */}
+              {isNCModal && (
+                <>
+                  <SectionTitle label="Factura que anula" />
+                  {!editingOrigen ? (
+                    <div className="flex items-center gap-3 py-2" style={{ borderBottom: '1px solid var(--border)' }}>
+                      {f.factura_origen_numero ? (
+                        <span className="flex-1 text-xs font-mono font-semibold" style={{ color: '#ef4444' }}>
+                          {f.factura_origen_numero}
+                          {f.factura_origen_id && (
+                            <span className="ml-2 text-xs font-normal" style={{ color: 'var(--text-muted)' }}>(vinculada · marcada ANULADA)</span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="flex-1 text-xs" style={{ color: 'var(--text-muted)' }}>Sin vincular</span>
+                      )}
+                      <button
+                        onClick={() => { setOrigenInput(f.factura_origen_numero ?? ''); setEditingOrigen(true) }}
+                        className="text-xs px-3 py-1 rounded-lg font-medium"
+                        style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                      >{f.factura_origen_numero ? 'Cambiar' : 'Asignar'}</button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 py-2">
+                      <input
+                        className="input text-xs flex-1 font-mono"
+                        placeholder="Número de factura (ej: FVA48)"
+                        value={origenInput}
+                        onChange={(e) => setOrigenInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') saveOrigen(); if (e.key === 'Escape') setEditingOrigen(false) }}
+                        autoFocus
+                      />
+                      <button
+                        onClick={saveOrigen}
+                        disabled={savingOrigen}
+                        className="text-xs px-3 py-1.5 rounded-lg font-semibold"
+                        style={{ background: '#ef4444', color: '#fff' }}
+                      >{savingOrigen ? '…' : 'Vincular'}</button>
+                      {f.factura_origen_numero && (
+                        <button
+                          onClick={async () => { setOrigenInput(''); setSavingOrigen(true); try { const r = await facturasAPI.update(f.id, { factura_origen_numero: null }); setFactura(r.data); setEditingOrigen(false); toast.success('Vinculación eliminada'); onUpdated() } catch { toast.error('Error') } finally { setSavingOrigen(false) } }}
+                          disabled={savingOrigen}
+                          className="text-xs px-2 py-1.5 rounded-lg"
+                          style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                          title="Quitar vinculación"
+                        >✕</button>
+                      )}
+                      <button onClick={() => setEditingOrigen(false)} className="text-xs opacity-50 hover:opacity-100" style={{ color: 'var(--text)' }}>Cancelar</button>
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Estado */}
