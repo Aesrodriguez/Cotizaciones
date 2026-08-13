@@ -128,9 +128,10 @@ function KPI({ label, value, sub }: { label: string; value: string; sub?: string
 
 // ── Modal detalle completo ────────────────────────────────────────────────────
 // ── Panel de movimientos bancarios coincidentes ───────────────────────────────
-function MovimientosCoincidentes({ facturaId, onVinculado }: {
+function MovimientosCoincidentes({ facturaId, onVinculado, readOnly = false }: {
   facturaId: string
   onVinculado: () => void
+  readOnly?: boolean
 }) {
   const [matches, setMatches]     = useState<MovimientoMatch[]>([])
   const [loading, setLoading]     = useState(true)
@@ -171,73 +172,82 @@ function MovimientosCoincidentes({ facturaId, onVinculado }: {
     </div>
   )
 
+  const aprobados  = matches.filter(m => m.estado_link === 'APROBADO')
+  const pendientes = matches.filter(m => m.estado_link !== 'APROBADO')
+
   if (matches.length === 0) return (
     <p className="text-xs py-2" style={{ color: 'var(--text-muted)' }}>
-      No se encontraron movimientos bancarios con monto similar en los últimos 8 días de diferencia.
+      {readOnly
+        ? 'No hay movimientos bancarios vinculados a esta factura.'
+        : 'No se encontraron movimientos bancarios con monto similar en los últimos 8 días de diferencia.'}
     </p>
   )
 
-  return (
-    <div className="space-y-2">
-      {matches.map(m => {
-        const isLinked   = m.estado_link === 'APROBADO'
-        const isLoading  = actionId === m.movimiento_id
-        const fmtDate = (s: string) => {
-          try { return new Date(s + 'T00:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) }
-          catch { return s }
-        }
-        return (
-          <div key={m.movimiento_id} className="rounded-xl p-3"
-            style={{
-              background: isLinked ? 'rgba(22,163,74,0.07)' : 'var(--surface)',
-              border: `1px solid ${isLinked ? 'rgba(22,163,74,0.35)' : 'var(--border)'}`,
-            }}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-bold font-mono" style={{ color: isLinked ? '#16a34a' : '#60a5fa' }}>
-                    -{formatCurrency(m.valor)}
-                  </span>
-                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {fmtDate(m.fecha)} · Extracto {m.periodo ?? ''}
-                  </span>
-                  {m.diff_dias === 0
-                    ? <span className="badge-lime text-xs">Mismo día</span>
-                    : <span className="badge-muted text-xs">{m.diff_dias}d diferencia</span>
-                  }
-                  {m.diff_pct === 0
-                    ? <span className="badge-lime text-xs">Monto exacto</span>
-                    : <span className="badge-muted text-xs">±{m.diff_pct.toFixed(1)}%</span>
-                  }
-                </div>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                  {m.descripcion}
-                  {m.cuenta_ref1 && <span> · Ref: {m.cuenta_ref1}</span>}
-                </p>
-              </div>
-              {isLinked ? (
-                <span className="badge-status-green text-xs whitespace-nowrap flex-shrink-0">✓ Vinculado</span>
-              ) : (
-                <div className="flex gap-1.5 flex-shrink-0">
-                  <button
-                    disabled={isLoading}
-                    onClick={() => handleDescartar(m.movimiento_id)}
-                    className="text-xs px-2 py-1 rounded-lg disabled:opacity-40"
-                    style={{ background: 'var(--card)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
-                    {isLoading ? '…' : 'No'}
-                  </button>
-                  <button
-                    disabled={isLoading}
-                    onClick={() => handleVincular(m.movimiento_id)}
-                    className="btn-primary text-xs py-1 px-3 disabled:opacity-40">
-                    {isLoading ? '…' : '✓ Es este pago'}
-                  </button>
-                </div>
+  const fmtDate = (s: string) => {
+    try { return new Date(s + 'T00:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) }
+    catch { return s }
+  }
+
+  const renderRow = (m: MovimientoMatch) => {
+    const isLinked  = m.estado_link === 'APROBADO'
+    const isLoading = actionId === m.movimiento_id
+    return (
+      <div key={m.movimiento_id} className="rounded-xl p-3"
+        style={{
+          background: isLinked ? 'rgba(22,163,74,0.07)' : 'var(--surface)',
+          border: `1px solid ${isLinked ? 'rgba(22,163,74,0.35)' : 'var(--border)'}`,
+        }}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold font-mono" style={{ color: isLinked ? '#16a34a' : '#60a5fa' }}>
+                -{formatCurrency(m.valor)}
+              </span>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                {fmtDate(m.fecha)} · Extracto {m.periodo ?? ''}
+              </span>
+              {!isLinked && (m.diff_dias === 0
+                ? <span className="badge-lime text-xs">Mismo día</span>
+                : <span className="badge-muted text-xs">{m.diff_dias}d diferencia</span>
+              )}
+              {!isLinked && (m.diff_pct === 0
+                ? <span className="badge-lime text-xs">Monto exacto</span>
+                : <span className="badge-muted text-xs">±{m.diff_pct.toFixed(1)}%</span>
               )}
             </div>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+              {m.descripcion}
+              {m.cuenta_ref1 && <span> · Ref: {m.cuenta_ref1}</span>}
+            </p>
           </div>
-        )
-      })}
+          {isLinked ? (
+            <span className="badge-status-green text-xs whitespace-nowrap flex-shrink-0">✓ Pago registrado</span>
+          ) : !readOnly ? (
+            <div className="flex gap-1.5 flex-shrink-0">
+              <button
+                disabled={isLoading}
+                onClick={() => handleDescartar(m.movimiento_id)}
+                className="text-xs px-2 py-1 rounded-lg disabled:opacity-40"
+                style={{ background: 'var(--card)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                {isLoading ? '…' : 'No'}
+              </button>
+              <button
+                disabled={isLoading}
+                onClick={() => handleVincular(m.movimiento_id)}
+                className="btn-primary text-xs py-1 px-3 disabled:opacity-40">
+                {isLoading ? '…' : '✓ Es este pago'}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      {aprobados.map(renderRow)}
+      {!readOnly && pendientes.map(renderRow)}
     </div>
   )
 }
@@ -672,26 +682,28 @@ export function DetalleModal({ facturaId, onClose, onUpdated }: {
                 </p>
               )}
 
-              {/* Movimientos bancarios coincidentes */}
-              {f.estado !== 'PAGADA' && f.estado !== 'ANULADA' && (
+              {/* Movimientos bancarios — siempre visible, APROBADO persiste aunque sea PAGADA */}
+              {f.estado !== 'ANULADA' && (
                 <>
                   <div className="flex items-center gap-2 pt-4 pb-1">
                     <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
-                      🏦 Movimientos bancarios similares
+                      🏦 Movimientos bancarios
                     </p>
-                    <span className="text-xs px-2 py-0.5 rounded-md font-medium"
-                      style={{ background: 'rgba(96,165,250,0.12)', color: '#60a5fa' }}>
-                      monto ±2% · fecha ±8 días
-                    </span>
+                    {f.estado !== 'PAGADA' && (
+                      <span className="text-xs px-2 py-0.5 rounded-md font-medium"
+                        style={{ background: 'rgba(96,165,250,0.12)', color: '#60a5fa' }}>
+                        monto ±2% · fecha ±8 días
+                      </span>
+                    )}
+                    {f.estado === 'PAGADA' && (
+                      <span className="text-xs px-2 py-0.5 rounded-md font-medium"
+                        style={{ background: 'rgba(22,163,74,0.12)', color: '#16a34a' }}>
+                        ✓ PAGADA
+                      </span>
+                    )}
                   </div>
-                  <MovimientosCoincidentes facturaId={f.id} onVinculado={reloadFactura} />
+                  <MovimientosCoincidentes facturaId={f.id} onVinculado={reloadFactura} readOnly={f.estado === 'PAGADA'} />
                 </>
-              )}
-              {f.estado === 'PAGADA' && (
-                <div className="mt-3 mb-2 flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
-                  style={{ background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.25)', color: '#16a34a' }}>
-                  ✓ Esta factura ya está marcada como PAGADA
-                </div>
               )}
 
               {/* Nota crédito — vinculación a factura original */}

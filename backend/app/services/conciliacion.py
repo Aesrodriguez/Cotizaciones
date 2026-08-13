@@ -410,9 +410,9 @@ _TOLERANCIA   = 0.02   # 2%
 
 def movimientos_para_factura(db: Session, factura_id: str) -> list[dict]:
     """
-    Dado un factura_id, devuelve movimientos de extracto (tipo DEBITO)
-    que coinciden en monto ±2% y fecha ±8 días.
-    Excluye movimientos ya vinculados y aprobados.
+    Devuelve movimientos relacionados a una factura:
+    - APROBADOS: siempre, sin importar ventana de tolerancia
+    - Sugerencias: dentro de ±2% / ±8 días, excluye rechazados
     """
     rows = db.execute(text("""
         SELECT
@@ -433,25 +433,28 @@ def movimientos_para_factura(db: Session, factura_id: str) -> list[dict]:
             ABS(m.valor - fe.total_pagar)                       AS diff_monto,
             ABS(m.valor - fe.total_pagar) / GREATEST(m.valor, fe.total_pagar) * 100 AS diff_pct,
             ABS(m.fecha - fe.fecha_emision)                     AS diff_dias,
-            -- Si ya está vinculado
-            (SELECT estado FROM pagos_facturas_links pfl
-             WHERE pfl.movimiento_id = m.id AND pfl.factura_id = :fid
-             LIMIT 1) AS estado_link
+            pfl.estado                                          AS estado_link
         FROM extractos_bancarios_movimientos m
         JOIN extractos_bancarios e ON e.id = m.extracto_id
         JOIN facturas_electronicas fe ON fe.id = :fid
+        LEFT JOIN pagos_facturas_links pfl
+               ON pfl.movimiento_id = m.id AND pfl.factura_id = :fid
         WHERE m.tipo = 'DEBITO'
           AND fe.total_pagar > 0
-          AND ABS(m.valor - fe.total_pagar) / GREATEST(m.valor, fe.total_pagar) <= :tol
-          AND ABS(m.fecha - fe.fecha_emision) <= :dias
-          -- Excluir ya rechazados
-          AND m.id NOT IN (
-              SELECT movimiento_id FROM pagos_facturas_links
-              WHERE factura_id = :fid
-                AND movimiento_id IS NOT NULL
-                AND estado = 'RECHAZADO'
+          AND (
+            -- Siempre incluir los ya aprobados
+            pfl.estado = 'APROBADO'
+            OR (
+              -- Sugerencias dentro de tolerancia
+              ABS(m.valor - fe.total_pagar) / GREATEST(m.valor, fe.total_pagar) <= :tol
+              AND ABS(m.fecha - fe.fecha_emision) <= :dias
+              AND (pfl.estado IS NULL OR pfl.estado != 'RECHAZADO')
+            )
           )
-        ORDER BY diff_dias ASC, diff_monto ASC
+        ORDER BY
+            CASE WHEN pfl.estado = 'APROBADO' THEN 0 ELSE 1 END,
+            diff_dias ASC,
+            diff_monto ASC
         LIMIT 20
     """), {"fid": factura_id, "tol": _TOLERANCIA, "dias": _DIAS_VENTANA}).fetchall()
 
