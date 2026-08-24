@@ -23,69 +23,60 @@ function CartaContenido({ territorial, fecha }: { territorial: Exclude<Territori
 
   return (
     <div className="carta-cuerpo">
-      {/* Marca de agua */}
+      {/* Marca de agua en COLOR */}
       <div className="marca-agua" aria-hidden="true">
         <img src="/Logo.jpeg" alt="" />
       </div>
 
-      {/* Encabezado: empresa izquierda, logo derecha */}
+      {/* Encabezado: título grande izquierda, logo derecha */}
       <div className="carta-header">
-        <div className="carta-empresa">
-          <p className="empresa-nombre">TRIPLE A CONSTRUCCIONES SAS</p>
-          <p className="empresa-nit">NIT 901.650.581-4</p>
-        </div>
+        <h1 className="carta-titulo">TRIPLE A CONSTRUCCIONES SAS</h1>
         <img src="/Logo.jpeg" alt="Triple A Construcciones" className="carta-logo" />
       </div>
 
-      <div className="carta-fecha">
-        <p>Bogotá D.C {dia} de {mes} de {anio}</p>
-      </div>
+      <p className="carta-fecha">Bogotá D.C {dia} de {mes} de {anio}</p>
 
       <div className="carta-destinatario">
-        <p>Señores</p>
+        <p><strong>Señores:</strong></p>
         <p><strong>Ministerio de Trabajo</strong></p>
-        <p>{nombreTerritorial}</p>
+        <p><strong>{nombreTerritorial}</strong></p>
         <p>CIUDAD</p>
       </div>
 
-      <div className="carta-asunto">
-        <p><strong>Asunto:</strong> Solicitud Certificado Paz y Salvo Laboral</p>
-      </div>
+      <p className="carta-saludo">Cordial Saludo</p>
 
       <div className="carta-cuerpo-texto">
         <p>
-          Yo <strong>ANDRES ESTEBAN RODRIGUEZ QUEVEDO</strong> identificado con cedula de ciudadanía
-          N° <strong>1.000.517.834</strong> de Madrid, actuando en calidad de Representante Legal de
-          la sociedad <strong>TRIPLE A CONSTRUCCIONES SAS</strong> identificada con{' '}
-          <strong>Nit 901.650.581-4</strong>, me permito solicitar Certificado de reclamaciones,
-          investigaciones administrativo laborales y sanciones. (paz y salvo) de la empresa a la
-          que represento.
+          Yo <strong>ANDRES ESTEBAN RODRIGUEZ QUEVEDO</strong> identificado con cedula de
+          ciudadanía N° <strong>1.000.517.834</strong> de Madrid, actuando en calidad de
+          Representante Legal de la sociedad <strong>TRIPLE A CONSTRUCCIONES SAS</strong>{' '}
+          identificada con <strong>Nit 901.650.581-4,</strong> me permito solicitar Certificado
+          de reclamaciones, investigaciones administrativo laborales y sanciones. (paz y salvo)
+          de la empresa a la que represento.
         </p>
       </div>
 
       <div className="carta-cierre">
         <p>
-          La presente solicitud se firma en Bogotá D.C a los {dia} días del mes de {mes} del año {anio}.
+          La presente solicitud se firma en Bogotá D.C a los {dia} días del mes de {mes} del
+          año {anio}.
         </p>
       </div>
 
       <div className="carta-adjuntos">
-        <p><strong>Adjuntos:</strong></p>
-        <ul>
-          <li>Certificado de cámara y comercio</li>
-          <li>Fotocopia del documento de identidad</li>
-        </ul>
+        <p>Adjunto a este documento:</p>
+        <p>certificado de cámara y comercio</p>
+        <p>Fotocopia del documento de identidad</p>
       </div>
 
-      {/* Firma */}
       <div className="carta-firma">
-        <img src="/Firma.jpg" alt="Firma Andres Rodriguez" className="firma-imagen" />
+        <img src="/Firma.jpg" alt="Firma" className="firma-imagen" />
         <div className="firma-linea" />
         <p><strong>ANDRES RODRIGUEZ</strong></p>
-        <p>C.C 1.000.517.834</p>
+        <p><strong>C.C 1.000.517.834</strong></p>
         <p>REPRESENTANTE LEGAL</p>
-        <p>TRIPLE A CONSTRUCCIONES SAS</p>
-        <p>Nit 901.650.581-4</p>
+        <p><strong>TRIPLE A CONSTRUCCIONES SAS</strong></p>
+        <p><strong>Nit 901.650.581-4</strong></p>
       </div>
     </div>
   )
@@ -98,13 +89,11 @@ export default function CartaSolicitudPage() {
 
   const fecha = new Date(fechaStr + 'T12:00:00')
 
-  const handlePrint = () => window.print()
-
   return (
     <>
       <style>{`
-        /* ── Pantalla ── */
-        .carta-page { max-width: 860px; margin: 0 auto; padding: 24px; }
+        /* ── Controles ── */
+        .carta-page { max-width: 820px; margin: 0 auto; padding: 24px; }
 
         .carta-controles {
           display: flex;
@@ -112,7 +101,7 @@ export default function CartaSolicitudPage() {
           gap: 16px;
           flex-wrap: wrap;
           margin-bottom: 24px;
-          padding: 16px 20px;
+          padding: 14px 18px;
           border-radius: 8px;
           background: var(--bg-card, #f9f9f9);
           border: 1px solid var(--border, #e0e0e0);
@@ -142,37 +131,35 @@ export default function CartaSolicitudPage() {
 
         .cartas-wrapper { display: flex; flex-direction: column; gap: 32px; }
 
-        /* ── Carta individual ── */
+        /* ── Hoja ── */
         .carta-cuerpo {
           position: relative;
           background: #fff;
           color: #111;
-          padding: 48px 56px;
+          padding: 52px 64px 56px;
           border: 1px solid #d0d0d0;
-          border-radius: 4px;
-          font-family: 'Times New Roman', Times, serif;
-          font-size: 14px;
-          line-height: 1.75;
+          font-family: Arial, Helvetica, sans-serif;
+          font-size: 13.5px;
+          line-height: 1.6;
           overflow: hidden;
         }
 
-        /* Marca de agua */
+        /* Marca de agua — en COLOR */
         .marca-agua {
           position: absolute;
-          inset: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+          top: 50%;
+          left: 50%;
+          transform: translate(-20%, -48%);
           pointer-events: none;
           z-index: 0;
         }
         .marca-agua img {
-          width: 55%;
-          opacity: 0.07;
-          filter: grayscale(100%);
+          width: 340px;
+          opacity: 0.13;
+          /* sin grayscale → conserva colores */
         }
 
-        /* Todo el contenido de la carta va sobre la marca de agua */
+        /* Todo el contenido sobre la marca */
         .carta-cuerpo > *:not(.marca-agua) { position: relative; z-index: 1; }
 
         /* Encabezado */
@@ -180,55 +167,77 @@ export default function CartaSolicitudPage() {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
-          margin-bottom: 32px;
-          padding-bottom: 16px;
-          border-bottom: 2px solid #111;
+          margin-bottom: 20px;
         }
-        .carta-empresa { }
-        .empresa-nombre { font-size: 15px; font-weight: 700; letter-spacing: 0.5px; }
-        .empresa-nit { font-size: 12px; color: #444; }
-
+        .carta-titulo {
+          font-size: 22px;
+          font-weight: 700;
+          letter-spacing: 0.3px;
+          margin: 0;
+          color: #111;
+        }
         .carta-logo {
           height: 72px;
           width: auto;
           object-fit: contain;
+          flex-shrink: 0;
         }
 
-        .carta-fecha { margin-bottom: 24px; }
+        /* Fecha */
+        .carta-fecha {
+          margin: 0 0 32px;
+          font-size: 13.5px;
+        }
 
+        /* Destinatario */
         .carta-destinatario {
-          margin-bottom: 20px;
-          line-height: 1.6;
+          margin-bottom: 28px;
+          line-height: 1.55;
+        }
+        .carta-destinatario p { margin: 0; }
+
+        /* Saludo */
+        .carta-saludo {
+          margin: 0 0 28px;
+          font-size: 13.5px;
         }
 
-        .carta-asunto {
-          margin-bottom: 20px;
-          padding: 8px 12px;
-          background: rgba(37, 99, 235, 0.06);
-          border-left: 3px solid #2563eb;
+        /* Cuerpo */
+        .carta-cuerpo-texto {
+          margin-bottom: 28px;
+          text-align: justify;
         }
+        .carta-cuerpo-texto p { margin: 0; }
 
-        .carta-cuerpo-texto { margin-bottom: 20px; text-align: justify; }
+        /* Cierre */
+        .carta-cierre {
+          margin-bottom: 28px;
+          text-align: justify;
+        }
+        .carta-cierre p { margin: 0; }
 
-        .carta-cierre { margin-bottom: 20px; }
-
-        .carta-adjuntos { margin-bottom: 24px; }
-        .carta-adjuntos ul { margin: 4px 0 0 20px; }
+        /* Adjuntos */
+        .carta-adjuntos {
+          margin-bottom: 32px;
+          line-height: 1.7;
+        }
+        .carta-adjuntos p { margin: 0; }
 
         /* Firma */
-        .carta-firma { margin-top: 16px; }
+        .carta-firma { margin-top: 8px; }
         .firma-imagen {
           display: block;
-          height: 90px;
+          height: 88px;
           width: auto;
           object-fit: contain;
-          margin-bottom: 4px;
+          margin-bottom: 0;
         }
         .firma-linea {
-          width: 220px;
-          border-top: 1px solid #111;
+          width: 260px;
+          border-top: 1.5px solid #111;
           margin-bottom: 6px;
         }
+        .carta-firma p { margin: 0; line-height: 1.55; }
 
         /* ── Impresión ── */
         @media print {
@@ -237,13 +246,15 @@ export default function CartaSolicitudPage() {
           .cartas-wrapper { gap: 0; }
           .carta-cuerpo {
             border: none;
-            border-radius: 0;
-            padding: 28mm 22mm;
+            padding: 22mm 22mm 26mm;
             page-break-after: always;
             box-shadow: none;
           }
-          .carta-asunto { background: #f0f4ff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .marca-agua img { opacity: 0.07 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .marca-agua img {
+            opacity: 0.13 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
         }
       `}</style>
 
@@ -255,15 +266,13 @@ export default function CartaSolicitudPage() {
             value={fechaStr}
             onChange={e => setFechaStr(e.target.value)}
           />
-
           <label>Territorial</label>
           <select value={territorial} onChange={e => setTerritorial(e.target.value as Territorial)}>
             <option value="BOGOTA">Bogotá</option>
             <option value="CUNDINAMARCA">Cundinamarca</option>
             <option value="AMBAS">Ambas (imprimir las dos)</option>
           </select>
-
-          <button className="btn-print" onClick={handlePrint}>
+          <button className="btn-print" onClick={() => window.print()}>
             Imprimir / Guardar PDF
           </button>
         </div>
