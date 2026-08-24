@@ -23,12 +23,18 @@ function CartaContenido({ territorial, fecha }: { territorial: Exclude<Territori
 
   return (
     <div className="carta-cuerpo">
-      {/* Encabezado */}
+      {/* Marca de agua */}
+      <div className="marca-agua" aria-hidden="true">
+        <img src="/Logo.jpeg" alt="" />
+      </div>
+
+      {/* Encabezado: empresa izquierda, logo derecha */}
       <div className="carta-header">
         <div className="carta-empresa">
           <p className="empresa-nombre">TRIPLE A CONSTRUCCIONES SAS</p>
           <p className="empresa-nit">NIT 901.650.581-4</p>
         </div>
+        <img src="/Logo.jpeg" alt="Triple A Construcciones" className="carta-logo" />
       </div>
 
       <div className="carta-fecha">
@@ -71,7 +77,9 @@ function CartaContenido({ territorial, fecha }: { territorial: Exclude<Territori
         </ul>
       </div>
 
+      {/* Firma */}
       <div className="carta-firma">
+        <img src="/Firma.jpg" alt="Firma Andres Rodriguez" className="firma-imagen" />
         <div className="firma-linea" />
         <p><strong>ANDRES RODRIGUEZ</strong></p>
         <p>C.C 1.000.517.834</p>
@@ -136,6 +144,7 @@ export default function CartaSolicitudPage() {
 
         /* ── Carta individual ── */
         .carta-cuerpo {
+          position: relative;
           background: #fff;
           color: #111;
           padding: 48px 56px;
@@ -144,18 +153,46 @@ export default function CartaSolicitudPage() {
           font-family: 'Times New Roman', Times, serif;
           font-size: 14px;
           line-height: 1.75;
-          page-break-after: always;
+          overflow: hidden;
         }
+
+        /* Marca de agua */
+        .marca-agua {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          pointer-events: none;
+          z-index: 0;
+        }
+        .marca-agua img {
+          width: 55%;
+          opacity: 0.07;
+          filter: grayscale(100%);
+        }
+
+        /* Todo el contenido de la carta va sobre la marca de agua */
+        .carta-cuerpo > *:not(.marca-agua) { position: relative; z-index: 1; }
+
+        /* Encabezado */
         .carta-header {
           display: flex;
-          justify-content: flex-end;
+          justify-content: space-between;
+          align-items: flex-start;
           margin-bottom: 32px;
           padding-bottom: 16px;
           border-bottom: 2px solid #111;
         }
-        .carta-empresa { text-align: right; }
+        .carta-empresa { }
         .empresa-nombre { font-size: 15px; font-weight: 700; letter-spacing: 0.5px; }
         .empresa-nit { font-size: 12px; color: #444; }
+
+        .carta-logo {
+          height: 72px;
+          width: auto;
+          object-fit: contain;
+        }
 
         .carta-fecha { margin-bottom: 24px; }
 
@@ -167,7 +204,7 @@ export default function CartaSolicitudPage() {
         .carta-asunto {
           margin-bottom: 20px;
           padding: 8px 12px;
-          background: #f5f5f5;
+          background: rgba(37, 99, 235, 0.06);
           border-left: 3px solid #2563eb;
         }
 
@@ -175,14 +212,22 @@ export default function CartaSolicitudPage() {
 
         .carta-cierre { margin-bottom: 20px; }
 
-        .carta-adjuntos { margin-bottom: 32px; }
+        .carta-adjuntos { margin-bottom: 24px; }
         .carta-adjuntos ul { margin: 4px 0 0 20px; }
 
-        .carta-firma { margin-top: 48px; }
+        /* Firma */
+        .carta-firma { margin-top: 16px; }
+        .firma-imagen {
+          display: block;
+          height: 90px;
+          width: auto;
+          object-fit: contain;
+          margin-bottom: 4px;
+        }
         .firma-linea {
-          width: 200px;
+          width: 220px;
           border-top: 1px solid #111;
-          margin-bottom: 8px;
+          margin-bottom: 6px;
         }
 
         /* ── Impresión ── */
@@ -193,10 +238,12 @@ export default function CartaSolicitudPage() {
           .carta-cuerpo {
             border: none;
             border-radius: 0;
-            padding: 30mm 25mm;
+            padding: 28mm 22mm;
             page-break-after: always;
             box-shadow: none;
           }
+          .carta-asunto { background: #f0f4ff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .marca-agua img { opacity: 0.07 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
       `}</style>
 
