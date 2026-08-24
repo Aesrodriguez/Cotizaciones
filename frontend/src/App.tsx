@@ -35,6 +35,7 @@ const ObraDetailPage = lazy(() => import('./pages/ObraDetailPage'))
 const PlanillasPage = lazy(() => import('./pages/PlanillasPage'))
 const RegistroTrabajadorPage = lazy(() => import('./pages/RegistroTrabajadorPage'))
 const ReporteMensualPage = lazy(() => import('./pages/ReporteMensualPage'))
+const CartaSolicitudPage = lazy(() => import('./pages/CartaSolicitudPage'))
 
 function PageLoader() {
   return (
@@ -109,6 +110,7 @@ export default function App() {
             <Route path="obras/:id" element={<ObraDetailPage />} />
             <Route path="planillas" element={<PlanillasPage />} />
             <Route path="reporte-mensual" element={<ReporteMensualPage />} />
+            <Route path="cartas" element={<CartaSolicitudPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
