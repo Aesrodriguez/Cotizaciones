@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { cotizacionesAPI, reportesAPI } from '../services/api'
 import type { Alerta } from '../services/api'
 import { formatCurrency, STATUS_CONFIG } from '../utils/format'
@@ -55,15 +55,62 @@ const ALERTA_COLOR: Record<string, { bg: string; border: string; text: string; d
   OBRA:     { bg: 'rgba(96,165,250,0.08)',  border: 'rgba(96,165,250,0.25)',  text: '#93c5fd', dot: '#60a5fa' },
 }
 
+const TIPOS_ALERTA = [
+  { key: 'STOCK',   label: 'Stock / Materiales' },
+  { key: 'FACTURA', label: 'Facturas' },
+  { key: 'EQUIPO',  label: 'Equipos' },
+  { key: 'OBRA',    label: 'Obras' },
+]
+
+const LS_KEY = 'dashboard_alertas_config'
+
+function loadConfig(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(LS_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch {}
+  return { STOCK: true, FACTURA: true, EQUIPO: true, OBRA: true }
+}
+
+function IconSettings() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-4 h-4">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+    </svg>
+  )
+}
+
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
   const [alertas, setAlertas] = useState<Alerta[]>([])
+  const [alertConfig, setAlertConfig] = useState<Record<string, boolean>>(loadConfig)
+  const [showConfig, setShowConfig] = useState(false)
+  const configRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     cotizacionesAPI.getStats().then((r) => setStats(r.data)).catch(() => {}).finally(() => setLoading(false))
     reportesAPI.getAlertas().then(r => setAlertas(r.data.alertas ?? [])).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (configRef.current && !configRef.current.contains(e.target as Node)) setShowConfig(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  function toggleTipo(tipo: string) {
+    setAlertConfig(prev => {
+      const next = { ...prev, [tipo]: !prev[tipo] }
+      localStorage.setItem(LS_KEY, JSON.stringify(next))
+      return next
+    })
+  }
+
+  const alertasFiltradas = alertas.filter(a => alertConfig[a.tipo] !== false)
 
   if (loading) {
     return (
@@ -91,6 +138,67 @@ export default function DashboardPage() {
         <KPICard label="Ingresos aprobados" value={formatCurrency(stats.ingresos_aprobados)} accent="border-l-emerald-500" icon={<IconMoney />} />
       </div>
 
+
+      {/* Sección alertas */}
+      <div className="rounded-xl p-4" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-bold" style={{ color: 'var(--text)' }}>
+            Alertas activas
+            {alertasFiltradas.length > 0 && (
+              <span className="ml-2 text-xs font-semibold px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171' }}>
+                {alertasFiltradas.length}
+              </span>
+            )}
+          </p>
+          <div className="relative" ref={configRef}>
+            <button
+              onClick={() => setShowConfig(v => !v)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors"
+              style={{ background: showConfig ? 'var(--border)' : 'transparent', color: 'var(--text-faint)' }}
+              title="Configurar alertas"
+            >
+              <IconSettings /> Configurar
+            </button>
+            {showConfig && (
+              <div className="absolute right-0 top-9 z-50 w-56 rounded-xl shadow-lg p-3 space-y-1"
+                style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                <p className="text-xs font-semibold mb-2 px-1" style={{ color: 'var(--text-faint)' }}>Tipos de alerta</p>
+                {TIPOS_ALERTA.map(({ key, label }) => (
+                  <label key={key} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-gray-50 hover:dark:bg-gray-800 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={alertConfig[key] !== false}
+                      onChange={() => toggleTipo(key)}
+                      className="w-3.5 h-3.5 accent-blue-500 cursor-pointer"
+                    />
+                    <span className="text-sm" style={{ color: 'var(--text)' }}>{label}</span>
+                    <span className="ml-auto w-2 h-2 rounded-full flex-shrink-0" style={{ background: ALERTA_COLOR[key]?.dot }} />
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        {alertasFiltradas.length === 0 ? (
+          <p className="text-sm text-center py-3" style={{ color: 'var(--text-faint)' }}>Sin alertas activas</p>
+        ) : (
+          <div className="space-y-1.5">
+            {alertasFiltradas.map((a, i) => {
+              const c = ALERTA_COLOR[a.tipo] ?? ALERTA_COLOR.OBRA
+              return (
+                <div key={i} className="flex items-start gap-2.5 px-3 py-2 rounded-lg"
+                  style={{ background: c.bg, border: `1px solid ${c.border}` }}>
+                  <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ background: c.dot }} />
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: c.text }}>{a.titulo}</p>
+                    {a.detalle && <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{a.detalle}</p>}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="card lg:col-span-2">
