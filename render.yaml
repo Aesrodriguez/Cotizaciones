@@ -24,9 +24,9 @@ services:
       - key: LOG_LEVEL
         value: INFO
       - key: CORS_ORIGINS
-        value: '["https://cotizaciones-web.onrender.com"]'
+        value: '["https://cotizaciones-web-60nf.onrender.com"]'
       - key: FRONTEND_URL
-        value: https://cotizaciones-web.onrender.com
+        value: https://cotizaciones-web-60nf.onrender.com
       - key: SMTP_HOST
         value: smtp.gmail.com
       - key: SMTP_PORT
@@ -45,7 +45,7 @@ services:
     staticPublishPath: ./dist
     envVars:
       - key: VITE_API_URL
-        value: https://cotizaciones-api-3uuy.onrender.com/api/v1
+        value: https://cotizaciones-api-p4qy.onrender.com/api/v1
     routes:
       - type: rewrite
         source: /*
