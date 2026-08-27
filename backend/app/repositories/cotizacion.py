@@ -120,11 +120,11 @@ class CotizacionRepository(BaseRepository[Cotizacion]):
               AND NOT ({_is_nc})
         """)).fetchone()
 
-        # Query 4: contratos activos
+        # Query 4: contratos vigentes
         contratos_activos = self.db.execute(sa_text("""
             SELECT COUNT(*), COALESCE(SUM(valor_final), 0)
             FROM contratos
-            WHERE estado = 'ACTIVO'
+            WHERE estado = 'VIGENTE'
               AND deleted_at IS NULL
         """)).fetchone()
 
