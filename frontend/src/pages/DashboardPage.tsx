@@ -89,6 +89,11 @@ function loadConfig(): Record<string, boolean> {
   return { STOCK: true, FACTURA: true, EQUIPO: true, OBRA: true }
 }
 
+// El backend envía "STOCK_BAJO", "FACTURA_VENCIDA", etc. — extrae el prefijo
+function getTipoKey(tipo: string): string {
+  return TIPOS_ALERTA.find(t => tipo.startsWith(t.key))?.key ?? tipo
+}
+
 // ── Tooltip personalizado ─────────────────────────────────────────────────────
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
@@ -134,7 +139,7 @@ export default function DashboardPage() {
     })
   }
 
-  const alertasFiltradas = alertas.filter(a => alertConfig[a.tipo] !== false)
+  const alertasFiltradas = alertas.filter(a => alertConfig[getTipoKey(a.tipo)] !== false)
 
   if (loading) {
     return (
@@ -241,7 +246,7 @@ export default function DashboardPage() {
         ) : (
           <div className="space-y-1.5">
             {alertasFiltradas.map((a, i) => {
-              const c = ALERTA_COLOR[a.tipo] ?? ALERTA_COLOR.OBRA
+              const c = ALERTA_COLOR[getTipoKey(a.tipo)] ?? ALERTA_COLOR.OBRA
               return (
                 <div key={i} className="flex items-start gap-2.5 px-3 py-2 rounded-lg" style={{ background: c.bg, border: `1px solid ${c.border}` }}>
                   <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ background: c.dot }} />
