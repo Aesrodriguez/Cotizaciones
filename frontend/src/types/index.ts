@@ -103,8 +103,16 @@ export interface Stats {
   rechazadas: number
   ingresos_totales: number
   ingresos_aprobados: number
+  facturas_emitidas_count: number
+  facturas_emitidas_total: number
+  facturas_recibidas_count: number
+  facturas_recibidas_total: number
+  facturas_pendientes_cobro_count: number
+  facturas_pendientes_cobro_total: number
+  contratos_activos_count: number
+  contratos_activos_valor: number
   por_estado: { estado: string; count: number }[]
-  por_mes: { mes: string; count: number; total: number }[]
+  por_mes: { mes: string; count: number; total_cotizaciones: number; total_facturas: number }[]
 }
 
 // ── Contratos ──────────────────────────────────────────────────────────────
