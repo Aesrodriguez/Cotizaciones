@@ -91,31 +91,6 @@ export default function DashboardPage() {
         <KPICard label="Ingresos aprobados" value={formatCurrency(stats.ingresos_aprobados)} accent="border-l-emerald-500" icon={<IconMoney />} />
       </div>
 
-      {alertas.length > 0 && (
-        <div className="rounded-xl p-4 space-y-2" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
-          <p className="text-sm font-bold mb-3" style={{ color: 'var(--text)' }}>
-            Alertas activas
-            <span className="ml-2 text-xs font-semibold px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171' }}>
-              {alertas.length}
-            </span>
-          </p>
-          <div className="space-y-1.5">
-            {alertas.map((a, i) => {
-              const c = ALERTA_COLOR[a.tipo] ?? ALERTA_COLOR.OBRA
-              return (
-                <div key={i} className="flex items-start gap-2.5 px-3 py-2 rounded-lg"
-                  style={{ background: c.bg, border: `1px solid ${c.border}` }}>
-                  <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ background: c.dot }} />
-                  <div>
-                    <p className="text-sm font-semibold" style={{ color: c.text }}>{a.titulo}</p>
-                    {a.detalle && <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{a.detalle}</p>}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="card lg:col-span-2">
