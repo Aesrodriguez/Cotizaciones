@@ -289,7 +289,7 @@ export default function APUPage() {
   const loadItems = useCallback(async () => {
     setLoading(true)
     try {
-      const r = await apuAPI.getAll({ capitulo: selectedCap, search: debouncedSearch, page, limit })
+      const r = await apuAPI.getAll({ capitulo: debouncedSearch ? '' : selectedCap, search: debouncedSearch, page, limit })
       setItems(r.data.data)
       setTotal(r.data.total)
     } catch { setItems([]); setTotal(0) }
@@ -298,6 +298,9 @@ export default function APUPage() {
 
   useEffect(() => { if (selectedCap) loadItems() }, [loadItems])
   useEffect(() => { setPage(1) }, [selectedCap, debouncedSearch])
+
+  // Si hay búsqueda activa, indicarlo visualmente en la barra
+  const searchingGlobal = debouncedSearch.length > 0
 
   const totalPages = Math.ceil(total / limit) || 1
   const selectedCapName = capitulos.find((c) => c.codigo === selectedCap)?.nombre ?? ''
@@ -338,9 +341,11 @@ export default function APUPage() {
         {/* Barra superior */}
         <div className="px-5 py-3 flex items-center gap-3 flex-shrink-0" style={{ borderBottom: '1px solid var(--border)', background: 'var(--card)' }}>
           <div className="flex-1 min-w-0">
-            <h1 className="text-sm font-semibold truncate" style={{ color: 'var(--text)' }}>{selectedCapName || 'Base APU'}</h1>
+            <h1 className="text-sm font-semibold truncate" style={{ color: 'var(--text)' }}>
+              {searchingGlobal ? 'Búsqueda global' : (selectedCapName || 'Base APU')}
+            </h1>
             <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              {total > 0 ? `${total.toLocaleString()} actividades · Master Pack Colombia 2026` : 'Master Pack Colombia 2026'}
+              {total > 0 ? `${total.toLocaleString()} actividades${searchingGlobal ? ' · todos los capítulos' : ' · Master Pack Colombia 2026'}` : 'Master Pack Colombia 2026'}
             </p>
           </div>
           <input
