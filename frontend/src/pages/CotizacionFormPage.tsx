@@ -8,6 +8,14 @@ import ClienteAutocomplete from '../components/common/ClienteAutocomplete'
 import ProductoBuscador, { type SelectedItem } from '../components/common/ProductoBuscador'
 import toast from 'react-hot-toast'
 
+interface DimCalc {
+  index: number
+  tipo: 'm2' | 'm3'
+  largo: string
+  ancho: string
+  alto: string
+}
+
 interface ItemForm {
   producto_id: string
   descripcion: string
@@ -71,6 +79,7 @@ export default function CotizacionFormPage() {
   const [productoModal, setProductoModal] = useState(false)
   const [savingCliente, setSavingCliente] = useState(false)
   const [savingProducto, setSavingProducto] = useState(false)
+  const [dimCalc, setDimCalc] = useState<DimCalc | null>(null)
   const [numeroPrefijo, setNumeroPrefijo] = useState('COT-')
   const [numeroSufijo, setNumeroSufijo] = useState<string>('')
   const [totals, setTotals] = useState({
@@ -442,12 +451,89 @@ export default function CotizacionFormPage() {
                                   placeholder="Descripción del ítem"
                                 />
                               </td>
-                              <td className="py-2 pr-2 align-middle">
-                                <input
-                                  type="number" step="1" min="1"
-                                  {...register(`items.${index}.cantidad`)}
-                                  className="input text-xs py-1.5 text-center"
-                                />
+                              <td className="py-2 pr-2 align-top">
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number" step="0.01" min="0"
+                                    {...register(`items.${index}.cantidad`)}
+                                    className="input text-xs py-1.5 text-center min-w-0 w-16"
+                                  />
+                                  <button
+                                    type="button"
+                                    title="Calcular m² o m³"
+                                    onClick={() => setDimCalc(d =>
+                                      d?.index === index ? null : { index, tipo: 'm2', largo: '', ancho: '', alto: '' }
+                                    )}
+                                    className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded text-xs transition-colors"
+                                    style={{
+                                      background: dimCalc?.index === index ? '#3b82f6' : 'var(--surface)',
+                                      color: dimCalc?.index === index ? '#fff' : 'var(--text-faint)',
+                                      border: '1px solid var(--border)',
+                                    }}
+                                  >▦</button>
+                                </div>
+                                {dimCalc?.index === index && (() => {
+                                  const largo  = parseFloat(dimCalc.largo)  || 0
+                                  const ancho  = parseFloat(dimCalc.ancho)  || 0
+                                  const alto   = parseFloat(dimCalc.alto)   || 0
+                                  const result = dimCalc.tipo === 'm2'
+                                    ? largo * ancho
+                                    : largo * ancho * alto
+                                  return (
+                                    <div className="mt-1.5 p-2.5 rounded-lg text-xs space-y-2"
+                                      style={{ background: 'var(--surface)', border: '1px solid var(--border)', minWidth: 180 }}>
+                                      {/* Selector m² / m³ */}
+                                      <div className="flex rounded overflow-hidden border" style={{ borderColor: 'var(--border)' }}>
+                                        {(['m2', 'm3'] as const).map(t => (
+                                          <button key={t} type="button"
+                                            onClick={() => setDimCalc(d => d ? { ...d, tipo: t, alto: '' } : d)}
+                                            className="flex-1 py-1 font-semibold transition-colors"
+                                            style={{
+                                              background: dimCalc.tipo === t ? '#3b82f6' : 'transparent',
+                                              color: dimCalc.tipo === t ? '#fff' : 'var(--text-faint)',
+                                            }}
+                                          >{t === 'm2' ? 'm²' : 'm³'}</button>
+                                        ))}
+                                      </div>
+                                      {/* Dimensiones */}
+                                      <div className="space-y-1">
+                                        {[
+                                          { key: 'largo', label: 'Largo (m)' },
+                                          { key: 'ancho', label: 'Ancho (m)' },
+                                          ...(dimCalc.tipo === 'm3' ? [{ key: 'alto', label: 'Alto (m)' }] : []),
+                                        ].map(({ key, label }) => (
+                                          <div key={key} className="flex items-center gap-1.5">
+                                            <span className="w-16 text-right shrink-0" style={{ color: 'var(--text-faint)' }}>{label}</span>
+                                            <input
+                                              type="number" step="0.01" min="0"
+                                              value={(dimCalc as any)[key]}
+                                              onChange={e => setDimCalc(d => d ? { ...d, [key]: e.target.value } : d)}
+                                              className="input py-1 text-xs text-right flex-1 min-w-0"
+                                              placeholder="0.00"
+                                            />
+                                          </div>
+                                        ))}
+                                      </div>
+                                      {/* Resultado */}
+                                      <div className="flex items-center justify-between pt-1 border-t" style={{ borderColor: 'var(--border)' }}>
+                                        <span style={{ color: 'var(--text-faint)' }}>Resultado</span>
+                                        <span className="font-bold" style={{ color: 'var(--text)' }}>
+                                          {result > 0 ? `${result.toFixed(4).replace(/\.?0+$/, '')} ${dimCalc.tipo === 'm2' ? 'm²' : 'm³'}` : '—'}
+                                        </span>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        disabled={result <= 0}
+                                        onClick={() => {
+                                          setValue(`items.${index}.cantidad`, result)
+                                          setDimCalc(null)
+                                        }}
+                                        className="w-full py-1.5 rounded font-semibold transition-colors disabled:opacity-40"
+                                        style={{ background: '#3b82f6', color: '#fff' }}
+                                      >Aplicar cantidad</button>
+                                    </div>
+                                  )
+                                })()}
                               </td>
                               <td className="py-2 pr-2 align-middle">
                                 <input
