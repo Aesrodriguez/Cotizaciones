@@ -551,18 +551,56 @@ export interface ConciliacionSugerencia {
   factura_id: string
 }
 
+export interface APUInsumo {
+  id: string
+  nombre?: string
+  descripcion?: string
+  unidad?: string
+  cantidad?: number
+  precio_unitario?: number
+  subtotal?: number
+  orden?: number
+}
+
+export interface APUInsumoInput {
+  nombre?: string
+  descripcion?: string
+  unidad?: string
+  cantidad?: number
+  precio_unitario?: number
+}
+
 export const apuAPI = {
   getCapitulos: () => api.get<{ codigo: string; nombre: string }[]>('/apu/capitulos', _noToast),
   getAll: (params?: object) => api.get<PaginatedResponse<APUItem>>('/apu/', { params, ..._noToast }),
   getById: (id: string) => api.get<APUItem>(`/apu/${id}`, _noToast),
+  updateAPU: (id: string, data: { nombre?: string; unidad_medida?: string }) =>
+    api.patch(`/apu/${id}`, data),
   updatePrecio: (id: string, precio_unitario: number) =>
     api.patch(`/apu/${id}/precio`, { precio_unitario }),
-  updateMaterial: (apuId: string, detId: string, data: { precio_unitario: number; cantidad?: number }) =>
-    api.patch(`/apu/${apuId}/materiales/${detId}`, data),
-  updateManoObra: (apuId: string, detId: string, data: { precio_unitario: number; cantidad?: number }) =>
-    api.patch(`/apu/${apuId}/mano_obra/${detId}`, data),
-  updateEquipo: (apuId: string, detId: string, data: { precio_unitario: number; cantidad?: number }) =>
-    api.patch(`/apu/${apuId}/equipos/${detId}`, data),
+  recalcular: (id: string) =>
+    api.post<{ ok: boolean; precio_unitario: number }>(`/apu/${id}/recalcular`),
+  // Materiales
+  updateMaterial: (apuId: string, detId: string, data: APUInsumoInput) =>
+    api.patch<{ ok: boolean; subtotal: number }>(`/apu/${apuId}/materiales/${detId}`, data),
+  createMaterial: (apuId: string, data?: APUInsumoInput) =>
+    api.post<APUInsumo>(`/apu/${apuId}/materiales`, data ?? {}),
+  deleteMaterial: (apuId: string, detId: string) =>
+    api.delete(`/apu/${apuId}/materiales/${detId}`),
+  // Mano de obra
+  updateManoObra: (apuId: string, detId: string, data: APUInsumoInput) =>
+    api.patch<{ ok: boolean; subtotal: number }>(`/apu/${apuId}/mano_obra/${detId}`, data),
+  createManoObra: (apuId: string, data?: APUInsumoInput) =>
+    api.post<APUInsumo>(`/apu/${apuId}/mano_obra`, data ?? {}),
+  deleteManoObra: (apuId: string, detId: string) =>
+    api.delete(`/apu/${apuId}/mano_obra/${detId}`),
+  // Equipos
+  updateEquipo: (apuId: string, detId: string, data: APUInsumoInput) =>
+    api.patch<{ ok: boolean; subtotal: number }>(`/apu/${apuId}/equipos/${detId}`, data),
+  createEquipo: (apuId: string, data?: APUInsumoInput) =>
+    api.post<APUInsumo>(`/apu/${apuId}/equipos`, data ?? {}),
+  deleteEquipo: (apuId: string, detId: string) =>
+    api.delete(`/apu/${apuId}/equipos/${detId}`),
   seed: () => api.post<{ ok: boolean; msg: string; count?: number }>('/apu/seed'),
   seedStatus: () => api.get<{ running: boolean; count: number }>('/apu/seed/status', { _skipToast: true } as any),
 }

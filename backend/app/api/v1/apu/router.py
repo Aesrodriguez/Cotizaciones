@@ -14,7 +14,7 @@ from app.api.deps import get_authenticated_user, get_db_session, require_admin
 from app.database import SessionLocal
 from app.models.auth import Usuario
 from app.models.apu import APU, APUMaterial, APUManoObra, APUEquipo
-from app.schemas.apu import APUListOut, APUOut, APUPrecioUpdate, APUDetallePrecioUpdate
+from app.schemas.apu import APUListOut, APUOut, APUPrecioUpdate, APUDetallePrecioUpdate, APUUpdate, InsumoUpdate, InsumoCreate, InsumoOut
 from app.schemas.common import PaginatedResponse
 
 router = APIRouter(prefix="/apu", tags=["APU"])
@@ -315,6 +315,45 @@ def get_apu(
     )
 
 
+# ── APU update (nombre / unidad) ─────────────────────────────────────────────
+
+@router.patch("/{apu_id}")
+def update_apu(
+    apu_id: UUID,
+    body: APUUpdate,
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    apu = db.query(APU).filter(APU.id == apu_id, APU.deleted_at.is_(None)).first()
+    if not apu:
+        raise HTTPException(404, "APU no encontrado")
+    if body.nombre is not None:
+        apu.nombre = body.nombre
+    if body.unidad_medida is not None:
+        apu.unidad_medida = body.unidad_medida
+    db.commit()
+    return {"ok": True}
+
+
+# ── Recalcular precio desde insumos ──────────────────────────────────────────
+
+@router.post("/{apu_id}/recalcular")
+def recalcular_precio(
+    apu_id: UUID,
+    db: Session = Depends(get_db_session),
+    _: Usuario = Depends(get_authenticated_user),
+):
+    apu = db.query(APU).filter(APU.id == apu_id, APU.deleted_at.is_(None)).first()
+    if not apu:
+        raise HTTPException(404)
+    total_mat = db.execute(text("SELECT COALESCE(SUM(subtotal),0) FROM apu_materiales WHERE apu_id=:id"), {"id": str(apu_id)}).scalar() or 0
+    total_mob = db.execute(text("SELECT COALESCE(SUM(subtotal),0) FROM apu_mano_obra WHERE apu_id=:id"), {"id": str(apu_id)}).scalar() or 0
+    total_equ = db.execute(text("SELECT COALESCE(SUM(subtotal),0) FROM apu_equipos WHERE apu_id=:id"), {"id": str(apu_id)}).scalar() or 0
+    apu.precio_unitario = float(total_mat) + float(total_mob) + float(total_equ)
+    db.commit()
+    return {"ok": True, "precio_unitario": float(apu.precio_unitario)}
+
+
 # ── Price updates ─────────────────────────────────────────────────────────────
 
 @router.patch("/{apu_id}/precio")
@@ -334,56 +373,170 @@ def update_precio(
 
 @router.patch("/{apu_id}/materiales/{det_id}")
 def update_material(
-    apu_id: UUID,
-    det_id: UUID,
-    body: APUDetallePrecioUpdate,
-    db: Session = Depends(get_db_session),
-    _: Usuario = Depends(get_authenticated_user),
+    apu_id: UUID, det_id: UUID, body: InsumoUpdate,
+    db: Session = Depends(get_db_session), _: Usuario = Depends(get_authenticated_user),
 ):
     row = db.query(APUMaterial).filter(APUMaterial.id == det_id, APUMaterial.apu_id == apu_id).first()
     if not row:
         raise HTTPException(404)
-    row.precio_unitario = body.precio_unitario
+    if body.nombre is not None:
+        row.nombre = body.nombre
+    if body.unidad is not None:
+        row.unidad = body.unidad
     if body.cantidad is not None:
         row.cantidad = body.cantidad
+    if body.precio_unitario is not None:
+        row.precio_unitario = body.precio_unitario
     row.subtotal = row.cantidad * row.precio_unitario
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "subtotal": float(row.subtotal)}
+
+
+@router.post("/{apu_id}/materiales", status_code=201, response_model=InsumoOut)
+def create_material(
+    apu_id: UUID, body: InsumoCreate,
+    db: Session = Depends(get_db_session), _: Usuario = Depends(get_authenticated_user),
+):
+    apu = db.query(APU).filter(APU.id == apu_id, APU.deleted_at.is_(None)).first()
+    if not apu:
+        raise HTTPException(404)
+    max_orden = db.execute(text("SELECT COALESCE(MAX(orden),0) FROM apu_materiales WHERE apu_id=:id"), {"id": str(apu_id)}).scalar() or 0
+    row = APUMaterial(
+        apu_id=apu_id,
+        nombre=body.nombre or "Nuevo material",
+        unidad=body.unidad,
+        cantidad=body.cantidad,
+        precio_unitario=body.precio_unitario,
+        subtotal=body.cantidad * body.precio_unitario,
+        orden=int(max_orden) + 1,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return InsumoOut(id=row.id, nombre=row.nombre, unidad=row.unidad, cantidad=row.cantidad, precio_unitario=row.precio_unitario, subtotal=row.subtotal, orden=row.orden)
+
+
+@router.delete("/{apu_id}/materiales/{det_id}", status_code=204)
+def delete_material(
+    apu_id: UUID, det_id: UUID,
+    db: Session = Depends(get_db_session), _: Usuario = Depends(get_authenticated_user),
+):
+    row = db.query(APUMaterial).filter(APUMaterial.id == det_id, APUMaterial.apu_id == apu_id).first()
+    if not row:
+        raise HTTPException(404)
+    db.delete(row)
+    db.commit()
 
 
 @router.patch("/{apu_id}/mano_obra/{det_id}")
 def update_mano_obra(
-    apu_id: UUID,
-    det_id: UUID,
-    body: APUDetallePrecioUpdate,
-    db: Session = Depends(get_db_session),
-    _: Usuario = Depends(get_authenticated_user),
+    apu_id: UUID, det_id: UUID, body: InsumoUpdate,
+    db: Session = Depends(get_db_session), _: Usuario = Depends(get_authenticated_user),
 ):
     row = db.query(APUManoObra).filter(APUManoObra.id == det_id, APUManoObra.apu_id == apu_id).first()
     if not row:
         raise HTTPException(404)
-    row.precio_unitario = body.precio_unitario
+    if body.descripcion is not None:
+        row.descripcion = body.descripcion
+    if body.unidad is not None:
+        row.unidad = body.unidad
     if body.cantidad is not None:
         row.cantidad = body.cantidad
+    if body.precio_unitario is not None:
+        row.precio_unitario = body.precio_unitario
     row.subtotal = row.cantidad * row.precio_unitario
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "subtotal": float(row.subtotal)}
+
+
+@router.post("/{apu_id}/mano_obra", status_code=201, response_model=InsumoOut)
+def create_mano_obra(
+    apu_id: UUID, body: InsumoCreate,
+    db: Session = Depends(get_db_session), _: Usuario = Depends(get_authenticated_user),
+):
+    apu = db.query(APU).filter(APU.id == apu_id, APU.deleted_at.is_(None)).first()
+    if not apu:
+        raise HTTPException(404)
+    max_orden = db.execute(text("SELECT COALESCE(MAX(orden),0) FROM apu_mano_obra WHERE apu_id=:id"), {"id": str(apu_id)}).scalar() or 0
+    row = APUManoObra(
+        apu_id=apu_id,
+        descripcion=body.descripcion or "Nueva mano de obra",
+        unidad=body.unidad,
+        cantidad=body.cantidad,
+        precio_unitario=body.precio_unitario,
+        subtotal=body.cantidad * body.precio_unitario,
+        orden=int(max_orden) + 1,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return InsumoOut(id=row.id, descripcion=row.descripcion, unidad=row.unidad, cantidad=row.cantidad, precio_unitario=row.precio_unitario, subtotal=row.subtotal, orden=row.orden)
+
+
+@router.delete("/{apu_id}/mano_obra/{det_id}", status_code=204)
+def delete_mano_obra(
+    apu_id: UUID, det_id: UUID,
+    db: Session = Depends(get_db_session), _: Usuario = Depends(get_authenticated_user),
+):
+    row = db.query(APUManoObra).filter(APUManoObra.id == det_id, APUManoObra.apu_id == apu_id).first()
+    if not row:
+        raise HTTPException(404)
+    db.delete(row)
+    db.commit()
 
 
 @router.patch("/{apu_id}/equipos/{det_id}")
 def update_equipo(
-    apu_id: UUID,
-    det_id: UUID,
-    body: APUDetallePrecioUpdate,
-    db: Session = Depends(get_db_session),
-    _: Usuario = Depends(get_authenticated_user),
+    apu_id: UUID, det_id: UUID, body: InsumoUpdate,
+    db: Session = Depends(get_db_session), _: Usuario = Depends(get_authenticated_user),
 ):
     row = db.query(APUEquipo).filter(APUEquipo.id == det_id, APUEquipo.apu_id == apu_id).first()
     if not row:
         raise HTTPException(404)
-    row.precio_unitario = body.precio_unitario
+    if body.descripcion is not None:
+        row.descripcion = body.descripcion
+    if body.unidad is not None:
+        row.unidad = body.unidad
     if body.cantidad is not None:
         row.cantidad = body.cantidad
+    if body.precio_unitario is not None:
+        row.precio_unitario = body.precio_unitario
     row.subtotal = row.cantidad * row.precio_unitario
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "subtotal": float(row.subtotal)}
+
+
+@router.post("/{apu_id}/equipos", status_code=201, response_model=InsumoOut)
+def create_equipo(
+    apu_id: UUID, body: InsumoCreate,
+    db: Session = Depends(get_db_session), _: Usuario = Depends(get_authenticated_user),
+):
+    apu = db.query(APU).filter(APU.id == apu_id, APU.deleted_at.is_(None)).first()
+    if not apu:
+        raise HTTPException(404)
+    max_orden = db.execute(text("SELECT COALESCE(MAX(orden),0) FROM apu_equipos WHERE apu_id=:id"), {"id": str(apu_id)}).scalar() or 0
+    row = APUEquipo(
+        apu_id=apu_id,
+        descripcion=body.descripcion or "Nuevo equipo",
+        unidad=body.unidad,
+        cantidad=body.cantidad,
+        precio_unitario=body.precio_unitario,
+        subtotal=body.cantidad * body.precio_unitario,
+        orden=int(max_orden) + 1,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return InsumoOut(id=row.id, descripcion=row.descripcion, unidad=row.unidad, cantidad=row.cantidad, precio_unitario=row.precio_unitario, subtotal=row.subtotal, orden=row.orden)
+
+
+@router.delete("/{apu_id}/equipos/{det_id}", status_code=204)
+def delete_equipo(
+    apu_id: UUID, det_id: UUID,
+    db: Session = Depends(get_db_session), _: Usuario = Depends(get_authenticated_user),
+):
+    row = db.query(APUEquipo).filter(APUEquipo.id == det_id, APUEquipo.apu_id == apu_id).first()
+    if not row:
+        raise HTTPException(404)
+    db.delete(row)
+    db.commit()

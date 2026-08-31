@@ -4,6 +4,7 @@ import { formatCurrency } from '../utils/format'
 import { useDebounce } from '../hooks/useDebounce'
 import toast from 'react-hot-toast'
 import type { APUItem, APUDetalle } from '../types'
+import APUEditModal from './APUEditModal'
 
 interface Capitulo { codigo: string; nombre: string }
 
@@ -110,7 +111,7 @@ function DetalleTable({
 }
 
 // ── Tarjeta APU expandible ─────────────────────────────────────────────────
-function APUCard({ item, onPriceUpdated }: { item: APUItem; onPriceUpdated: () => void }) {
+function APUCard({ item, onPriceUpdated, onEdit }: { item: APUItem; onPriceUpdated: () => void; onEdit: (item: APUItem) => void }) {
   const [expanded, setExpanded] = useState(false)
   const [detail, setDetail] = useState<APUItem | null>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
@@ -184,6 +185,12 @@ function APUCard({ item, onPriceUpdated }: { item: APUItem; onPriceUpdated: () =
               onSave={async (v) => { await apuAPI.updatePrecio(item.id, v); toast.success('Precio actualizado'); onPriceUpdated() }}
             />
           </div>
+          <button
+            onClick={(e) => { e.stopPropagation(); onEdit(item) }}
+            className="btn-secondary text-xs !py-1 !px-3 flex-shrink-0"
+          >
+            ✎ Editar insumos
+          </button>
 
           {/* Resumen de insumos (si ya se cargó el detalle) */}
           {detail ? (
@@ -274,6 +281,7 @@ export default function APUPage() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
+  const [editingItem, setEditingItem] = useState<APUItem | null>(null)
   const debouncedSearch = useDebounce(search, 350)
   const limit = 20
 
@@ -306,6 +314,7 @@ export default function APUPage() {
   const selectedCapName = capitulos.find((c) => c.codigo === selectedCap)?.nombre ?? ''
 
   return (
+    <>
     <div className="flex h-[calc(100vh-80px)]" style={{ overflow: 'hidden' }}>
 
       {/* ── Sidebar capítulos ─────────────────────────────────────────── */}
@@ -379,7 +388,7 @@ export default function APUPage() {
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {items.map((item) => (
-                <APUCard key={item.id} item={item} onPriceUpdated={loadItems} />
+                <APUCard key={item.id} item={item} onPriceUpdated={loadItems} onEdit={setEditingItem} />
               ))}
             </div>
           )}
@@ -395,5 +404,14 @@ export default function APUPage() {
         </div>
       </div>
     </div>
+
+    {editingItem && (
+      <APUEditModal
+        item={editingItem}
+        onClose={() => setEditingItem(null)}
+        onPriceUpdated={() => { loadItems(); setEditingItem(null) }}
+      />
+    )}
+    </>
   )
 }
