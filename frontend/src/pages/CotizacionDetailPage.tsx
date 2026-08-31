@@ -217,7 +217,7 @@ export default function CotizacionDetailPage() {
               {quote.items?.map((item) => (
                 <tr key={item.id}>
                   <td className="py-2.5 pr-4">
-                    <div className="font-medium text-gray-900">{item.descripcion || item.producto_nombre}</div>
+                    <div className="font-medium text-gray-900 whitespace-pre-line">{item.descripcion || item.producto_nombre}</div>
                     {item.producto_codigo && <div className="text-xs text-gray-400">{item.producto_codigo}</div>}
                   </td>
                   <td className="py-2.5 pr-4 text-right text-gray-600">{item.cantidad}</td>
@@ -312,7 +312,7 @@ export default function CotizacionDetailPage() {
               {quote.items?.map((item, i) => (
                 <tr key={item.id} style={{ borderBottom: '1px solid #e2e8f0', background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
                   <td style={{ padding: '8px 10px' }}>
-                    <div style={{ fontWeight: '600' }}>{item.descripcion || item.producto_nombre}</div>
+                    <div style={{ fontWeight: '600', whiteSpace: 'pre-line' }}>{item.descripcion || item.producto_nombre}</div>
                     {item.producto_codigo && <div style={{ fontSize: '10px', color: '#94a3b8' }}>{item.producto_codigo}</div>}
                   </td>
                   <td style={{ padding: '8px 10px', textAlign: 'center' }}>{item.cantidad}</td>

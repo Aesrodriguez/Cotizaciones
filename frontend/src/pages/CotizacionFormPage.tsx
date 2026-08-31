@@ -526,6 +526,12 @@ export default function CotizacionFormPage() {
                                         disabled={result <= 0}
                                         onClick={() => {
                                           setValue(`items.${index}.cantidad`, result)
+                                          // Añadir medidas a la descripción
+                                          const desc = (watchItems?.[index]?.descripcion ?? '').replace(/\n\([\d.,×\s]+= [\d.,]+ m[²³]\)$/, '').trimEnd()
+                                          const dimStr = dimCalc.tipo === 'm2'
+                                            ? `\n(${largo.toFixed(2)}m × ${ancho.toFixed(2)}m = ${result.toFixed(4).replace(/\.?0+$/, '')} m²)`
+                                            : `\n(${largo.toFixed(2)}m × ${ancho.toFixed(2)}m × ${alto.toFixed(2)}m = ${result.toFixed(4).replace(/\.?0+$/, '')} m³)`
+                                          setValue(`items.${index}.descripcion`, desc + dimStr)
                                           setDimCalc(null)
                                         }}
                                         className="w-full py-1.5 rounded font-semibold transition-colors disabled:opacity-40"
