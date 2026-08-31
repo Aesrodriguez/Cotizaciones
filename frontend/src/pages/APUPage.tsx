@@ -229,7 +229,7 @@ function APUCard({ item, onPriceUpdated }: { item: APUItem; onPriceUpdated: () =
 
       {/* ── Detalle expandido ── */}
       {expanded && detail && (
-        <div style={{ borderTop: '1px solid var(--border)', overflowY: 'auto', maxHeight: '60vh' }}>
+        <div style={{ borderTop: '1px solid var(--border)' }}>
           {nMat + nEqu + nMob === 0 ? (
             <p className="text-xs text-center py-6" style={{ color: 'var(--text-muted)' }}>Sin detalle de insumos registrado.</p>
           ) : (
