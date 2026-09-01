@@ -42,6 +42,9 @@ export default function CotizacionDetailPage() {
   const [downloadingPdf, setDownloadingPdf] = useState(false)
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null)
   const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false)
+  const [generatingLink, setGeneratingLink] = useState(false)
+  const [vistas, setVistas] = useState<{ total: number; vistas: { fecha: string; ip: string }[] } | null>(null)
+  const [vistasOpen, setVistasOpen] = useState(false)
 
   const { register, handleSubmit, reset: resetEmail, formState: { errors } } = useForm<EmailForm>()
 
@@ -109,6 +112,30 @@ export default function CotizacionDetailPage() {
     setPdfPreviewOpen(false)
   }
 
+  const handleGenerarLink = async () => {
+    if (!id) return
+    setGeneratingLink(true)
+    try {
+      const res = await cotizacionesAPI.generarLink(id)
+      const url = `${window.location.origin}/ver/${res.data.token}`
+      await navigator.clipboard.writeText(url)
+      toast.success('¡Enlace copiado al portapapeles!')
+    } catch {
+      toast.error('Error al generar enlace')
+    } finally {
+      setGeneratingLink(false)
+    }
+  }
+
+  const handleVerVistas = async () => {
+    if (!id) return
+    try {
+      const res = await cotizacionesAPI.getVistas(id)
+      setVistas(res.data)
+      setVistasOpen(true)
+    } catch { /* handled */ }
+  }
+
   const handleEstado = async (nuevoEstado: string) => {
     if (!id) return
     setChangingEstado(nuevoEstado)
@@ -161,6 +188,12 @@ export default function CotizacionDetailPage() {
             ))}
           </div>
           <div className="flex flex-wrap gap-2">
+            <button onClick={handleGenerarLink} disabled={generatingLink} className="btn-secondary flex items-center gap-1.5">
+              🔗 {generatingLink ? 'Generando…' : 'Copiar enlace'}
+            </button>
+            <button onClick={handleVerVistas} className="btn-secondary flex items-center gap-1.5">
+              👁 Vistas
+            </button>
             <button onClick={openEmail} className="btn-secondary">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -456,6 +489,41 @@ export default function CotizacionDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Modal vistas */}
+      <Modal open={vistasOpen} onClose={() => setVistasOpen(false)} title="Historial de vistas" size="sm">
+        {vistas && (
+          <div>
+            <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>
+              Esta cotización ha sido vista <strong>{vistas.total}</strong> {vistas.total === 1 ? 'vez' : 'veces'}.
+            </p>
+            {vistas.vistas.length === 0 ? (
+              <p className="text-sm text-center py-6" style={{ color: 'var(--text-muted)' }}>Nadie ha abierto el enlace todavía.</p>
+            ) : (
+              <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                {vistas.vistas.map((v, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs px-3 py-2 rounded" style={{ background: 'var(--surface)' }}>
+                    <span style={{ color: 'var(--text)' }}>
+                      {new Date(v.fecha).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' })}
+                    </span>
+                    <span className="font-mono" style={{ color: 'var(--text-muted)' }}>{v.ip || '—'}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="pt-3 flex justify-between items-center">
+              <button
+                onClick={handleGenerarLink}
+                disabled={generatingLink}
+                className="btn-secondary text-xs !py-1.5"
+              >
+                🔗 {generatingLink ? 'Copiando…' : 'Copiar enlace'}
+              </button>
+              <button onClick={() => setVistasOpen(false)} className="btn-secondary text-xs !py-1.5">Cerrar</button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

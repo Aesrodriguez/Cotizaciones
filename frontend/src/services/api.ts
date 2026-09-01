@@ -125,6 +125,10 @@ export const cotizacionesAPI = {
     api.get(`/cotizaciones/${id}/pdf`, { responseType: 'blob' }),
   nextNumero: () =>
     api.get<{ prefijo: string; proximo_numero: number }>('/cotizaciones/next-numero'),
+  generarLink: (id: string) =>
+    api.post<{ token: string }>(`/cotizaciones/${id}/generar-link`),
+  getVistas: (id: string) =>
+    api.get<{ total: number; vistas: { fecha: string; ip: string }[] }>(`/cotizaciones/${id}/vistas`, _noToast),
 }
 
 export const clientesAPI = {

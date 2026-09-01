@@ -20,7 +20,7 @@ logger = logging.getLogger("cotizaciones")
 
 
 def _ensure_columns():
-    """Agrega columnas nuevas de forma segura si no existen (safety net post-migration)."""
+    """Agrega columnas/tablas nuevas de forma segura si no existen (safety net post-migration)."""
     try:
         from app.database import SessionLocal
         from sqlalchemy import text
@@ -28,6 +28,21 @@ def _ensure_columns():
         try:
             db.execute(text(
                 "ALTER TABLE cotizacion_items ADD COLUMN IF NOT EXISTS unidad VARCHAR(20)"
+            ))
+            db.execute(text(
+                "ALTER TABLE cotizaciones ADD COLUMN IF NOT EXISTS token_publico VARCHAR(64)"
+            ))
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS cotizacion_vistas (
+                    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    cotizacion_id UUID NOT NULL REFERENCES cotizaciones(id) ON DELETE CASCADE,
+                    fecha         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    ip            VARCHAR(64),
+                    user_agent    VARCHAR(512)
+                )
+            """))
+            db.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_cot_vistas_cotizacion_id ON cotizacion_vistas(cotizacion_id)"
             ))
             db.commit()
         finally:

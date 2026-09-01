@@ -116,6 +116,7 @@ class Cotizacion(Base, UUIDPrimaryKey, TimestampedMixin, SoftDeleteMixin):
         DateTime(timezone=True),
         nullable=True
     )
+    token_publico = Column(VARCHAR(64), nullable=True, unique=True)
 
     # Relationships
     cliente = relationship(
@@ -141,6 +142,11 @@ class Cotizacion(Base, UUIDPrimaryKey, TimestampedMixin, SoftDeleteMixin):
         "CotizacionCalculo",
         back_populates="cotizacion",
         cascade="all, delete-orphan"
+    )
+    vistas = relationship(
+        "CotizacionVista",
+        back_populates="cotizacion",
+        cascade="all, delete-orphan",
     )
     historial = relationship(
         "CotizacionHistorial",
@@ -370,3 +376,23 @@ class CotizacionHistorial(Base, UUIDPrimaryKey, TimestampedMixin):
 
     def __repr__(self):
         return f"<CotizacionHistorial cotizacion_id={self.cotizacion_id}>"
+
+
+class CotizacionVista(Base, UUIDPrimaryKey):
+    """Registro de visitas al enlace público de una cotización."""
+    __tablename__ = "cotizacion_vistas"
+
+    cotizacion_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("cotizaciones.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    fecha = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    ip = Column(VARCHAR(64), nullable=True)
+    user_agent = Column(VARCHAR(512), nullable=True)
+
+    cotizacion = relationship("Cotizacion", back_populates="vistas")
+
+    __table_args__ = (
+        Index("idx_cot_vistas_cotizacion_id", "cotizacion_id"),
+    )

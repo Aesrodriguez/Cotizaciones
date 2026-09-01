@@ -36,6 +36,7 @@ const PlanillasPage = lazy(() => import('./pages/PlanillasPage'))
 const RegistroTrabajadorPage = lazy(() => import('./pages/RegistroTrabajadorPage'))
 const ReporteMensualPage = lazy(() => import('./pages/ReporteMensualPage'))
 const CartaSolicitudPage = lazy(() => import('./pages/CartaSolicitudPage'))
+const CotizacionPublicaPage = lazy(() => import('./pages/CotizacionPublicaPage'))
 
 function PageLoader() {
   return (
@@ -72,6 +73,7 @@ export default function App() {
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/inscripcion" element={<RegistroTrabajadorPage />} />
+          <Route path="/ver/:token" element={<CotizacionPublicaPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
