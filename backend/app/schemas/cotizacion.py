@@ -112,6 +112,11 @@ class CotizacionOut(CotizacionList):
     terminos: Optional[str] = None
     observaciones: Optional[str] = None
     cliente_email: Optional[str] = None
+    cliente_nit: Optional[str] = None
+    cliente_ciudad: Optional[str] = None
+    cliente_contacto_nombre: Optional[str] = None
+    cliente_contacto_telefono: Optional[str] = None
+    validez_dias: Optional[int] = None
     items: List[CotizacionItemOut] = []
 
     model_config = {"from_attributes": True}

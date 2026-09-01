@@ -89,9 +89,13 @@ def ver_cotizacion_publica(
     if not cot_full:
         raise HTTPException(404)
 
-    cot_full.cliente_nombre = cot_full.cliente.nombre if cot_full.cliente else ""
-    cot_full.cliente_nit    = cot_full.cliente.rut or "" if cot_full.cliente else ""
-    cot_full.cliente_ciudad = cot_full.cliente.ciudad or "" if cot_full.cliente else ""
+    cl = cot_full.cliente
+    cot_full.cliente_nombre             = cl.nombre if cl else ""
+    cot_full.cliente_nit                = cl.rut or "" if cl else ""
+    cot_full.cliente_ciudad             = cl.ciudad or "" if cl else ""
+    cot_full.cliente_email              = cl.contacto_email or "" if cl else ""
+    cot_full.cliente_contacto_nombre    = cl.contacto_nombre or "" if cl else ""
+    cot_full.cliente_contacto_telefono  = cl.contacto_telefono or "" if cl else ""
     for item in cot_full.items:
         item.producto_nombre = item.producto.nombre if item.producto else None
         item.producto_codigo = item.producto.codigo if item.producto else None
