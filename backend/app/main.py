@@ -19,9 +19,27 @@ logging.basicConfig(
 logger = logging.getLogger("cotizaciones")
 
 
+def _ensure_columns():
+    """Agrega columnas nuevas de forma segura si no existen (safety net post-migration)."""
+    try:
+        from app.database import SessionLocal
+        from sqlalchemy import text
+        db = SessionLocal()
+        try:
+            db.execute(text(
+                "ALTER TABLE cotizacion_items ADD COLUMN IF NOT EXISTS unidad VARCHAR(20)"
+            ))
+            db.commit()
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning(f"_ensure_columns: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(f"🚀 {settings.API_TITLE} v{settings.API_VERSION} iniciando...")
+    _ensure_columns()
     yield
     logger.info(f"🛑 {settings.API_TITLE} deteniendo...")
 
