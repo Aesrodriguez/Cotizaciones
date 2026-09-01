@@ -206,6 +206,7 @@ export default function CotizacionDetailPage() {
             <thead>
               <tr className="border-b text-left text-gray-500 text-xs uppercase">
                 <th className="pb-2 pr-4">Descripción</th>
+                <th className="pb-2 pr-4 text-center">Und.</th>
                 <th className="pb-2 pr-4 text-right">Cant.</th>
                 <th className="pb-2 pr-4 text-right">P. Unit.</th>
                 <th className="pb-2 pr-4 text-right">Desc.</th>
@@ -220,6 +221,7 @@ export default function CotizacionDetailPage() {
                     <div className="font-medium text-gray-900 whitespace-pre-line">{item.descripcion || item.producto_nombre}</div>
                     {item.producto_codigo && <div className="text-xs text-gray-400">{item.producto_codigo}</div>}
                   </td>
+                  <td className="py-2.5 pr-4 text-center text-gray-600 text-xs font-mono">{item.unidad || '—'}</td>
                   <td className="py-2.5 pr-4 text-right text-gray-600">{item.cantidad}</td>
                   <td className="py-2.5 pr-4 text-right text-gray-600">{formatCurrency(item.precio_unitario, quote.moneda)}</td>
                   <td className="py-2.5 pr-4 text-right text-gray-600">{item.descuento_porcentaje ?? 0}%</td>
@@ -301,6 +303,7 @@ export default function CotizacionDetailPage() {
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
                 <th style={{ padding: '8px 10px', textAlign: 'left', fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Descripción</th>
+                <th style={{ padding: '8px 10px', textAlign: 'center', fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase' }}>Und.</th>
                 <th style={{ padding: '8px 10px', textAlign: 'center', fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase' }}>Cant.</th>
                 <th style={{ padding: '8px 10px', textAlign: 'right', fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase' }}>P. Unit.</th>
                 <th style={{ padding: '8px 10px', textAlign: 'right', fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase' }}>Desc. %</th>
@@ -315,6 +318,7 @@ export default function CotizacionDetailPage() {
                     <div style={{ fontWeight: '600', whiteSpace: 'pre-line' }}>{item.descripcion || item.producto_nombre}</div>
                     {item.producto_codigo && <div style={{ fontSize: '10px', color: '#94a3b8' }}>{item.producto_codigo}</div>}
                   </td>
+                  <td style={{ padding: '8px 10px', textAlign: 'center', fontFamily: 'monospace', fontSize: '11px' }}>{item.unidad || '—'}</td>
                   <td style={{ padding: '8px 10px', textAlign: 'center' }}>{item.cantidad}</td>
                   <td style={{ padding: '8px 10px', textAlign: 'right' }}>{formatCurrency(item.precio_unitario, quote.moneda)}</td>
                   <td style={{ padding: '8px 10px', textAlign: 'right' }}>{item.descuento_porcentaje ?? 0}%</td>

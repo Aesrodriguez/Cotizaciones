@@ -19,6 +19,7 @@ interface DimCalc {
 interface ItemForm {
   producto_id: string
   descripcion: string
+  unidad: string
   cantidad: number
   precio_unitario: number
   descuento_porcentaje: number
@@ -62,6 +63,7 @@ interface ProductoForm {
 const defaultItem: ItemForm = {
   producto_id: '',
   descripcion: '',
+  unidad: 'UN',
   cantidad: 1,
   precio_unitario: 0,
   descuento_porcentaje: 0,
@@ -142,6 +144,7 @@ export default function CotizacionFormPage() {
           items: (q.items ?? []).map((i, idx) => ({
             producto_id: i.producto_id,
             descripcion: i.descripcion ?? '',
+            unidad: (i as any).unidad ?? 'UN',
             cantidad: Number(i.cantidad),
             precio_unitario: Number(i.precio_unitario),
             descuento_porcentaje: Number(i.descuento_porcentaje ?? 0),
@@ -185,6 +188,7 @@ export default function CotizacionFormPage() {
     append({
       producto_id: item.id ?? '',
       descripcion: item.nombre,
+      unidad: (item as any).unidad_medida ?? 'UN',
       cantidad: 1,
       precio_unitario: item.precio_unitario,
       descuento_porcentaje: 0,
@@ -420,6 +424,7 @@ export default function CotizacionFormPage() {
                         <tr className="border-b border-gray-100">
                           <th className="pb-2 pr-2 text-left text-xs text-gray-400 font-medium w-7">#</th>
                           <th className="pb-2 pr-2 text-left text-xs text-gray-400 font-medium">Descripción</th>
+                          <th className="pb-2 pr-2 text-xs text-gray-400 font-medium w-16 text-center">Und.</th>
                           <th className="pb-2 pr-2 text-xs text-gray-400 font-medium w-20 text-center">Cant.</th>
                           <th className="pb-2 pr-2 text-xs text-gray-400 font-medium w-28 text-right">Precio</th>
                           <th className="pb-2 pr-2 text-xs text-gray-400 font-medium w-16 text-center">Desc%</th>
@@ -449,6 +454,13 @@ export default function CotizacionFormPage() {
                                   {...register(`items.${index}.descripcion`, { required: true })}
                                   className="input text-xs py-1.5"
                                   placeholder="Descripción del ítem"
+                                />
+                              </td>
+                              <td className="py-2 pr-2 align-middle">
+                                <input
+                                  {...register(`items.${index}.unidad`)}
+                                  className="input text-xs py-1.5 text-center w-14"
+                                  placeholder="UN"
                                 />
                               </td>
                               <td className="py-2 pr-2 align-top">
@@ -526,6 +538,7 @@ export default function CotizacionFormPage() {
                                         disabled={result <= 0}
                                         onClick={() => {
                                           setValue(`items.${index}.cantidad`, result)
+                                          setValue(`items.${index}.unidad`, dimCalc.tipo === 'm2' ? 'M2' : 'M3')
                                           // Añadir medidas a la descripción
                                           const desc = (watchItems?.[index]?.descripcion ?? '').replace(/\n\([\d.,×\s]+= [\d.,]+ m[²³]\)$/, '').trimEnd()
                                           const dimStr = dimCalc.tipo === 'm2'

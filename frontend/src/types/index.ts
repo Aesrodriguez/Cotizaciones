@@ -46,6 +46,7 @@ export interface CotizacionItem {
   producto_nombre?: string
   producto_codigo?: string
   descripcion?: string
+  unidad?: string
   cantidad: number
   precio_unitario: number
   descuento_porcentaje?: number

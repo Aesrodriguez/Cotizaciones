@@ -192,6 +192,10 @@ class CotizacionItem(Base, UUIDPrimaryKey, TimestampedMixin):
         VARCHAR(255),
         nullable=True
     )
+    unidad = Column(
+        VARCHAR(20),
+        nullable=True
+    )
     cantidad = Column(
         Numeric(12, 4),
         nullable=False
