@@ -70,9 +70,10 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Always include the production frontend; merge with anything in CORS_ORIGINS
+    # Always include production frontends; merge with anything in CORS_ORIGINS
     _cors_origins = list({
         "https://cotizaciones-web.onrender.com",
+        "https://cotizaciones-web-60nf.onrender.com",
         "http://localhost:5173",
         *settings.CORS_ORIGINS,
     })

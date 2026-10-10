@@ -7,7 +7,7 @@ from datetime import date
 from fpdf import FPDF
 
 _STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'static')
-_FRONTEND_URL = "https://cotizaciones-web.onrender.com"
+_FRONTEND_URL = "https://cotizaciones-web-60nf.onrender.com"
 
 # Page constants — A4 portrait, 10mm margins
 _LM = 10

@@ -3,7 +3,7 @@ import toast from 'react-hot-toast'
 import { useAuthStore } from '../stores/authStore'
 import type { APUItem, Cliente, Contrato, ContratoActa, ContratoCapitulo, ContratoDashboard, ContratoGasto, ContratoListItem, ContratoPago, CorteQuincenal, Cotizacion, PaginatedResponse, Producto, SoportePago, Stats, Trabajador, TrabajadorAsignacion, TrabajadorDetalle, TrabajadorPago, Usuario } from '../types'
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'https://cotizaciones-api-3uuy.onrender.com/api/v1'
+const API_URL = import.meta.env.VITE_API_URL ?? 'https://cotizaciones-api-p4qy.onrender.com/api/v1'
 
 const api = axios.create({ baseURL: API_URL, timeout: 30000 })
 

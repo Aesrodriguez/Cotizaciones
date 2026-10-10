@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     # Mantener SMTP_USER solo para compatibilidad con código existente
     SMTP_USER: str = Field(default="tripleaconstruccionessas@gmail.com")
     SMTP_PASSWORD: str = Field(default="")
-    FRONTEND_URL: str = Field(default="https://cotizaciones-web.onrender.com")
+    FRONTEND_URL: str = Field(default="https://cotizaciones-web-60nf.onrender.com")
 
     model_config = SettingsConfigDict(
         env_file=".env",

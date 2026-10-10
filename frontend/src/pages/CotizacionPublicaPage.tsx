@@ -4,7 +4,7 @@ import axios from 'axios'
 import { formatCurrency, formatDate } from '../utils/format'
 import type { Cotizacion } from '../types'
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'https://cotizaciones-api-3uuy.onrender.com/api/v1'
+const API_URL = import.meta.env.VITE_API_URL ?? 'https://cotizaciones-api-p4qy.onrender.com/api/v1'
 const EMPRESA_TEL = '314 395 2896'
 
 type QuoteExtra = Cotizacion & {
