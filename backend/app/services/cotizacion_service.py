@@ -9,12 +9,23 @@ from app.schemas.cotizacion import CotizacionCreate, CotizacionUpdate
 
 def _get_or_create_seq(db: Session):
     from datetime import date
+    from sqlalchemy import text as _text
     year = date.today().year
+    prefijo = f"COT-{year}-"
     seq = db.query(Secuencia).filter(Secuencia.tipo_documento == "cotizacion").first()
     if not seq:
-        seq = Secuencia(tipo_documento="cotizacion", prefijo=f"COT-{year}-", proximo_numero=1)
+        seq = Secuencia(tipo_documento="cotizacion", prefijo=prefijo, proximo_numero=1)
         db.add(seq)
         db.flush()
+
+    # Auto-sync: align sequence with max existing cotizacion number
+    row = db.execute(_text(
+        "SELECT MAX(CAST(REGEXP_REPLACE(numero, '[^0-9]', '', 'g') AS INTEGER)) "
+        "FROM cotizaciones WHERE numero LIKE :pfx"
+    ), {"pfx": f"{prefijo}%"}).scalar()
+    if row is not None:
+        seq.proximo_numero = row + 1  # always match reality
+
     return seq
 
 
