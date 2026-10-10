@@ -18,9 +18,9 @@ def _get_or_create_seq(db: Session):
         db.add(seq)
         db.flush()
 
-    # Auto-sync: align sequence with max existing cotizacion number
+    # Auto-sync: align sequence with max existing cotizacion suffix (part after last '-')
     row = db.execute(_text(
-        "SELECT MAX(CAST(REGEXP_REPLACE(numero, '[^0-9]', '', 'g') AS INTEGER)) "
+        "SELECT MAX(CAST(SPLIT_PART(numero, '-', 3) AS INTEGER)) "
         "FROM cotizaciones WHERE numero LIKE :pfx"
     ), {"pfx": f"{prefijo}%"}).scalar()
     if row is not None:
