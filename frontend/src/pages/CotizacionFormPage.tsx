@@ -212,12 +212,6 @@ export default function CotizacionFormPage() {
         toast.error('Con AIU activo debe ingresar al menos un porcentaje (A, I o U)')
         return
       }
-    } else {
-      const hasIVA = data.items.some((item) => Number(item.impuesto_porcentaje) > 0)
-      if (!hasIVA) {
-        toast.error('Debe aplicar IVA en al menos un ítem, o activar el AIU')
-        return
-      }
     }
     const normalizeItems = (items: typeof data.items) =>
       items.map((it) => ({ ...it, producto_id: it.producto_id || null }))
@@ -233,7 +227,10 @@ export default function CotizacionFormPage() {
         toast.success(`Cotización ${res.data.numero} creada`)
       }
       navigate('/cotizaciones')
-    } catch {}
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail ?? err?.message ?? 'Error al guardar la cotización'
+      toast.error(typeof msg === 'string' ? msg : 'Error al guardar la cotización')
+    }
   }
 
   const onCreateCliente = async (data: ClienteForm) => {
