@@ -23,8 +23,7 @@ def _get_or_create_seq(db: Session):
         "SELECT MAX(CAST(SPLIT_PART(numero, '-', 3) AS INTEGER)) "
         "FROM cotizaciones WHERE numero LIKE :pfx"
     ), {"pfx": f"{prefijo}%"}).scalar()
-    if row is not None:
-        seq.proximo_numero = row + 1  # always match reality
+    seq.proximo_numero = (row + 1) if row is not None else 1
 
     return seq
 

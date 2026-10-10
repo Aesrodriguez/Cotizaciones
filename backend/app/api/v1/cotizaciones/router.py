@@ -64,7 +64,18 @@ def get_cotizacion(id: UUID, db: Session = Depends(get_db_session), _: Usuario =
 
 @router.post("/", response_model=CotizacionOut, status_code=201)
 def create_cotizacion(data: CotizacionCreate, db: Session = Depends(get_db_session), user: Usuario = Depends(get_authenticated_user)):
-    return CotizacionService(db).create(data, user.id)
+    from app.models.cliente import Cliente
+    cliente = db.query(Cliente).filter(Cliente.id == data.cliente_id, Cliente.deleted_at.is_(None)).first()
+    if not cliente:
+        raise HTTPException(404, "Cliente no encontrado")
+    cot = CotizacionService(db).create(data, user.id)
+    cot.cliente_nombre = cot.cliente.nombre if cot.cliente else None
+    cot.cliente_email = cot.cliente.contacto_email if cot.cliente else None
+    cot.usuario_nombre = f"{cot.usuario.nombres} {cot.usuario.apellidos}" if cot.usuario else None
+    for item in cot.items:
+        item.producto_nombre = item.producto.nombre if item.producto else None
+        item.producto_codigo = item.producto.codigo if item.producto else None
+    return cot
 
 
 @router.put("/{id}", response_model=CotizacionOut)
@@ -73,7 +84,14 @@ def update_cotizacion(id: UUID, data: CotizacionUpdate, db: Session = Depends(ge
     cot = repo.get(id)
     if not cot:
         raise HTTPException(404, "Cotización no encontrada")
-    return CotizacionService(db).update(cot, data)
+    cot = CotizacionService(db).update(cot, data)
+    cot.cliente_nombre = cot.cliente.nombre if cot.cliente else None
+    cot.cliente_email = cot.cliente.contacto_email if cot.cliente else None
+    cot.usuario_nombre = f"{cot.usuario.nombres} {cot.usuario.apellidos}" if cot.usuario else None
+    for item in cot.items:
+        item.producto_nombre = item.producto.nombre if item.producto else None
+        item.producto_codigo = item.producto.codigo if item.producto else None
+    return cot
 
 
 @router.delete("/{id}", status_code=204)
