@@ -9,6 +9,11 @@ import sqlalchemy as sa
 from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import UUID
 
+revision = '039'
+down_revision = '038'
+branch_labels = None
+depends_on = None
+
 
 def upgrade():
     conn = op.get_bind()
