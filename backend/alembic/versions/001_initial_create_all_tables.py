@@ -229,7 +229,7 @@ CREATE TABLE apu_equipos (
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
 	updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
 	PRIMARY KEY (id), 
-	CONSTRAINT ck_apu_equipos_cantidad CHECK (cantidad > 0), 
+	CONSTRAINT ck_apu_equipos_cantidad CHECK (cantidad >= 0),
 	CONSTRAINT ck_apu_equipos_precio CHECK (precio_unitario >= 0), 
 	FOREIGN KEY(apu_id) REFERENCES apu (id) ON DELETE CASCADE
 )
@@ -251,7 +251,7 @@ CREATE TABLE apu_mano_obra (
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
 	updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
 	PRIMARY KEY (id), 
-	CONSTRAINT ck_apu_mano_obra_cantidad CHECK (cantidad > 0), 
+	CONSTRAINT ck_apu_mano_obra_cantidad CHECK (cantidad >= 0),
 	CONSTRAINT ck_apu_mano_obra_precio CHECK (precio_unitario >= 0), 
 	FOREIGN KEY(apu_id) REFERENCES apu (id) ON DELETE CASCADE
 )
@@ -274,7 +274,7 @@ CREATE TABLE apu_materiales (
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
 	updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
 	PRIMARY KEY (id), 
-	CONSTRAINT ck_apu_materiales_cantidad CHECK (cantidad > 0), 
+	CONSTRAINT ck_apu_materiales_cantidad CHECK (cantidad >= 0),
 	CONSTRAINT ck_apu_materiales_precio CHECK (precio_unitario >= 0), 
 	FOREIGN KEY(apu_id) REFERENCES apu (id) ON DELETE CASCADE
 )
